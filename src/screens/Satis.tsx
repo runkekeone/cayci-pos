@@ -7,7 +7,7 @@ import type { Payment, SaleLine } from '../types'
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
 
 export default function Satis() {
-  const { s, addToTable, removeFromTable, closeTable, quickSale } = useStore()
+  const { s, addToTable, removeFromTable, setTableQty, closeTable, quickSale } = useStore()
   const [target, setTarget] = useState<Target>({ kind: 'hizli' })
   const [quick, setQuick] = useState<SaleLine[]>([])
   const [customerId, setCustomerId] = useState('')
@@ -52,6 +52,15 @@ export default function Satis() {
     setQuick((cur) =>
       cur.map((l, i) => (i === index ? { ...l, qty: l.qty - 1 } : l)).filter((l) => l.qty > 0),
     )
+  }
+
+  /** Adedi elle yaz: "12 çay" için 12 kez dokunmaya gerek yok. */
+  function setQty(index: number, qty: number) {
+    if (target.kind === 'masa') {
+      setTableQty(target.id, index, qty)
+      return
+    }
+    setQuick((cur) => cur.map((l, i) => (i === index ? { ...l, qty } : l)).filter((l) => l.qty > 0))
   }
 
   function pay(payment: Payment) {
@@ -148,12 +157,22 @@ export default function Satis() {
             {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
             {lines.map((l, idx) => (
               <div className="cline" key={l.itemId}>
-                <span className="q">{l.qty}×</span>
-                <span className="nm">{l.name}</span>
-                <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
                 <button className="x" onClick={() => remove(idx)} title="Bir azalt">
                   −
                 </button>
+                <input
+                  className="qty"
+                  type="number"
+                  min={0}
+                  value={l.qty}
+                  onChange={(e) => setQty(idx, Number(e.target.value))}
+                  title="Adedi elle yaz"
+                />
+                <button className="x" onClick={() => add(l.itemId)} title="Bir artır">
+                  +
+                </button>
+                <span className="nm">{l.name}</span>
+                <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
               </div>
             ))}
           </div>

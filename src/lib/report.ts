@@ -43,7 +43,10 @@ export interface DayReport {
 
 export function dayReport(s: State, date: string): DayReport {
   const sales = s.sales.filter((x) => dayOf(x.date) === date)
-  const expenses = s.expenses.filter((e) => e.kind === 'gunluk' && e.date === date)
+  // O güne yazılan giderler + her gün tekrar eden sabit günlük giderler (yevmiye gibi).
+  const expenses = s.expenses.filter(
+    (e) => (e.kind === 'gunluk' && e.date === date) || e.kind === 'gunluk-sabit',
+  )
   const payments = s.payments.filter((p) => dayOf(p.date) === date)
   const wastes = s.wastes.filter((w) => dayOf(w.date) === date)
   const cashDay = s.cashDays.find((c) => c.date === date)

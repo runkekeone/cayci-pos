@@ -9,18 +9,17 @@ import type {
 } from './types'
 import { applyStock, unitCost } from './lib/cost'
 import { today, uid } from './lib/units'
-import { seed } from './seed'
+import { bosState } from './seed'
+import { dataKey } from './auth'
 
-const KEY = 'cayci-pos-v1'
-
-function load(): State {
+function load(userId: string): State {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) return { ...seed, ...(JSON.parse(raw) as State) }
+    const raw = localStorage.getItem(dataKey(userId))
+    if (raw) return { ...bosState, ...(JSON.parse(raw) as State) }
   } catch {
-    // bozuk kayıt: tohum veriyle devam
+    // bozuk kayıt: boş başla
   }
-  return seed
+  return bosState
 }
 
 interface Store {
@@ -36,6 +35,7 @@ interface Store {
   // satış
   addToTable: (tableId: string, itemId: string, qty?: number) => void
   removeFromTable: (tableId: string, index: number) => void
+  setTableQty: (tableId: string, index: number, qty: number) => void
   closeTable: (tableId: string, payment: Payment, customerId?: string) => void
   quickSale: (lines: SaleLine[], payment: Payment, customerId?: string) => void
 
@@ -48,16 +48,19 @@ interface Store {
   deleteExpense: (id: string) => void
   setOpeningCash: (amount: number) => void
   setCountedCash: (amount: number) => void
+
+  // kurulum
+  finishSetup: (patch: Pick<State, 'items' | 'expenses' | 'business'>) => void
 }
 
 const Ctx = createContext<Store | null>(null)
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<State>(load)
+export function StoreProvider({ userId, children }: { userId: string; children: ReactNode }) {
+  const [s, setS] = useState<State>(() => load(userId))
 
   useEffect(() => {
-    localStorage.setItem(KEY, JSON.stringify(s))
-  }, [s])
+    localStorage.setItem(dataKey(userId), JSON.stringify(s))
+  }, [s, userId])
 
   const store = useMemo<Store>(() => {
     const set = (fn: (s: State) => State) => setS(fn)
@@ -198,6 +201,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
         })),
 
+      setTableQty: (tableId, index, qty) =>
+        set((st) => ({
+          ...st,
+          tables: st.tables.map((t) => {
+            if (t.id !== tableId) return t
+            const lines = t.lines
+              .map((l, i) => (i === index ? { ...l, qty } : l))
+              .filter((l) => l.qty > 0)
+            return { ...t, lines, openedAt: lines.length ? t.openedAt : undefined }
+          }),
+        })),
+
       closeTable: (tableId, payment, customerId) =>
         set((st) => {
           const table = st.tables.find((t) => t.id === tableId)
@@ -266,6 +281,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               : [...st.cashDays, { date: d, opening: 0, counted: amount }],
           }
         }),
+
+      finishSetup: (patch) =>
+        set((st) => ({
+          ...st,
+          items: patch.items,
+          expenses: patch.expenses,
+          business: patch.business,
+          setupDone: true,
+        })),
     }
   }, [s])
 

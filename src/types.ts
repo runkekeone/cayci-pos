@@ -85,11 +85,16 @@ export interface CustomerPayment {
 
 export interface Expense {
   id: string
+  /** Sadece 'gunluk' için dolu. Sabit giderlerde boş. */
   date: string
   name: string
   amount: number
-  /** aylik = sabit gider, güne bölünür. gunluk = o gün elden çıkan para. */
-  kind: 'gunluk' | 'aylik'
+  /**
+   * aylik       = kira/elektrik gibi. 30'a bölünüp her günün kârından düşer.
+   * gunluk-sabit = eleman yevmiyesi gibi. Her gün olduğu gibi düşer.
+   * gunluk      = o gün bir kereliğine çıkan para.
+   */
+  kind: 'gunluk' | 'gunluk-sabit' | 'aylik'
   paidCash: boolean
 }
 
@@ -112,6 +117,15 @@ export interface CashDay {
   counted?: number
 }
 
+export interface Business {
+  name: string
+  address: string
+  phone: string
+  owner: string
+  openTime: string
+  closeTime: string
+}
+
 export interface State {
   items: Item[]
   purchases: Purchase[]
@@ -122,5 +136,8 @@ export interface State {
   expenses: Expense[]
   wastes: Waste[]
   cashDays: CashDay[]
-  settings: { businessName: string; showImages: boolean }
+  business: Business
+  /** Kurulum sihirbazı tamamlandı mı. Tamamlanmadan uygulamaya girilemez. */
+  setupDone: boolean
+  settings: { showImages: boolean }
 }

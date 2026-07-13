@@ -312,6 +312,14 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.cline .qty {
+  width: 52px;
+  padding: 4px 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .x {
   border: 0;
   background: transparent;
