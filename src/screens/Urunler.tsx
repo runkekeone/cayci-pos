@@ -1,18 +1,22 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { unitCost } from '../lib/cost'
-import { fmtQty, fmtTL, round, uid } from '../lib/units'
-import type { Item, Unit } from '../types'
+import { UNITS, fmtQty, fmtTL, fmtTLInce, fromBase, round, toBase, uid, unitDef } from '../lib/units'
+import { URUNLER } from '../defaults'
+import type { Item } from '../types'
 
-const BOS: Item = {
-  id: '',
-  name: '',
-  unit: 'adet',
-  category: 'Sıcak',
-  icon: '🍵',
-  sellable: true,
-  price: 0,
-  stock: 0,
+function bosUrun(sellable: boolean): Item {
+  return {
+    id: uid(),
+    name: '',
+    unit: sellable ? 'adet' : 'g',
+    buyUnit: sellable ? 'adet' : 'kg',
+    category: sellable ? 'Sıcak' : 'Hammadde',
+    icon: sellable ? '🍵' : '📦',
+    sellable,
+    price: sellable ? 0 : undefined,
+    stock: 0,
+  }
 }
 
 export default function Urunler() {
@@ -26,30 +30,15 @@ export default function Urunler() {
     <>
       <h1>Ürünler & Tarifler</h1>
       <p className="sub">
-        Tarife hammadde de, başka ürün de eklenebilir. Maliyet son alış fiyatından hesaplanır.
+        Maliyet son alış fiyatından hesaplanır. Alış fiyatını değiştirdiğin an tarifteki gramaja
+        göre ürün maliyeti kendiliğinden güncellenir — ortalama alınmaz.
       </p>
 
       <div className="row" style={{ marginBottom: 16 }}>
-        <button
-          className="btn primary"
-          onClick={() => setEdit({ ...BOS, id: uid(), sellable: true })}
-        >
+        <button className="btn primary" onClick={() => setEdit(bosUrun(true))}>
           + Satış ürünü
         </button>
-        <button
-          className="btn"
-          onClick={() =>
-            setEdit({
-              ...BOS,
-              id: uid(),
-              sellable: false,
-              category: 'Hammadde',
-              icon: '📦',
-              unit: 'g',
-              price: undefined,
-            })
-          }
-        >
+        <button className="btn" onClick={() => setEdit(bosUrun(false))}>
           + Hammadde
         </button>
       </div>
@@ -62,7 +51,7 @@ export default function Urunler() {
               <th>Ürün</th>
               <th>Tarif</th>
               <th className="num">Maliyet</th>
-              <th className="num">Fiyat</th>
+              <th className="num">Satış</th>
               <th className="num">Kâr</th>
               <th className="num">Kâr %</th>
               <th></th>
@@ -73,7 +62,6 @@ export default function Urunler() {
               const c = unitCost(i.id, s.items)
               const p = i.price ?? 0
               const kar = p - c
-              const oran = p > 0 ? (kar / p) * 100 : 0
               return (
                 <tr key={i.id}>
                   <td>
@@ -86,7 +74,8 @@ export default function Urunler() {
                           .map((l) => {
                             const it = s.items.find((x) => x.id === l.itemId)
                             if (!it) return '?'
-                            return `${fmtQty(round(l.qty / (i.recipe!.yield || 1), 2), it.unit)} ${it.name}`
+                            const perUnit = l.qty / (i.recipe!.yield || 1)
+                            return `${round(perUnit, 2)} ${it.unit} ${it.name}`
                           })
                           .join(' + ')}
                       </span>
@@ -94,22 +83,29 @@ export default function Urunler() {
                       <span className="tag">tarifsiz (al-sat)</span>
                     )}
                   </td>
-                  <td className="num">{fmtTL(c)}</td>
+                  <td className="num">{fmtTLInce(c)}</td>
                   <td className="num">{fmtTL(p)}</td>
                   <td className="num">
                     <span className={kar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 14 }}>
                       {fmtTL(kar)}
                     </span>
                   </td>
-                  <td className="num">%{round(oran, 0)}</td>
+                  <td className="num">{p > 0 ? `%${round((kar / p) * 100, 0)}` : '—'}</td>
                   <td className="num">
                     <button className="btn sm" onClick={() => setEdit(i)}>
-                      Düzenle
+                      Aç
                     </button>
                   </td>
                 </tr>
               )
             })}
+            {satilan.length === 0 && (
+              <tr>
+                <td colSpan={7} className="hint">
+                  Henüz satış ürünü yok.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -132,26 +128,35 @@ export default function Urunler() {
                 <td>
                   {i.icon} <strong>{i.name}</strong>
                 </td>
-                <td className="num">{fmtQty(i.stock, i.unit)}</td>
+                <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
                 <td className="num">
-                  {i.lastCost ? `${fmtTL(i.lastCost.total)} / ${fmtQty(i.lastCost.qty, i.unit)}` : '—'}
+                  {i.lastCost
+                    ? `${fmtTL(i.lastCost.total)} / ${round(fromBase(i.lastCost.qty, i.buyUnit), 2)} ${i.buyUnit}`
+                    : '—'}
                 </td>
                 <td className="num">
-                  {fmtTL(unitCost(i.id, s.items))} / {i.unit}
+                  {fmtTLInce(unitCost(i.id, s.items))} / {i.unit}
                 </td>
                 <td className="num">
                   <button className="btn sm" onClick={() => setEdit(i)}>
-                    Düzenle
+                    Aç
                   </button>
                 </td>
               </tr>
             ))}
+            {hammadde.length === 0 && (
+              <tr>
+                <td colSpan={5} className="hint">
+                  Henüz hammadde yok.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {edit && (
-        <ItemModal
+        <UrunKarti
           item={edit}
           onClose={() => setEdit(null)}
           onSave={(it) => {
@@ -168,7 +173,12 @@ export default function Urunler() {
   )
 }
 
-function ItemModal({
+/**
+ * ÜRÜN KARTI.
+ * Ad · Ürün tipi (kg/lt/cc/adet...) · Alış fiyatı · Satış fiyatı · [ ] Tarif ekle
+ * Alış "kaç birim için kaç ₺" olarak girilir; birim maliyet buradan çıkar.
+ */
+function UrunKarti({
   item,
   onClose,
   onSave,
@@ -182,34 +192,73 @@ function ItemModal({
   const { s } = useStore()
   const [d, setD] = useState<Item>(item)
 
+  // Alış kutuları kullanıcının birimiyle çalışır, kayıtta temel birime çevrilir.
+  const [alisMiktar, setAlisMiktar] = useState(
+    item.lastCost ? round(fromBase(item.lastCost.qty, item.buyUnit), 3) : 1,
+  )
+  const [alisTutar, setAlisTutar] = useState(item.lastCost?.total ?? 0)
+  const [tarifli, setTarifli] = useState(!!item.recipe)
+
   const yieldN = d.recipe?.yield || 1
-  // Kaydedilmemiş halin maliyetini görebilmek için listeye geçici olarak koy.
+
+  // Kaydedilmemiş hali de dahil ederek maliyeti canlı göster.
+  const kayitli = { ...d, lastCost: { total: alisTutar, qty: toBase(alisMiktar, d.buyUnit) } }
   const preview = s.items.some((i) => i.id === d.id)
-    ? s.items.map((i) => (i.id === d.id ? d : i))
-    : [...s.items, d]
+    ? s.items.map((i) => (i.id === d.id ? kayitli : i))
+    : [...s.items, kayitli]
   const maliyet = unitCost(d.id, preview)
 
-  function addLine() {
-    const first = s.items.find((i) => i.id !== d.id)
-    if (!first) return
+  /** Hazır tarif: kütüphaneden aynı isimli/id'li ürünün tarifini getirir. */
+  const hazir = URUNLER.find(
+    (u) => u.id === d.id || u.name.toLowerCase() === d.name.trim().toLowerCase(),
+  )
+  const hazirVar = !!hazir?.recipe
+
+  function hazirTarifiKullan() {
+    if (!hazir?.recipe) return
+    const eksik = hazir.recipe.lines.filter((l) => !s.items.some((i) => i.id === l.itemId))
+    if (eksik.length > 0) {
+      alert(
+        'Bu hazır tarifin bazı hammaddeleri ürün listende yok: ' +
+          eksik.map((l) => l.itemId).join(', ') +
+          '\nÖnce onları hammadde olarak ekle.',
+      )
+      return
+    }
+    setTarifli(true)
     setD({
       ...d,
-      recipe: {
-        yield: d.recipe?.yield ?? 1,
-        lines: [...(d.recipe?.lines ?? []), { itemId: first.id, qty: 1 }],
-      },
+      recipe: { yield: hazir.recipe.yield, lines: hazir.recipe.lines.map((l) => ({ ...l })) },
     })
   }
 
+  function kaydet() {
+    const base = toBase(alisMiktar, d.buyUnit)
+    const next: Item = {
+      ...d,
+      recipe: tarifli ? d.recipe : undefined,
+      // Tarifli üründe kendi alış maliyeti tutulmaz — maliyet içindekilerden gelir.
+      lastCost: tarifli || alisTutar <= 0 || base <= 0 ? d.lastCost : { total: alisTutar, qty: base },
+    }
+    if (tarifli) next.lastCost = undefined
+    onSave(next)
+  }
+
+  const birimSecenek = UNITS
+
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{d.sellable ? 'Satış ürünü' : 'Hammadde'}</h2>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+        <h2>{d.sellable ? 'Ürün kartı' : 'Hammadde kartı'}</h2>
 
         <div className="row">
           <div className="field" style={{ flex: 2 }}>
-            <label>Ad</label>
-            <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+            <label>Ürün adı</label>
+            <input
+              value={d.name}
+              onChange={(e) => setD({ ...d, name: e.target.value })}
+              placeholder="Çay, Kaşarlı tost, Kola..."
+            />
           </div>
           <div className="field" style={{ width: 70 }}>
             <label>İkon</label>
@@ -219,22 +268,30 @@ function ItemModal({
 
         <div className="row">
           <div className="field" style={{ flex: 1 }}>
-            <label>Kategori</label>
-            <input
-              value={d.category}
-              onChange={(e) => setD({ ...d, category: e.target.value })}
-            />
-          </div>
-          <div className="field" style={{ width: 110 }}>
-            <label>Birim</label>
+            <label>Ürün tipi (birim)</label>
             <select
-              value={d.unit}
-              onChange={(e) => setD({ ...d, unit: e.target.value as Unit })}
+              value={d.buyUnit}
+              onChange={(e) => {
+                const def = unitDef(e.target.value)
+                setD({ ...d, buyUnit: def.label, unit: def.base })
+              }}
             >
-              <option value="adet">adet</option>
-              <option value="g">gram</option>
-              <option value="ml">mililitre</option>
+              {['Ağırlık', 'Hacim', 'Sayı'].map((g) => (
+                <optgroup key={g} label={g}>
+                  {birimSecenek
+                    .filter((u) => u.group === g)
+                    .map((u) => (
+                      <option key={u.label} value={u.label}>
+                        {u.label}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
             </select>
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Kategori</label>
+            <input value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })} />
           </div>
           {d.sellable && (
             <div className="field" style={{ width: 120 }}>
@@ -248,110 +305,187 @@ function ItemModal({
           )}
         </div>
 
-        {!d.sellable && (
-          <div className="row">
-            <div className="field" style={{ flex: 1 }}>
-              <label>Kritik stok (alt limit, {d.unit})</label>
+        {!tarifli && (
+          <>
+            <div className="section-title">Alış fiyatı</div>
+            <div className="row">
               <input
                 type="number"
-                value={d.minStock ?? 0}
-                onChange={(e) => setD({ ...d, minStock: Number(e.target.value) })}
+                style={{ width: 90 }}
+                value={alisMiktar}
+                onChange={(e) => setAlisMiktar(Number(e.target.value))}
               />
+              <span className="hint">{d.buyUnit} aldım,</span>
+              <input
+                type="number"
+                style={{ width: 110 }}
+                value={alisTutar}
+                onChange={(e) => setAlisTutar(Number(e.target.value))}
+              />
+              <span className="hint">₺ ödedim</span>
             </div>
-          </div>
+            <p className="hint" style={{ marginTop: 8 }}>
+              Birim maliyet: <strong>{fmtTLInce(maliyet)}</strong> / {d.unit}
+              {d.buyUnit !== d.unit && (
+                <>
+                  {' '}
+                  ({round(toBase(alisMiktar, d.buyUnit), 0)} {d.unit} girdi)
+                </>
+              )}
+            </p>
+
+            {!d.sellable && (
+              <div className="field" style={{ marginTop: 12, width: 200 }}>
+                <label>Kritik stok ({d.unit})</label>
+                <input
+                  type="number"
+                  value={d.minStock ?? 0}
+                  onChange={(e) => setD({ ...d, minStock: Number(e.target.value) })}
+                />
+              </div>
+            )}
+          </>
         )}
 
-        <div className="section-title" style={{ marginTop: 16 }}>
-          Tarif
-        </div>
-        <p className="hint" style={{ marginBottom: 10 }}>
-          Boş bırakırsan ürün "al-sat" sayılır, stoğu doğrudan tutulur. Tarif girersen satışta
-          içindekiler stoktan düşer. <strong>Çıkan adet</strong> demlik mantığıdır: 119 g çay
-          yazıp 25 adet dersen bardak başına 4,76 g düşer.
-        </p>
-
-        {(d.recipe?.lines ?? []).map((line, idx) => {
-          const li = s.items.find((i) => i.id === line.itemId)
-          return (
-            <div className="row" key={idx} style={{ marginBottom: 8 }}>
-              <select
-                style={{ flex: 1 }}
-                value={line.itemId}
-                onChange={(e) => {
-                  const lines = [...d.recipe!.lines]
-                  lines[idx] = { ...line, itemId: e.target.value }
-                  setD({ ...d, recipe: { ...d.recipe!, lines } })
-                }}
-              >
-                {s.items
-                  .filter((i) => i.id !== d.id)
-                  .map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.icon} {i.name}
-                    </option>
-                  ))}
-              </select>
+        {d.sellable && (
+          <>
+            <div className="section-title">Tarif</div>
+            <label className="row" style={{ cursor: 'pointer', marginBottom: 10 }}>
               <input
-                type="number"
-                style={{ width: 100 }}
-                value={line.qty}
+                type="checkbox"
+                checked={tarifli}
                 onChange={(e) => {
-                  const lines = [...d.recipe!.lines]
-                  lines[idx] = { ...line, qty: Number(e.target.value) }
-                  setD({ ...d, recipe: { ...d.recipe!, lines } })
+                  const on = e.target.checked
+                  setTarifli(on)
+                  if (on && !d.recipe) setD({ ...d, recipe: { yield: 1, lines: [] } })
                 }}
+                style={{ width: 18, height: 18 }}
               />
-              <span className="hint" style={{ width: 40 }}>
-                {li?.unit}
+              <strong>Tarif ekle</strong>
+              <span className="hint">
+                işaretlersen satışta içindekiler stoktan düşer, maliyet tariften hesaplanır
               </span>
-              <button
-                className="x"
-                onClick={() =>
-                  setD({
-                    ...d,
-                    recipe: {
-                      ...d.recipe!,
-                      lines: d.recipe!.lines.filter((_, i) => i !== idx),
-                    },
-                  })
-                }
-              >
-                ✕
-              </button>
-            </div>
-          )
-        })}
+            </label>
 
-        <div className="row" style={{ marginTop: 10 }}>
-          <button className="btn sm" onClick={addLine}>
-            + Tarife satır ekle
-          </button>
-          {d.recipe && (
-            <>
-              <span className="hint">Bu tariften çıkan adet:</span>
-              <input
-                type="number"
-                style={{ width: 80 }}
-                value={yieldN}
-                onChange={(e) =>
-                  setD({
-                    ...d,
-                    recipe: { ...d.recipe!, yield: Math.max(1, Number(e.target.value)) },
-                  })
-                }
-              />
-            </>
-          )}
-        </div>
+            {tarifli && (
+              <>
+                {hazirVar && (
+                  <button
+                    className="btn sm"
+                    onClick={hazirTarifiKullan}
+                    style={{ marginBottom: 12 }}
+                  >
+                    ⚡ Otomatik tarif kullan ({hazir!.name})
+                  </button>
+                )}
 
-        <div className="card" style={{ marginTop: 16, background: 'var(--bg)' }}>
+                {(d.recipe?.lines ?? []).map((line, idx) => {
+                  const li = s.items.find((i) => i.id === line.itemId)
+                  const perUnit = line.qty / yieldN
+                  const satirMaliyet = perUnit * unitCost(line.itemId, s.items)
+                  return (
+                    <div className="row" key={idx} style={{ marginBottom: 8 }}>
+                      <select
+                        style={{ flex: 1 }}
+                        value={line.itemId}
+                        onChange={(e) => {
+                          const lines = [...d.recipe!.lines]
+                          lines[idx] = { ...line, itemId: e.target.value }
+                          setD({ ...d, recipe: { ...d.recipe!, lines } })
+                        }}
+                      >
+                        {s.items
+                          .filter((i) => i.id !== d.id)
+                          .map((i) => (
+                            <option key={i.id} value={i.id}>
+                              {i.icon} {i.name}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        type="number"
+                        style={{ width: 90 }}
+                        value={line.qty}
+                        onChange={(e) => {
+                          const lines = [...d.recipe!.lines]
+                          lines[idx] = { ...line, qty: Number(e.target.value) }
+                          setD({ ...d, recipe: { ...d.recipe!, lines } })
+                        }}
+                      />
+                      <span className="hint" style={{ width: 34 }}>
+                        {li?.unit}
+                      </span>
+                      <span className="hint" style={{ width: 110 }}>
+                        = {fmtTLInce(satirMaliyet)}/adet
+                      </span>
+                      <button
+                        className="x"
+                        onClick={() =>
+                          setD({
+                            ...d,
+                            recipe: {
+                              ...d.recipe!,
+                              lines: d.recipe!.lines.filter((_, i) => i !== idx),
+                            },
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )
+                })}
+
+                <div className="row" style={{ marginTop: 10 }}>
+                  <button
+                    className="btn sm"
+                    onClick={() => {
+                      const first = s.items.find((i) => i.id !== d.id)
+                      if (!first) return
+                      setD({
+                        ...d,
+                        recipe: {
+                          yield: d.recipe?.yield ?? 1,
+                          lines: [...(d.recipe?.lines ?? []), { itemId: first.id, qty: 1 }],
+                        },
+                      })
+                    }}
+                  >
+                    + Malzeme ekle
+                  </button>
+                  <span className="hint">Bu tariften çıkan adet:</span>
+                  <input
+                    type="number"
+                    style={{ width: 80 }}
+                    value={yieldN}
+                    onChange={(e) =>
+                      setD({
+                        ...d,
+                        recipe: { ...d.recipe!, yield: Math.max(1, Number(e.target.value)) },
+                      })
+                    }
+                  />
+                </div>
+                <p className="hint" style={{ marginTop: 8 }}>
+                  Miktarlar <strong>bir parti</strong> içindir. Demlik örneği: 119 g çay yaz, çıkan
+                  adet 25 de — bardak başına 4,76 g düşer.
+                </p>
+              </>
+            )}
+          </>
+        )}
+
+        <div
+          className="card"
+          style={{ marginTop: 16, background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}
+        >
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="hint">Birim maliyet</span>
-            <strong>{fmtTL(maliyet)}</strong>
+            <span>Birim maliyet</span>
+            <strong>{fmtTLInce(maliyet)}</strong>
           </div>
           {d.sellable && (
             <div className="row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-              <span className="hint">Kâr</span>
+              <span>Kâr</span>
               <strong className={(d.price ?? 0) - maliyet >= 0 ? 'v good' : 'v bad'}>
                 {fmtTL((d.price ?? 0) - maliyet)}
               </strong>
@@ -367,7 +501,7 @@ function ItemModal({
             <button className="btn ghost" onClick={onClose}>
               Vazgeç
             </button>
-            <button className="btn primary" onClick={() => onSave(d)}>
+            <button className="btn primary" disabled={!d.name.trim()} onClick={kaydet}>
               Kaydet
             </button>
           </div>

@@ -16,7 +16,10 @@ export interface Recipe {
 export interface Item {
   id: string
   name: string
+  /** Temel birim: g | ml | adet. Hesaplar hep bunda döner. */
   unit: Unit
+  /** Kullanıcının aldığı/gördüğü birim: kg, lt, cc, koli... Sadece gösterim ve giriş içindir. */
+  buyUnit: string
   category: string
   icon: string
   /** Satış ekranında çıkar mı. */

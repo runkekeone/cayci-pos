@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { lowStock, unitCost } from '../lib/cost'
-import { INPUT_UNITS, fmtQty, fmtTL, toBase } from '../lib/units'
+import { fmtQty, fmtTL, fmtTLInce, toBase, unitsFor } from '../lib/units'
 
 export default function Stok() {
   const { s, addPurchase, addWaste } = useStore()
@@ -29,7 +29,7 @@ export default function Stok() {
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
           <strong>⚠ Azalan stok</strong>
           <p className="hint" style={{ marginTop: 6 }}>
-            {azalan.map((i) => `${i.name} (${fmtQty(i.stock, i.unit)})`).join(' · ')}
+            {azalan.map((i) => `${i.name} (${fmtQty(i.stock, i.unit, i.buyUnit)})`).join(' · ')}
           </p>
         </div>
       )}
@@ -54,9 +54,9 @@ export default function Stok() {
                   <td>
                     {i.icon} <strong>{i.name}</strong>
                   </td>
-                  <td className="num">{fmtQty(i.stock, i.unit)}</td>
+                  <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
                   <td className="num">
-                    {fmtTL(c)} / {i.unit}
+                    {fmtTLInce(c)} / {i.unit}
                   </td>
                   <td className="num">{fmtTL(c * i.stock)}</td>
                   <td>
@@ -97,9 +97,9 @@ export default function Stok() {
                   <tr key={p.id}>
                     <td>{new Date(p.date).toLocaleDateString('tr-TR')}</td>
                     <td>{i?.name ?? '—'}</td>
-                    <td className="num">{i ? fmtQty(p.qty, i.unit) : p.qty}</td>
+                    <td className="num">{i ? fmtQty(p.qty, i.unit, i.buyUnit) : p.qty}</td>
                     <td className="num">{fmtTL(p.total)}</td>
-                    <td className="num">{fmtTL(p.total / p.qty)}</td>
+                    <td className="num">{fmtTLInce(p.total / p.qty)}</td>
                   </tr>
                 )
               })}
@@ -136,9 +136,9 @@ function AlisModal({
   const [supplier, setSupplier] = useState('')
 
   const item = s.items.find((i) => i.id === itemId)
-  const units = item ? INPUT_UNITS[item.unit] : []
-  const label = unitLabel || units[0]?.label || ''
-  const base = item ? toBase(qty, item.unit, label) : 0
+  const units = item ? unitsFor(item.unit) : []
+  const label = unitLabel || item?.buyUnit || units[0]?.label || ''
+  const base = toBase(qty, label)
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -194,8 +194,9 @@ function AlisModal({
 
         {item && base > 0 && (
           <p className="hint">
-            Stoğa <strong>{fmtQty(base, item.unit)}</strong> girecek. Yeni birim maliyet:{' '}
-            <strong>{fmtTL(total / base)}</strong> / {item.unit}
+            Stoğa <strong>{fmtQty(base, item.unit, item.buyUnit)}</strong> girecek. Yeni birim
+            maliyet: <strong>{fmtTLInce(total / base)}</strong> / {item.unit} — bu ürünün geçtiği
+            tüm tariflerin maliyeti anında güncellenir.
           </p>
         )}
 
