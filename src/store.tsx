@@ -29,7 +29,14 @@ interface Store {
   // ürün / stok
   saveItem: (item: Item) => void
   deleteItem: (id: string) => void
-  addPurchase: (itemId: string, qty: number, total: number, supplier?: string) => void
+  addPurchase: (
+    itemId: string,
+    qty: number,
+    total: number,
+    supplier?: string,
+    /** Alış birimi değiştiyse kalemin kartına da yansısın (koli -> adet gibi). */
+    birim?: { buyUnit: string; packSize?: number },
+  ) => void
   addWaste: (itemId: string, qty: number, reason: 'fire' | 'ikram') => void
 
   // satış
@@ -137,12 +144,20 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           items: st.items.filter((i) => i.id !== id),
         })),
 
-      addPurchase: (itemId, qty, total, supplier) =>
+      addPurchase: (itemId, qty, total, supplier, birim) =>
         set((st) => ({
           ...st,
           // Son alış maliyeti = bu alış. Ortalama yok.
           items: st.items.map((i) =>
-            i.id === itemId ? { ...i, stock: i.stock + qty, lastCost: { total, qty } } : i,
+            i.id === itemId
+              ? {
+                  ...i,
+                  stock: i.stock + qty,
+                  lastCost: { total, qty },
+                  buyUnit: birim?.buyUnit ?? i.buyUnit,
+                  packSize: birim?.packSize ?? i.packSize,
+                }
+              : i,
           ),
           purchases: [
             ...st.purchases,

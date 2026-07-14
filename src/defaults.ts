@@ -1,16 +1,14 @@
 import type { Item, Unit } from './types'
-import { toBase, uid } from './lib/units'
+import { alisToBase, uid } from './lib/units'
 
 /**
- * HAZIR TARİF KÜTÜPHANESİ.
+ * HAZIR KATALOG — gerçek bir kıraathanenin sattığı kalemler ve tarifleri.
  *
- * İşletme kendi tarifini vermek zorunda değil — kurulumda "önerilen ayarlar"ı
- * seçerse buradaki ürünler, tarifler ve giderler olduğu gibi kurulur.
- * Sonradan Ürünler ekranından her şey düzeltilebilir.
+ * Tarifler ve fiyatlar sahadan alındı. Kurulumda "önerilen ayarlar" seçilirse
+ * bunlar olduğu gibi kurulur; kullanıcı sonradan hepsini değiştirebilir.
  *
- * Maliyet daima SON ALIŞ fiyatından hesaplanır. Buradaki fiyatlar sadece
- * başlangıç değeri; kullanıcı 5 kg çayı 1700 ₺'ye aldığını girdiği anda
- * tarifteki gramaja göre bardak maliyeti kendiliğinden güncellenir.
+ * Maliyet daima SON ALIŞ fiyatından hesaplanır — ortalama alınmaz.
+ * Tüp gaz bilerek dışarıda: kullanıcı istemedi.
  */
 
 export interface HamTanim {
@@ -18,33 +16,42 @@ export interface HamTanim {
   name: string
   icon: string
   unit: Unit
-  /** Kullanıcının aldığı birim. */
   buyUnit: string
-  /** Varsayılan alış: kaç buyUnit için kaç ₺. */
+  /** Alış birimi adet değilse: içinde kaç adet var. 1 kg şeker = 405 küp. */
+  packSize?: number
   buyQty: number
   buyTotal: number
 }
 
 export const HAMMADDELER: HamTanim[] = [
-  { id: 'cay', name: 'Çay (dökme)', icon: '🌿', unit: 'g', buyUnit: 'kg', buyQty: 5, buyTotal: 1700 },
-  { id: 'seker', name: 'Şeker (küp)', icon: '🍬', unit: 'adet', buyUnit: 'adet', buyQty: 500, buyTotal: 90 },
-  { id: 'tup', name: 'Tüp gaz', icon: '🔥', unit: 'g', buyUnit: 'kg', buyQty: 12, buyTotal: 900 },
-  { id: 'bardak', name: 'İnce belli bardak', icon: '🥃', unit: 'adet', buyUnit: 'adet', buyQty: 200, buyTotal: 600 },
+  { id: 'cay', name: 'Çay (dökme)', icon: '🌿', unit: 'g', buyUnit: 'kg', buyQty: 5, buyTotal: 1500 },
+  {
+    id: 'seker',
+    name: 'Küp şeker',
+    icon: '🍬',
+    unit: 'adet',
+    buyUnit: 'kg',
+    packSize: 405, // 1 kg = 405 küp
+    buyQty: 1,
+    buyTotal: 60,
+  },
   { id: 'kahve-toz', name: 'Türk kahvesi (toz)', icon: '🫘', unit: 'g', buyUnit: 'kg', buyQty: 1, buyTotal: 320 },
   { id: 'nescafe-toz', name: 'Nescafe (toz)', icon: '🥄', unit: 'g', buyUnit: 'g', buyQty: 200, buyTotal: 180 },
   { id: 'sut-tozu', name: 'Süt tozu / krema', icon: '🥛', unit: 'g', buyUnit: 'g', buyQty: 500, buyTotal: 150 },
-  { id: 'sut', name: 'Süt', icon: '🐄', unit: 'ml', buyUnit: 'lt', buyQty: 1, buyTotal: 40 },
-  { id: 'salep-toz', name: 'Salep tozu', icon: '🌰', unit: 'g', buyUnit: 'g', buyQty: 500, buyTotal: 220 },
-  { id: 'ekmek-tost', name: 'Tost ekmeği', icon: '🍞', unit: 'adet', buyUnit: 'adet', buyQty: 20, buyTotal: 120 },
+  { id: 'oralet-toz', name: 'Oralet (toz)', icon: '🍋', unit: 'g', buyUnit: 'kg', buyQty: 1, buyTotal: 250 },
+  {
+    id: 'uclubir-poset',
+    name: "3'ü 1 arada poşeti",
+    icon: '📦',
+    unit: 'adet',
+    buyUnit: 'paket',
+    packSize: 48,
+    buyQty: 1,
+    buyTotal: 240,
+  },
+  { id: 'ekmek', name: 'Ekmek', icon: '🍞', unit: 'adet', buyUnit: 'adet', buyQty: 20, buyTotal: 100 },
   { id: 'kasar', name: 'Kaşar peyniri', icon: '🧀', unit: 'g', buyUnit: 'kg', buyQty: 2, buyTotal: 500 },
-  { id: 'sucuk', name: 'Sucuk', icon: '🌭', unit: 'g', buyUnit: 'kg', buyQty: 1, buyTotal: 450 },
 ]
-
-export interface TarifSatiri {
-  itemId: string
-  /** Temel birimde, BİR PARTİ için. */
-  qty: number
-}
 
 export interface UrunTanim {
   id: string
@@ -52,135 +59,194 @@ export interface UrunTanim {
   icon: string
   category: string
   price: number
-  /** Tarifli ürün: partiden kaç adet çıkar + parti tarifi. */
-  recipe?: { yield: number; lines: TarifSatiri[] }
+  /** Tarifli ürün. Miktarlar BİR PARTİ içindir, temel birimde. */
+  recipe?: { yield: number; lines: { itemId: string; qty: number }[] }
   /** Al-sat ürün: aldığın gibi satarsın. */
-  alsat?: { buyUnit: string; buyQty: number; buyTotal: number }
-  /** Bu ürün seçilirse gereken hammaddeler. */
+  alsat?: { buyUnit: string; packSize?: number; buyQty: number; buyTotal: number }
+  /** Bu ürün seçilirse gereken kalemler — hammadde veya başka ürün olabilir. */
   needs?: string[]
 }
 
 export const URUNLER: UrunTanim[] = [
+  // ---------- SICAK (tarifli) ----------
   {
     id: 'cay-bardak',
     name: 'Çay',
     icon: '🍵',
     category: 'Sıcak',
-    price: 15,
-    // Demlik: 119 g çay + 150 g gaz -> 25 bardak. Bardak başı 2 küp şeker.
+    price: 20,
+    // Demlik: 125 g çay -> 25 bardak. Bardak başı 2 küp şeker (25 x 2 = 50).
     recipe: {
       yield: 25,
       lines: [
-        { itemId: 'cay', qty: 119 },
-        { itemId: 'tup', qty: 150 },
+        { itemId: 'cay', qty: 125 },
         { itemId: 'seker', qty: 50 },
       ],
     },
-    needs: ['cay', 'tup', 'seker'],
+    needs: ['cay', 'seker'],
   },
   {
     id: 'turk-kahvesi',
     name: 'Türk Kahvesi',
     icon: '☕',
     category: 'Sıcak',
-    price: 40,
+    price: 60,
+    // Yanında verilen bardak su, sattığımız ürünün kendisi — tarifin içinde ürün var.
     recipe: {
       yield: 1,
       lines: [
         { itemId: 'kahve-toz', qty: 7 },
-        { itemId: 'tup', qty: 8 },
         { itemId: 'seker', qty: 1 },
+        { itemId: 'bardak-su', qty: 1 },
       ],
     },
-    needs: ['kahve-toz', 'tup', 'seker'],
+    needs: ['kahve-toz', 'seker', 'bardak-su'],
   },
   {
     id: 'nescafe',
     name: 'Nescafe',
     icon: '🍶',
     category: 'Sıcak',
-    price: 35,
+    price: 60,
     recipe: {
       yield: 1,
       lines: [
-        { itemId: 'nescafe-toz', qty: 3 },
+        { itemId: 'nescafe-toz', qty: 2 },
         { itemId: 'sut-tozu', qty: 8 },
-        { itemId: 'tup', qty: 5 },
       ],
     },
-    needs: ['nescafe-toz', 'sut-tozu', 'tup'],
+    needs: ['nescafe-toz', 'sut-tozu'],
   },
   {
-    id: 'salep',
-    name: 'Salep',
-    icon: '🥛',
+    id: 'uclubir',
+    name: "3'ü 1 Arada",
+    icon: '🥤',
     category: 'Sıcak',
-    price: 45,
-    recipe: {
-      yield: 1,
-      lines: [
-        { itemId: 'salep-toz', qty: 15 },
-        { itemId: 'sut', qty: 200 },
-        { itemId: 'tup', qty: 8 },
-      ],
-    },
-    needs: ['salep-toz', 'sut', 'tup'],
+    price: 20,
+    recipe: { yield: 1, lines: [{ itemId: 'uclubir-poset', qty: 1 }] },
+    needs: ['uclubir-poset'],
   },
+  {
+    id: 'oralet',
+    name: 'Oralet',
+    icon: '🍋',
+    category: 'Sıcak',
+    price: 20,
+    recipe: { yield: 1, lines: [{ itemId: 'oralet-toz', qty: 15 }] },
+    needs: ['oralet-toz'],
+  },
+
+  // ---------- YİYECEK (tarifli) ----------
   {
     id: 'tost',
     name: 'Kaşarlı Tost',
     icon: '🥪',
     category: 'Yiyecek',
-    price: 60,
+    price: 100,
+    // 1 tost = yarım ekmek + 60 g kaşar
     recipe: {
       yield: 1,
       lines: [
-        { itemId: 'ekmek-tost', qty: 1 },
+        { itemId: 'ekmek', qty: 0.5 },
         { itemId: 'kasar', qty: 60 },
-        { itemId: 'tup', qty: 10 },
       ],
     },
-    needs: ['ekmek-tost', 'kasar', 'tup'],
+    needs: ['ekmek', 'kasar'],
+  },
+
+  // ---------- SOĞUK (al-sat) ----------
+  {
+    id: 'bardak-su',
+    name: 'Bardak Su (300 ml)',
+    icon: '🥛',
+    category: 'Soğuk',
+    price: 20,
+    alsat: { buyUnit: 'koli', packSize: 40, buyQty: 1, buyTotal: 120 },
   },
   {
-    id: 'sucuklu-tost',
-    name: 'Sucuklu Tost',
-    icon: '🥙',
-    category: 'Yiyecek',
-    price: 80,
-    recipe: {
-      yield: 1,
-      lines: [
-        { itemId: 'ekmek-tost', qty: 1 },
-        { itemId: 'kasar', qty: 40 },
-        { itemId: 'sucuk', qty: 40 },
-        { itemId: 'tup', qty: 10 },
-      ],
-    },
-    needs: ['ekmek-tost', 'kasar', 'sucuk', 'tup'],
+    id: 'pet-su',
+    name: 'Pet Su (500 ml)',
+    icon: '💧',
+    category: 'Soğuk',
+    price: 20,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 140 },
   },
-
-  // --- al-sat ---
-  { id: 'kola', name: 'Kola', icon: '🥤', category: 'Soğuk', price: 35, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 480 } },
-  { id: 'soda', name: 'Soda', icon: '🫧', category: 'Soğuk', price: 20, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 240 } },
-  { id: 'ayran', name: 'Ayran', icon: '🥛', category: 'Soğuk', price: 25, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 288 } },
-  { id: 'su-sise', name: 'Su (şişe)', icon: '💧', category: 'Soğuk', price: 10, alsat: { buyUnit: 'adet', buyQty: 48, buyTotal: 240 } },
-  { id: 'gazoz', name: 'Gazoz', icon: '🍾', category: 'Soğuk', price: 25, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 336 } },
-  { id: 'meyve-suyu', name: 'Meyve suyu', icon: '🧃', category: 'Soğuk', price: 35, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 480 } },
-  { id: 'cikolata', name: 'Çikolata', icon: '🍫', category: 'Atıştırmalık', price: 25, alsat: { buyUnit: 'adet', buyQty: 24, buyTotal: 360 } },
-  { id: 'cips', name: 'Cips', icon: '🥔', category: 'Atıştırmalık', price: 40, alsat: { buyUnit: 'adet', buyQty: 12, buyTotal: 300 } },
+  {
+    id: 'sade-soda',
+    name: 'Sade Soda',
+    icon: '🫧',
+    category: 'Soğuk',
+    price: 20,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 260 },
+  },
+  {
+    id: 'meyveli-soda',
+    name: 'Meyveli Soda',
+    icon: '🍊',
+    category: 'Soğuk',
+    price: 40,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 320 },
+  },
+  {
+    id: 'gazoz',
+    name: 'Gazoz',
+    icon: '🍾',
+    category: 'Soğuk',
+    price: 60,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 375 },
+  },
+  {
+    id: 'kola',
+    name: 'Kola',
+    icon: '🥤',
+    category: 'Soğuk',
+    price: 60,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 625 },
+  },
+  {
+    id: 'fanta',
+    name: 'Fanta',
+    icon: '🍹',
+    category: 'Soğuk',
+    price: 60,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 625 },
+  },
+  {
+    id: 'ayran',
+    name: 'Ayran',
+    icon: '🥛',
+    category: 'Soğuk',
+    price: 40,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 380 },
+  },
+  {
+    id: 'meyve-suyu',
+    name: 'Meyve Suyu',
+    icon: '🧃',
+    category: 'Soğuk',
+    price: 60,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 600 },
+  },
+  {
+    id: 'enerji',
+    name: 'Enerji İçeceği',
+    icon: '⚡',
+    category: 'Soğuk',
+    price: 100,
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 900 },
+  },
+  {
+    id: 'bardak-limonata',
+    name: 'Bardak Limonata',
+    icon: '🍋',
+    category: 'Soğuk',
+    price: 20,
+    alsat: { buyUnit: 'koli', packSize: 40, buyQty: 1, buyTotal: 280 },
+  },
 ]
 
-/** Kurulumda varsayılan seçili gelenler. Çay zorunlu. */
-export const VARSAYILAN_SECILI = [
-  'cay-bardak',
-  'turk-kahvesi',
-  'tost',
-  'kola',
-  'soda',
-  'ayran',
-  'su-sise',
-]
+/** Kurulumda varsayılan seçili gelenler: hepsi. Liste zaten dar. */
+export const VARSAYILAN_SECILI = URUNLER.map((u) => u.id)
 
 export const VARSAYILAN_AYLIK_GIDER = [
   { name: 'Kira', amount: 15000 },
@@ -189,40 +255,57 @@ export const VARSAYILAN_AYLIK_GIDER = [
   { name: 'Doğalgaz', amount: 1500 },
   { name: 'İnternet', amount: 500 },
   { name: 'Vergi / muhasebe', amount: 2000 },
+  // Tarife girmeyen ama tükenen sarf malzemeleri — unutulursa kâr yüksek görünür.
+  { name: 'Peçete', amount: 800 },
+  { name: 'Temizlik / deterjan', amount: 600 },
+  { name: 'Çöp poşeti', amount: 200 },
+  { name: 'Kırılan bardak / fincan', amount: 500 },
+  { name: 'Kayıp şişe (depozito kesintisi)', amount: 300 },
 ]
 
 export const VARSAYILAN_GUNLUK_GIDER = [{ name: 'Eleman yevmiyesi', amount: 1000 }]
 
 /**
  * Seçilen ürün id'lerinden Item listesi kurar.
- * Gereken hammaddeleri kendiliğinden ekler — tarifi olan ürün seçilip
- * hammaddesi eksik kalamaz.
+ * Tarifin gerektirdiği hammaddeyi de, başka ürünü de (kahvenin yanındaki su gibi)
+ * kendiliğinden ekler — eksik hammaddeyle ürün kurulamaz.
  */
 export function urunleriKur(
   secili: string[],
-  hamAlis: Record<string, { qty: number; total: number }> = {},
+  hamAlis: Record<string, { qty: number; total: number; packSize?: number }> = {},
   urunFiyat: Record<string, number> = {},
-  alsatAlis: Record<string, { qty: number; total: number }> = {},
+  alsatAlis: Record<string, { qty: number; total: number; packSize?: number }> = {},
 ): Item[] {
-  const items: Item[] = []
-  const gerekenHam = new Set<string>()
-
+  // Tarifi olan ürün başka bir ürünü gerektiriyorsa (kahve -> bardak su) onu da seçime kat.
+  const tamSecim = new Set(secili)
   for (const id of secili) {
     const u = URUNLER.find((x) => x.id === id)
-    if (!u) continue
-    for (const h of u.needs ?? []) gerekenHam.add(h)
+    for (const n of u?.needs ?? []) {
+      if (URUNLER.some((x) => x.id === n)) tamSecim.add(n)
+    }
   }
 
+  const gerekenHam = new Set<string>()
+  for (const id of tamSecim) {
+    const u = URUNLER.find((x) => x.id === id)
+    for (const n of u?.needs ?? []) {
+      if (HAMMADDELER.some((h) => h.id === n)) gerekenHam.add(n)
+    }
+  }
+
+  const items: Item[] = []
+
   for (const hamId of gerekenHam) {
-    const h = HAMMADDELER.find((x) => x.id === hamId)
-    if (!h) continue
-    const alis = hamAlis[hamId] ?? { qty: h.buyQty, total: h.buyTotal }
-    const base = toBase(alis.qty, h.buyUnit)
+    const h = HAMMADDELER.find((x) => x.id === hamId)!
+    const alis = hamAlis[hamId] ?? { qty: h.buyQty, total: h.buyTotal, packSize: h.packSize }
+    const packSize = alis.packSize ?? h.packSize
+    const base = alisToBase(alis.qty, h.unit, h.buyUnit, packSize)
     items.push({
       id: h.id,
       name: h.name,
       unit: h.unit,
       buyUnit: h.buyUnit,
+      packSize,
       category: 'Hammadde',
       icon: h.icon,
       sellable: false,
@@ -232,24 +315,31 @@ export function urunleriKur(
     })
   }
 
-  for (const id of secili) {
+  for (const id of tamSecim) {
     const u = URUNLER.find((x) => x.id === id)
     if (!u) continue
 
     if (u.alsat) {
-      const alis = alsatAlis[id] ?? { qty: u.alsat.buyQty, total: u.alsat.buyTotal }
+      const alis = alsatAlis[id] ?? {
+        qty: u.alsat.buyQty,
+        total: u.alsat.buyTotal,
+        packSize: u.alsat.packSize,
+      }
+      const packSize = alis.packSize ?? u.alsat.packSize
+      const base = alisToBase(alis.qty, 'adet', u.alsat.buyUnit, packSize)
       items.push({
         id: u.id,
         name: u.name,
         unit: 'adet',
         buyUnit: u.alsat.buyUnit,
+        packSize,
         category: u.category,
         icon: u.icon,
         sellable: true,
         price: urunFiyat[id] ?? u.price,
-        stock: alis.qty,
-        minStock: Math.max(1, Math.round(alis.qty * 0.25)),
-        lastCost: { total: alis.total, qty: alis.qty },
+        stock: base,
+        minStock: Math.max(1, Math.round(base * 0.25)),
+        lastCost: { total: alis.total, qty: base },
       })
       continue
     }

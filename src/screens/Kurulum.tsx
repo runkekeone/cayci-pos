@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { unitCost } from '../lib/cost'
-import { fmtTL, fmtTLInce, toBase, uid } from '../lib/units'
+import { alisToBase, fmtTL, fmtTLInce, packSizeGerekli, uid } from '../lib/units'
 import {
   HAMMADDELER,
   URUNLER,
@@ -14,13 +14,10 @@ import {
 import type { Business, Expense } from '../types'
 
 const ZORUNLU = 'cay-bardak'
+const KATEGORILER = ['Sıcak', 'Soğuk', 'Yiyecek']
 
-/**
- * Kurulum. İki yol var:
- *   1) Önerilen ayarlar — hazır ürünler, hazır tarifler, hazır giderler. Tek tık.
- *   2) Kendim ayarlayayım — ürünleri seç, alış fiyatlarını kendi rakamınla gir.
- * Her iki yolda da her şey sonradan Ürünler/Giderler ekranından düzeltilebilir.
- */
+type Alis = { qty: number; total: number; packSize?: number }
+
 export default function Kurulum({ businessName }: { businessName: string }) {
   const { finishSetup } = useStore()
   const [adim, setAdim] = useState(0)
@@ -34,17 +31,18 @@ export default function Kurulum({ businessName }: { businessName: string }) {
     closeTime: '23:00',
   })
 
-  // Çay zorunlu, hep seçili.
   const [secili, setSecili] = useState<string[]>(VARSAYILAN_SECILI)
 
-  const [hamAlis, setHamAlis] = useState<Record<string, { qty: number; total: number }>>(
-    Object.fromEntries(HAMMADDELER.map((h) => [h.id, { qty: h.buyQty, total: h.buyTotal }])),
+  const [hamAlis, setHamAlis] = useState<Record<string, Alis>>(
+    Object.fromEntries(
+      HAMMADDELER.map((h) => [h.id, { qty: h.buyQty, total: h.buyTotal, packSize: h.packSize }]),
+    ),
   )
-  const [alsatAlis, setAlsatAlis] = useState<Record<string, { qty: number; total: number }>>(
+  const [alsatAlis, setAlsatAlis] = useState<Record<string, Alis>>(
     Object.fromEntries(
       URUNLER.filter((u) => u.alsat).map((u) => [
         u.id,
-        { qty: u.alsat!.buyQty, total: u.alsat!.buyTotal },
+        { qty: u.alsat!.buyQty, total: u.alsat!.buyTotal, packSize: u.alsat!.packSize },
       ]),
     ),
   )
@@ -55,7 +53,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
   const [aylik, setAylik] = useState(VARSAYILAN_AYLIK_GIDER.map((g) => ({ ...g })))
   const [gunluk, setGunluk] = useState(VARSAYILAN_GUNLUK_GIDER.map((g) => ({ ...g })))
 
-  // Seçilen ürünlerden canlı Item listesi — maliyetleri anında göstermek için.
+  // Seçime göre canlı Item listesi — maliyetler anında görünsün.
   const onizleme = urunleriKur(secili, hamAlis, fiyat, alsatAlis)
 
   function toggle(id: string) {
@@ -63,7 +61,6 @@ export default function Kurulum({ businessName }: { businessName: string }) {
     setSecili((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
   }
 
-  /** Yol 1: hazır her şey. */
   function onerilenIleKur() {
     finishSetup({
       items: urunleriKur(VARSAYILAN_SECILI),
@@ -72,7 +69,6 @@ export default function Kurulum({ businessName }: { businessName: string }) {
     })
   }
 
-  /** Yol 2: kullanıcının girdiği rakamlarla. */
   function bitir() {
     const expenses: Expense[] = [
       ...aylik
@@ -101,13 +97,14 @@ export default function Kurulum({ businessName }: { businessName: string }) {
 
   const cayMaliyet = unitCost(ZORUNLU, onizleme)
   const cayFiyat = fiyat[ZORUNLU] ?? 0
-  const gunlukEksi = aylik.reduce((n, g) => n + g.amount, 0) / 30 + gunluk.reduce((n, g) => n + g.amount, 0)
-  const basaBasBardak = cayFiyat - cayMaliyet > 0 ? Math.ceil(gunlukEksi / (cayFiyat - cayMaliyet)) : 0
+  const gunlukEksi =
+    aylik.reduce((n, g) => n + g.amount, 0) / 30 + gunluk.reduce((n, g) => n + g.amount, 0)
+  const basaBas = cayFiyat - cayMaliyet > 0 ? Math.ceil(gunlukEksi / (cayFiyat - cayMaliyet)) : 0
 
   const adimlar = ['İşletme', 'Ürünler & tarifler', 'Giderler']
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '32px 20px 60px' }}>
+    <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 20px 60px' }}>
       <h1>Kurulum</h1>
       <p className="sub">Bu adımlar bitmeden satış yapılamaz. Her şey sonradan değiştirilebilir.</p>
 
@@ -167,8 +164,8 @@ export default function Kurulum({ businessName }: { businessName: string }) {
             >
               <strong>Hızlı kurulum</strong>
               <p className="hint" style={{ margin: '6px 0 12px', color: 'var(--ink)' }}>
-                Hazır tarifler, ürünler ve tipik kıraathane giderleriyle kurar. Uğraşmadan başlar,
-                rakamları sonra kendi alışlarına göre düzeltirsin.
+                Hazır ürünler, hazır tarifler ve tipik kıraathane giderleriyle kurar. Rakamları
+                sonra kendi alışlarına göre düzeltirsin.
               </p>
               <button className="btn primary" disabled={!biz.name.trim()} onClick={onerilenIleKur}>
                 ⚡ Önerilen ayarlarla kur
@@ -181,56 +178,59 @@ export default function Kurulum({ businessName }: { businessName: string }) {
           <>
             <h2 style={{ marginTop: 0 }}>Ürünler ve tarifler</h2>
             <p className="hint" style={{ marginBottom: 16 }}>
-              Tarifler hazır geliyor. Satmadığın ürünü işaretten çıkar — ürün kartına hiç eklenmez.
-              Alış rakamlarını kendi faturana göre düzelt; maliyetler anında güncellenir.
+              Tarifler hazır. Satmadığın ürünü işaretten çıkar. Alış rakamlarını kendi faturana
+              göre düzelt — maliyetler anında güncellenir.
             </p>
 
-            <div className="section-title">Sattığın ürünler</div>
-            <div className="tiles" style={{ marginBottom: 20 }}>
-              {URUNLER.map((u) => {
-                const on = secili.includes(u.id)
-                const zorunlu = u.id === ZORUNLU
-                const m = on ? unitCost(u.id, onizleme) : 0
-                return (
-                  <button
-                    key={u.id}
-                    className="tile"
-                    onClick={() => toggle(u.id)}
-                    style={{
-                      opacity: on ? 1 : 0.45,
-                      borderColor: on ? 'var(--accent)' : undefined,
-                      cursor: zorunlu ? 'default' : 'pointer',
-                    }}
-                  >
-                    <span className="ic">{u.icon}</span>
-                    <span className="nm">{u.name}</span>
-                    {on ? (
-                      <span className="st">maliyet {fmtTLInce(m)}</span>
-                    ) : (
-                      <span className="st">satmıyorum</span>
-                    )}
-                    {zorunlu && <span className="tag warn">zorunlu</span>}
-                  </button>
-                )
-              })}
-            </div>
+            {KATEGORILER.map((kat) => (
+              <div key={kat}>
+                <div className="section-title">{kat}</div>
+                <div className="tiles" style={{ marginBottom: 16 }}>
+                  {URUNLER.filter((u) => u.category === kat).map((u) => {
+                    const on = secili.includes(u.id)
+                    const zorunlu = u.id === ZORUNLU
+                    const m = on ? unitCost(u.id, onizleme) : 0
+                    return (
+                      <button
+                        key={u.id}
+                        className="tile"
+                        onClick={() => toggle(u.id)}
+                        style={{
+                          opacity: on ? 1 : 0.45,
+                          borderColor: on ? 'var(--accent)' : undefined,
+                        }}
+                      >
+                        <span className="ic">{u.icon}</span>
+                        <span className="nm">{u.name}</span>
+                        {on ? (
+                          <span className="st">maliyet {fmtTLInce(m)}</span>
+                        ) : (
+                          <span className="st">satmıyorum</span>
+                        )}
+                        {zorunlu && <span className="tag warn">zorunlu</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
 
-            <div className="section-title">Alış fiyatların (hammadde)</div>
+            <div className="section-title">Hammadde alışların</div>
             <table style={{ marginBottom: 20 }}>
               <thead>
                 <tr>
                   <th>Hammadde</th>
                   <th className="num">Ne kadar aldın</th>
+                  <th className="num">İçinde kaç adet</th>
                   <th className="num">Kaç ₺ ödedin</th>
                   <th className="num">Birim maliyet</th>
                 </tr>
               </thead>
               <tbody>
-                {HAMMADDELER.filter((h) =>
-                  onizleme.some((i) => i.id === h.id),
-                ).map((h) => {
+                {HAMMADDELER.filter((h) => onizleme.some((i) => i.id === h.id)).map((h) => {
                   const v = hamAlis[h.id]
-                  const base = toBase(v.qty, h.buyUnit)
+                  const pack = packSizeGerekli(h.unit, h.buyUnit)
+                  const base = alisToBase(v.qty, h.unit, h.buyUnit, v.packSize)
                   return (
                     <tr key={h.id}>
                       <td>
@@ -239,21 +239,38 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                       <td className="num">
                         <input
                           type="number"
-                          style={{ width: 80 }}
+                          style={{ width: 70 }}
                           value={v.qty}
                           onChange={(e) =>
-                            setHamAlis({
-                              ...hamAlis,
-                              [h.id]: { ...v, qty: Number(e.target.value) },
-                            })
+                            setHamAlis({ ...hamAlis, [h.id]: { ...v, qty: Number(e.target.value) } })
                           }
                         />{' '}
                         <span className="hint">{h.buyUnit}</span>
                       </td>
                       <td className="num">
+                        {pack ? (
+                          <>
+                            <input
+                              type="number"
+                              style={{ width: 70 }}
+                              value={v.packSize ?? 1}
+                              onChange={(e) =>
+                                setHamAlis({
+                                  ...hamAlis,
+                                  [h.id]: { ...v, packSize: Number(e.target.value) },
+                                })
+                              }
+                            />{' '}
+                            <span className="hint">adet</span>
+                          </>
+                        ) : (
+                          <span className="hint">—</span>
+                        )}
+                      </td>
+                      <td className="num">
                         <input
                           type="number"
-                          style={{ width: 100 }}
+                          style={{ width: 90 }}
                           value={v.total}
                           onChange={(e) =>
                             setHamAlis({
@@ -277,14 +294,14 @@ export default function Kurulum({ businessName }: { businessName: string }) {
               <thead>
                 <tr>
                   <th>Ürün</th>
-                  <th className="num">Al-sat alışı</th>
+                  <th className="num">Al-sat: koli / içindeki / ₺</th>
                   <th className="num">Maliyet</th>
                   <th className="num">Satış ₺</th>
                   <th className="num">Kâr</th>
                 </tr>
               </thead>
               <tbody>
-                {URUNLER.filter((u) => secili.includes(u.id)).map((u) => {
+                {URUNLER.filter((u) => onizleme.some((i) => i.id === u.id)).map((u) => {
                   const m = unitCost(u.id, onizleme)
                   const av = alsatAlis[u.id]
                   return (
@@ -297,7 +314,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                           <>
                             <input
                               type="number"
-                              style={{ width: 60 }}
+                              style={{ width: 45 }}
                               value={av.qty}
                               onChange={(e) =>
                                 setAlsatAlis({
@@ -306,10 +323,22 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                                 })
                               }
                             />{' '}
+                            <span className="hint">{u.alsat.buyUnit} ×</span>{' '}
+                            <input
+                              type="number"
+                              style={{ width: 55 }}
+                              value={av.packSize ?? 1}
+                              onChange={(e) =>
+                                setAlsatAlis({
+                                  ...alsatAlis,
+                                  [u.id]: { ...av, packSize: Number(e.target.value) },
+                                })
+                              }
+                            />{' '}
                             <span className="hint">adet /</span>{' '}
                             <input
                               type="number"
-                              style={{ width: 80 }}
+                              style={{ width: 70 }}
                               value={av.total}
                               onChange={(e) =>
                                 setAlsatAlis({
@@ -328,13 +357,16 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                       <td className="num">
                         <input
                           type="number"
-                          style={{ width: 80 }}
+                          style={{ width: 70 }}
                           value={fiyat[u.id]}
                           onChange={(e) => setFiyat({ ...fiyat, [u.id]: Number(e.target.value) })}
                         />
                       </td>
                       <td className="num">
-                        <span className={fiyat[u.id] - m >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 14 }}>
+                        <span
+                          className={fiyat[u.id] - m >= 0 ? 'v good' : 'v bad'}
+                          style={{ fontSize: 14 }}
+                        >
                           {fmtTL(fiyat[u.id] - m)}
                         </span>
                       </td>
@@ -406,10 +438,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                 </button>
               </div>
             ))}
-            <button
-              className="btn sm"
-              onClick={() => setGunluk([...gunluk, { name: '', amount: 0 }])}
-            >
+            <button className="btn sm" onClick={() => setGunluk([...gunluk, { name: '', amount: 0 }])}>
               + Ekle
             </button>
 
@@ -424,7 +453,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
               <p className="hint" style={{ color: 'var(--ink)' }}>
                 Bir bardak çayın maliyeti <strong>{fmtTLInce(cayMaliyet)}</strong>, kârı{' '}
                 <strong>{fmtTL(cayFiyat - cayMaliyet)}</strong>. Başa baş için günde{' '}
-                <strong>{basaBasBardak || '—'}</strong> bardak çay satman gerekiyor.
+                <strong>{basaBas || '—'}</strong> bardak çay satman gerekiyor.
               </p>
             </div>
           </>

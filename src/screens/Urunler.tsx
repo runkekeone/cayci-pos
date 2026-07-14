@@ -1,7 +1,18 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { unitCost } from '../lib/cost'
-import { UNITS, fmtQty, fmtTL, fmtTLInce, fromBase, round, toBase, uid, unitDef } from '../lib/units'
+import {
+  UNITS,
+  alisToBase,
+  baseToAlis,
+  fmtQty,
+  fmtTL,
+  fmtTLInce,
+  packSizeGerekli,
+  round,
+  uid,
+  unitDef,
+} from '../lib/units'
 import { URUNLER } from '../defaults'
 import type { Item } from '../types'
 
@@ -131,7 +142,10 @@ export default function Urunler() {
                 <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
                 <td className="num">
                   {i.lastCost
-                    ? `${fmtTL(i.lastCost.total)} / ${round(fromBase(i.lastCost.qty, i.buyUnit), 2)} ${i.buyUnit}`
+                    ? `${fmtTL(i.lastCost.total)} / ${round(
+                        baseToAlis(i.lastCost.qty, i.unit, i.buyUnit, i.packSize),
+                        2,
+                      )} ${i.buyUnit}`
                     : '—'}
                 </td>
                 <td className="num">
@@ -194,15 +208,17 @@ function UrunKarti({
 
   // Alış kutuları kullanıcının birimiyle çalışır, kayıtta temel birime çevrilir.
   const [alisMiktar, setAlisMiktar] = useState(
-    item.lastCost ? round(fromBase(item.lastCost.qty, item.buyUnit), 3) : 1,
+    item.lastCost ? round(baseToAlis(item.lastCost.qty, item.unit, item.buyUnit, item.packSize), 3) : 1,
   )
   const [alisTutar, setAlisTutar] = useState(item.lastCost?.total ?? 0)
   const [tarifli, setTarifli] = useState(!!item.recipe)
 
   const yieldN = d.recipe?.yield || 1
+  const packGerek = packSizeGerekli(d.unit, d.buyUnit)
+  const alisBase = alisToBase(alisMiktar, d.unit, d.buyUnit, d.packSize)
 
   // Kaydedilmemiş hali de dahil ederek maliyeti canlı göster.
-  const kayitli = { ...d, lastCost: { total: alisTutar, qty: toBase(alisMiktar, d.buyUnit) } }
+  const kayitli = { ...d, lastCost: { total: alisTutar, qty: alisBase } }
   const preview = s.items.some((i) => i.id === d.id)
     ? s.items.map((i) => (i.id === d.id ? kayitli : i))
     : [...s.items, kayitli]
@@ -233,12 +249,12 @@ function UrunKarti({
   }
 
   function kaydet() {
-    const base = toBase(alisMiktar, d.buyUnit)
     const next: Item = {
       ...d,
       recipe: tarifli ? d.recipe : undefined,
       // Tarifli üründe kendi alış maliyeti tutulmaz — maliyet içindekilerden gelir.
-      lastCost: tarifli || alisTutar <= 0 || base <= 0 ? d.lastCost : { total: alisTutar, qty: base },
+      lastCost:
+        tarifli || alisTutar <= 0 || alisBase <= 0 ? d.lastCost : { total: alisTutar, qty: alisBase },
     }
     if (tarifli) next.lastCost = undefined
     onSave(next)
@@ -311,14 +327,26 @@ function UrunKarti({
             <div className="row">
               <input
                 type="number"
-                style={{ width: 90 }}
+                style={{ width: 80 }}
                 value={alisMiktar}
                 onChange={(e) => setAlisMiktar(Number(e.target.value))}
               />
               <span className="hint">{d.buyUnit} aldım,</span>
+              {packGerek && (
+                <>
+                  <span className="hint">içinde</span>
+                  <input
+                    type="number"
+                    style={{ width: 70 }}
+                    value={d.packSize ?? 1}
+                    onChange={(e) => setD({ ...d, packSize: Number(e.target.value) })}
+                  />
+                  <span className="hint">adet var,</span>
+                </>
+              )}
               <input
                 type="number"
-                style={{ width: 110 }}
+                style={{ width: 100 }}
                 value={alisTutar}
                 onChange={(e) => setAlisTutar(Number(e.target.value))}
               />
@@ -326,10 +354,10 @@ function UrunKarti({
             </div>
             <p className="hint" style={{ marginTop: 8 }}>
               Birim maliyet: <strong>{fmtTLInce(maliyet)}</strong> / {d.unit}
-              {d.buyUnit !== d.unit && (
+              {alisBase > 0 && d.buyUnit !== d.unit && (
                 <>
                   {' '}
-                  ({round(toBase(alisMiktar, d.buyUnit), 0)} {d.unit} girdi)
+                  (stoğa {round(alisBase, 0)} {d.unit} girer)
                 </>
               )}
             </p>

@@ -25,14 +25,44 @@ export const UNITS: UnitDef[] = [
   { label: 'adet', base: 'adet', factor: 1, group: 'Sayı' },
   { label: 'porsiyon', base: 'adet', factor: 1, group: 'Sayı' },
   { label: 'dilim', base: 'adet', factor: 1, group: 'Sayı' },
-  { label: 'bardak', base: 'adet', factor: 1, group: 'Sayı' },
-  { label: 'fincan', base: 'adet', factor: 1, group: 'Sayı' },
-  { label: 'şişe', base: 'adet', factor: 1, group: 'Sayı' },
-  { label: 'kutu', base: 'adet', factor: 1, group: 'Sayı' },
+  { label: 'koli', base: 'adet', factor: 1, group: 'Sayı' },
   { label: 'paket', base: 'adet', factor: 1, group: 'Sayı' },
-  { label: 'koli (24)', base: 'adet', factor: 24, group: 'Sayı' },
-  { label: 'düzine (12)', base: 'adet', factor: 12, group: 'Sayı' },
+  { label: 'kutu', base: 'adet', factor: 1, group: 'Sayı' },
 ]
+
+/**
+ * Adetle kullanılan bir kalem, adet olmayan bir kapla alınabiliyor mu?
+ * Şeker kiloyla alınır, küple kullanılır. Soda koliyle alınır, adetle satılır.
+ * Bu durumda "içinde kaç adet var" (packSize) kullanıcıdan sorulur.
+ */
+export const ADET_ALIS_BIRIMLERI = ['adet', 'koli', 'paket', 'kutu', 'kg', 'lt']
+
+/** packSize gerekiyor mu — yani alış birimi tek tek saymaya uygun değil mi. */
+export function packSizeGerekli(unit: Unit, buyUnit: string): boolean {
+  return unit === 'adet' && buyUnit !== 'adet'
+}
+
+/**
+ * Alıştaki miktarı temel birime çevirir.
+ * - Ağırlık/hacim: sabit katsayı (5 kg -> 5000 g)
+ * - Adet: alış birimi 'adet' değilse packSize ile çarpılır (1 koli x 24 -> 24 adet)
+ */
+export function alisToBase(qty: number, unit: Unit, buyUnit: string, packSize?: number): number {
+  if (unit === 'adet') {
+    if (buyUnit === 'adet') return qty
+    return qty * (packSize && packSize > 0 ? packSize : 1)
+  }
+  return qty * unitDef(buyUnit).factor
+}
+
+/** Temel birimdeki miktarı alış birimine geri çevirir (gösterim için). */
+export function baseToAlis(qty: number, unit: Unit, buyUnit: string, packSize?: number): number {
+  if (unit === 'adet') {
+    if (buyUnit === 'adet') return qty
+    return packSize && packSize > 0 ? qty / packSize : qty
+  }
+  return qty / unitDef(buyUnit).factor
+}
 
 export function unitDef(label: string): UnitDef {
   return UNITS.find((u) => u.label === label) ?? UNITS[0]

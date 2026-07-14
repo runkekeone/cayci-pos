@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { lowStock, unitCost } from '../lib/cost'
-import { fmtQty, fmtTL, fmtTLInce, toBase, unitsFor } from '../lib/units'
+import {
+  ADET_ALIS_BIRIMLERI,
+  alisToBase,
+  fmtQty,
+  fmtTL,
+  fmtTLInce,
+  packSizeGerekli,
+  unitsFor,
+} from '../lib/units'
 
 export default function Stok() {
   const { s, addPurchase, addWaste } = useStore()
@@ -125,7 +133,13 @@ function AlisModal({
   onSave,
 }: {
   onClose: () => void
-  onSave: (itemId: string, qty: number, total: number, supplier?: string) => void
+  onSave: (
+    itemId: string,
+    qty: number,
+    total: number,
+    supplier?: string,
+    birim?: { buyUnit: string; packSize?: number },
+  ) => void
 }) {
   const { s } = useStore()
   const stoklu = s.items.filter((i) => !i.recipe)
@@ -136,9 +150,16 @@ function AlisModal({
   const [supplier, setSupplier] = useState('')
 
   const item = s.items.find((i) => i.id === itemId)
-  const units = item ? unitsFor(item.unit) : []
-  const label = unitLabel || item?.buyUnit || units[0]?.label || ''
-  const base = toBase(qty, label)
+  // Adetle kullanılan kalem kiloyla/koliyle de alınabilir; o zaman "içinde kaç adet" sorulur.
+  const units = item
+    ? item.unit === 'adet'
+      ? ADET_ALIS_BIRIMLERI
+      : unitsFor(item.unit).map((u) => u.label)
+    : []
+  const label = unitLabel || item?.buyUnit || units[0] || ''
+  const [packSize, setPackSize] = useState<number>(item?.packSize ?? 1)
+  const packGerek = item ? packSizeGerekli(item.unit, label) : false
+  const base = item ? alisToBase(qty, item.unit, label, packSize) : 0
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -150,8 +171,10 @@ function AlisModal({
           <select
             value={itemId}
             onChange={(e) => {
+              const next = s.items.find((i) => i.id === e.target.value)
               setItemId(e.target.value)
               setUnitLabel('')
+              setPackSize(next?.packSize ?? 1)
             }}
           >
             {stoklu.map((i) => (
@@ -164,26 +187,32 @@ function AlisModal({
 
         <div className="row">
           <div className="field" style={{ flex: 1 }}>
-            <label>Miktar</label>
+            <label>Ne kadar aldın</label>
             <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
           </div>
-          <div className="field" style={{ width: 130 }}>
+          <div className="field" style={{ width: 110 }}>
             <label>Birim</label>
             <select value={label} onChange={(e) => setUnitLabel(e.target.value)}>
               {units.map((u) => (
-                <option key={u.label} value={u.label}>
-                  {u.label}
+                <option key={u} value={u}>
+                  {u}
                 </option>
               ))}
             </select>
           </div>
+          {packGerek && (
+            <div className="field" style={{ width: 130 }}>
+              <label>İçinde kaç adet var</label>
+              <input
+                type="number"
+                value={packSize}
+                onChange={(e) => setPackSize(Number(e.target.value))}
+              />
+            </div>
+          )}
           <div className="field" style={{ flex: 1 }}>
-            <label>Toplam tutar ₺</label>
-            <input
-              type="number"
-              value={total}
-              onChange={(e) => setTotal(Number(e.target.value))}
-            />
+            <label>Kaç ₺ ödedin</label>
+            <input type="number" value={total} onChange={(e) => setTotal(Number(e.target.value))} />
           </div>
         </div>
 
@@ -195,7 +224,7 @@ function AlisModal({
         {item && base > 0 && (
           <p className="hint">
             Stoğa <strong>{fmtQty(base, item.unit, item.buyUnit)}</strong> girecek. Yeni birim
-            maliyet: <strong>{fmtTLInce(total / base)}</strong> / {item.unit} — bu ürünün geçtiği
+            maliyet: <strong>{fmtTLInce(total / base)}</strong> / {item.unit} — bu kalemin geçtiği
             tüm tariflerin maliyeti anında güncellenir.
           </p>
         )}
@@ -208,7 +237,10 @@ function AlisModal({
             className="btn primary"
             disabled={!item || base <= 0 || total <= 0}
             onClick={() => {
-              onSave(itemId, base, total, supplier || undefined)
+              onSave(itemId, base, total, supplier || undefined, {
+                buyUnit: label,
+                packSize: packGerek ? packSize : undefined,
+              })
               onClose()
             }}
           >

@@ -20,6 +20,12 @@ export interface Item {
   unit: Unit
   /** Kullanıcının aldığı/gördüğü birim: kg, lt, cc, koli... Sadece gösterim ve giriş içindir. */
   buyUnit: string
+  /**
+   * Bir alış biriminde kaç temel birim var — sabit çevrimle bulunamayan kalemler için.
+   * 1 kg küp şeker = 405 küp, 1 koli soda = 24 adet. Kullanıcı alışta girer.
+   * Sadece unit === 'adet' iken anlamlı.
+   */
+  packSize?: number
   category: string
   icon: string
   /** Satış ekranında çıkar mı. */
