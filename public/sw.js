@@ -10,8 +10,17 @@
  *   - Gezinme (sayfa açma): önce ağ, olmazsa önbellekteki index.html
  *   - Diğer dosyalar: önce önbellek, yoksa ağdan al ve önbelleğe koy
  */
-const CACHE = 'cayci-pos-v1'
-const KABUK = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg']
+// GitHub Pages'te uygulama depo adının altında yayınlanır: /cayci-pos/
+const TABAN = new URL('./', self.location).pathname
+
+const CACHE = 'cayci-pos-v2'
+const KABUK = [
+  TABAN,
+  TABAN + 'index.html',
+  TABAN + 'manifest.webmanifest',
+  TABAN + 'icon.svg',
+  TABAN + 'icon-maskable.svg',
+]
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -37,7 +46,9 @@ self.addEventListener('fetch', (e) => {
 
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(() => caches.match('/index.html').then((r) => r || caches.match('/'))),
+      fetch(req).catch(() =>
+        caches.match(TABAN + 'index.html').then((r) => r || caches.match(TABAN)),
+      ),
     )
     return
   }

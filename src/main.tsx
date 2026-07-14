@@ -12,7 +12,9 @@ createRoot(document.getElementById('root')!).render(
 // Çevrimdışı kabuk. Sadece derlenmiş sürümde — geliştirirken önbellek kafa karıştırır.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    // BASE_URL: GitHub Pages'te "/cayci-pos/", yerelde "/"
+    const taban = import.meta.env.BASE_URL
+    navigator.serviceWorker.register(`${taban}sw.js`, { scope: taban }).catch(() => {
       // kayıt olmazsa uygulama yine çalışır, sadece çevrimdışı açılmaz
     })
   })
