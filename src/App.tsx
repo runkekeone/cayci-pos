@@ -16,13 +16,13 @@ import Takvim from './screens/Takvim'
 
 const SAYFALAR = [
   { id: 'satis', ad: 'Satış', ic: '🧾', el: Satis },
+  { id: 'rapor', ad: 'Rapor', ic: '📊', el: Rapor },
   { id: 'urunler', ad: 'Ürünler & Tarif', ic: '🍵', el: Urunler },
   { id: 'stok', ad: 'Stok & Alış', ic: '📦', el: Stok },
   { id: 'musteriler', ad: 'Veresiye', ic: '📒', el: Musteriler },
   { id: 'giderler', ad: 'Giderler', ic: '💸', el: Giderler },
   { id: 'kasa', ad: 'Kasa', ic: '💵', el: Kasa },
   { id: 'takvim', ad: 'Takvim', ic: '📅', el: Takvim },
-  { id: 'rapor', ad: 'Rapor', ic: '📊', el: Rapor },
 ]
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
@@ -62,6 +62,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
               {fmtTL(r.netKar)}
             </strong>
           </div>
+          <Yedek />
           <button className="nav" onClick={onOut}>
             <span>🚪</span>
             <span>
@@ -75,6 +76,65 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
         <Ekran />
       </main>
     </div>
+  )
+}
+
+/**
+ * Veri yedeği. Tarayıcı temizlenirse her şey gider — dosyaya al, gerektiğinde geri yükle.
+ * Sunucu gelene kadar tek koruma bu.
+ */
+function Yedek() {
+  const { s, set } = useStore()
+
+  function yedekAl() {
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cayci-yedek-${today()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function geriYukle(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const veri = JSON.parse(String(reader.result))
+        if (!veri.items || !veri.sales) throw new Error('geçersiz')
+        if (
+          confirm('Yedekteki veri şu anki verinin ÜZERİNE yazılacak. Devam edilsin mi?')
+        ) {
+          set(() => veri)
+        }
+      } catch {
+        alert('Dosya okunamadı — geçerli bir yedek dosyası değil.')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  return (
+    <>
+      <button className="nav" onClick={yedekAl}>
+        <span>💾</span>
+        <span>Yedek al</span>
+      </button>
+      <label className="nav" style={{ cursor: 'pointer' }}>
+        <span>📂</span>
+        <span>Geri yükle</span>
+        <input
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) geriYukle(f)
+            e.target.value = ''
+          }}
+        />
+      </label>
+    </>
   )
 }
 

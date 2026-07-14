@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store'
-import { availableQty, unitCost } from '../lib/cost'
-import { dayReport } from '../lib/report'
-import { fmtTL, today } from '../lib/units'
+import { availableQty, lowStock, unitCost } from '../lib/cost'
+import { fmtTL } from '../lib/units'
 import type { Payment, SaleLine } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
 
 export default function Satis() {
-  const { s, addToTable, removeFromTable, setTableQty, renameTable, closeTable, quickSale } =
+  const { s, addToTable, removeFromTable, setTableQty, renameTable, closeTable, quickSale, cancelSale } =
     useStore()
   const [target, setTarget] = useState<Target>({ kind: 'hizli' })
   const [quick, setQuick] = useState<SaleLine[]>([])
@@ -24,7 +23,8 @@ export default function Satis() {
   const lines = target.kind === 'masa' ? (table?.lines ?? []) : quick
   const total = useMemo(() => lines.reduce((n, l) => n + l.qty * l.unitPrice, 0), [lines])
 
-  const r = dayReport(s, today())
+  const azalanlar = lowStock(s.items)
+  const sonSatislar = [...s.sales].reverse().slice(0, 6)
 
   function add(itemId: string) {
     if (target.kind === 'masa') {
@@ -132,54 +132,22 @@ export default function Satis() {
         </div>
       )}
 
-      {/* ---- günlük rapor kutuları ---- */}
-      <div className="section-title">Bugün</div>
-      <div className="stats">
-        <div className="stat">
-          <div className="k">Satış (fiş)</div>
-          <div className="v">{s.sales.filter((x) => x.date.slice(0, 10) === today()).length}</div>
+      {/* Stok uyarısı: satışı engellemez, sadece haber verir.
+          Veri her zaman tam tutulmaz — elinde malzeme olabilir, satışı kesmeyiz. */}
+      {azalanlar.length > 0 && (
+        <div
+          className="card"
+          style={{ margin: '16px 0 0', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}
+        >
+          <strong>⚠ Stok azaldı</strong>
+          <p className="hint" style={{ marginTop: 6, color: 'var(--ink)' }}>
+            {azalanlar.map((i) => i.name).join(' · ')} — satış devam eder, alım yapmayı unutma.
+          </p>
         </div>
-        <div className="stat">
-          <div className="k">Ciro</div>
-          <div className="v">{fmtTL(r.ciro)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Nakit</div>
-          <div className="v good">{fmtTL(r.nakitSatis)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">POS / Kart</div>
-          <div className="v">{fmtTL(r.kartSatis)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Veresiye</div>
-          <div className="v bad">{fmtTL(r.veresiyeSatis)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Ürün maliyeti</div>
-          <div className="v bad">{fmtTL(r.satilanMalMaliyeti)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Günlük gider</div>
-          <div className="v bad">{fmtTL(r.gunlukGider + r.sabitGiderPayi)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Brüt kâr</div>
-          <div className="v good">
-            {fmtTL(r.brutKar)}
-            {r.ciro > 0 && (
-              <span className="hint"> (%{Math.round((r.brutKar / r.ciro) * 100)})</span>
-            )}
-          </div>
-        </div>
-        <div className="stat" style={{ borderColor: r.netKar >= 0 ? 'var(--good)' : 'var(--bad)' }}>
-          <div className="k">NET KÂR</div>
-          <div className={`v ${r.netKar >= 0 ? 'good' : 'bad'}`}>{fmtTL(r.netKar)}</div>
-        </div>
-      </div>
+      )}
 
       {/* ---- ürünler + sepet ---- */}
-      <div className="grid2">
+      <div className="grid2" style={{ marginTop: 16 }}>
         <div>
           <div className="row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
@@ -196,19 +164,22 @@ export default function Satis() {
           <div className="tiles">
             {shown.map((i) => {
               const kalan = availableQty(i.id, s.items)
-              const out = kalan <= 0
               const kar = (i.price ?? 0) - unitCost(i.id, s.items)
               return (
                 <button
                   key={i.id}
-                  className={`tile ${out ? 'out' : ''}`}
+                  className="tile"
                   onClick={() => add(i.id)}
                   title={`Maliyet ${fmtTL(unitCost(i.id, s.items))} · Kâr ${fmtTL(kar)}`}
                 >
+                  {kalan <= 0 && (
+                    <span className="warn-dot" title="Stok bitti — satış yine de yapılabilir">
+                      ⚠
+                    </span>
+                  )}
                   <span className="ic">{i.icon}</span>
                   <span className="nm">{i.name}</span>
                   <span className="pr">{fmtTL(i.price ?? 0)}</span>
-                  <span className="st">{out ? 'stok yok' : `${kalan} adetlik`}</span>
                 </button>
               )
             })}
@@ -272,6 +243,68 @@ export default function Satis() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ---- son satışlar: yanlış tuşa basınca dönüş yolu ---- */}
+      <div className="section-title">Son satışlar</div>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Saat</th>
+              <th>Ne satıldı</th>
+              <th>Ödeme</th>
+              <th className="num">Tutar</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sonSatislar.map((sale) => (
+              <tr key={sale.id}>
+                <td>
+                  {new Date(sale.date).toLocaleTimeString('tr-TR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </td>
+                <td>
+                  <span className="hint">
+                    {sale.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}
+                  </span>
+                </td>
+                <td>
+                  <span className={`tag ${sale.payment === 'veresiye' ? 'bad' : ''}`}>
+                    {sale.payment}
+                  </span>
+                </td>
+                <td className="num">{fmtTL(sale.total)}</td>
+                <td className="num">
+                  <button
+                    className="btn sm"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `${fmtTL(sale.total)} tutarındaki satış iptal edilecek.\nStok geri yüklenecek, veresiyeyse borç silinecek.\n\nOnaylıyor musun?`,
+                        )
+                      ) {
+                        cancelSale(sale.id)
+                      }
+                    }}
+                  >
+                    İptal et
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {sonSatislar.length === 0 && (
+              <tr>
+                <td colSpan={5} className="hint">
+                  Henüz satış yok.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {adlandir && (

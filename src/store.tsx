@@ -46,6 +46,7 @@ interface Store {
   renameTable: (tableId: string, name: string) => void
   closeTable: (tableId: string, payment: Payment, customerId?: string) => void
   quickSale: (lines: SaleLine[], payment: Payment, customerId?: string) => void
+  cancelSale: (saleId: string) => void
 
   // müşteri
   saveCustomer: (c: Customer) => void
@@ -250,6 +251,30 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
 
       quickSale: (lines, payment, customerId) =>
         set((st) => commitSale(st, lines, payment, customerId)),
+
+      /** Yanlış satışı geri al: stok geri döner, veresiyeyse borç silinir. */
+      cancelSale: (saleId) =>
+        set((st) => {
+          const sale = st.sales.find((x) => x.id === saleId)
+          if (!sale) return st
+
+          let items = st.items
+          for (const l of sale.lines) items = applyStock(items, l.itemId, -l.qty)
+
+          const customers =
+            sale.payment === 'veresiye' && sale.customerId
+              ? st.customers.map((c) =>
+                  c.id === sale.customerId ? { ...c, balance: c.balance - sale.total } : c,
+                )
+              : st.customers
+
+          return {
+            ...st,
+            items,
+            customers,
+            sales: st.sales.filter((x) => x.id !== saleId),
+          }
+        }),
 
       saveCustomer: (c) =>
         set((st) => ({

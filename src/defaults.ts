@@ -157,7 +157,7 @@ export const URUNLER: UrunTanim[] = [
   // ---------- SOĞUK (al-sat) ----------
   {
     id: 'bardak-su',
-    name: 'Bardak Su (300 ml)',
+    name: 'Bardak Su',
     icon: '🥛',
     category: 'Soğuk',
     price: 20,
@@ -165,7 +165,7 @@ export const URUNLER: UrunTanim[] = [
   },
   {
     id: 'pet-su',
-    name: 'Pet Su (500 ml)',
+    name: 'Pet Su',
     icon: '💧',
     category: 'Soğuk',
     price: 20,
