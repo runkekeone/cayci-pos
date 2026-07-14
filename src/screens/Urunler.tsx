@@ -13,7 +13,7 @@ import {
   uid,
   unitDef,
 } from '../lib/units'
-import { URUNLER } from '../defaults'
+import { URUNLER, urunleriKur } from '../defaults'
 import type { Item } from '../types'
 
 function bosUrun(sellable: boolean): Item {
@@ -33,9 +33,13 @@ function bosUrun(sellable: boolean): Item {
 export default function Urunler() {
   const { s, saveItem, deleteItem } = useStore()
   const [edit, setEdit] = useState<Item | null>(null)
+  const [katalog, setKatalog] = useState(false)
 
   const satilan = s.items.filter((i) => i.sellable)
   const hammadde = s.items.filter((i) => !i.sellable)
+
+  // Hazır katalogda olup bu işletmede olmayan ürünler.
+  const eksikler = URUNLER.filter((u) => !s.items.some((i) => i.id === u.id))
 
   return (
     <>
@@ -52,6 +56,14 @@ export default function Urunler() {
         <button className="btn" onClick={() => setEdit(bosUrun(false))}>
           + Hammadde
         </button>
+        {eksikler.length > 0 && (
+          <button className="btn" onClick={() => setKatalog(true)}>
+            📚 Hazır katalogdan ekle
+            <span className="tag warn" style={{ marginLeft: 6 }}>
+              {eksikler.length}
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="section-title">Satış ürünleri</div>
@@ -183,7 +195,92 @@ export default function Urunler() {
           }}
         />
       )}
+
+      {katalog && (
+        <KatalogModal
+          eksikIdler={eksikler.map((u) => u.id)}
+          onClose={() => setKatalog(false)}
+          onEkle={(secilen) => {
+            // Seçilen ürünler ve eksik hammaddeleri hazır tarifleriyle kurulur.
+            const yeniler = urunleriKur(secilen)
+            for (const it of yeniler) {
+              if (!s.items.some((i) => i.id === it.id)) saveItem(it)
+            }
+            setKatalog(false)
+          }}
+        />
+      )}
     </>
+  )
+}
+
+/** Hazır katalogda olup listende olmayan ürünleri getirir. */
+function KatalogModal({
+  eksikIdler,
+  onClose,
+  onEkle,
+}: {
+  eksikIdler: string[]
+  onClose: () => void
+  onEkle: (ids: string[]) => void
+}) {
+  const eksikler = URUNLER.filter((u) => eksikIdler.includes(u.id))
+  const [secili, setSecili] = useState<string[]>(eksikIdler)
+
+  const kategoriler = [...new Set(eksikler.map((u) => u.category))]
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+        <h2>Hazır katalogdan ürün ekle</h2>
+        <p className="hint" style={{ marginBottom: 16 }}>
+          Bunlar katalogda var ama senin listende yok. Eklediklerin hazır tarifleri ve varsayılan
+          alış fiyatlarıyla gelir — sonra kendi rakamlarınla düzeltirsin.
+        </p>
+
+        {kategoriler.map((kat) => (
+          <div key={kat}>
+            <div className="section-title">{kat}</div>
+            <div className="tiles">
+              {eksikler
+                .filter((u) => u.category === kat)
+                .map((u) => {
+                  const on = secili.includes(u.id)
+                  return (
+                    <button
+                      key={u.id}
+                      className="tile"
+                      style={{ opacity: on ? 1 : 0.45, borderColor: on ? 'var(--accent)' : undefined }}
+                      onClick={() =>
+                        setSecili((c) =>
+                          c.includes(u.id) ? c.filter((x) => x !== u.id) : [...c, u.id],
+                        )
+                      }
+                    >
+                      <span className="ic">{u.icon}</span>
+                      <span className="nm">{u.name}</span>
+                      <span className="pr">{fmtTL(u.price)}</span>
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        ))}
+
+        <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          <button
+            className="btn primary"
+            disabled={secili.length === 0}
+            onClick={() => onEkle(secili)}
+          >
+            {secili.length} ürünü ekle
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
