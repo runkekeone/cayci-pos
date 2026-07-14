@@ -179,6 +179,86 @@ h1 {
   color: var(--bad);
 }
 
+/* ---- rapor kutucukları ---- */
+.rgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.rbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.rbox-ic {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.rbox-txt {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+
+.rbox-k {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rbox-v {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rbox-v.good {
+  color: var(--good);
+}
+
+.rbox-v.bad {
+  color: var(--bad);
+}
+
+.rbox-ek {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+@media (max-width: 1100px) {
+  .rgrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .rgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- ürün ızgarası ---- */
 .tiles {
   display: grid;

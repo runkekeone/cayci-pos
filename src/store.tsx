@@ -243,8 +243,11 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           const next = commitSale(st, table.lines, payment, customerId, tableId)
           return {
             ...next,
-            tables: next.tables.map((t) =>
-              t.id === tableId ? { ...t, lines: [], openedAt: undefined } : t,
+            tables: next.tables.map((t, i) =>
+              t.id === tableId
+                ? // Hesap kapandı: verilen özel isim düşer, masa varsayılan adına döner.
+                  { ...t, lines: [], openedAt: undefined, name: `Masa ${i + 1}` }
+                : t,
             ),
           }
         }),

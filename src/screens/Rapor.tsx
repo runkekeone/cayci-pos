@@ -1,42 +1,102 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { dayReport, totalVeresiye } from '../lib/report'
-import { fmtTL, round, today } from '../lib/units'
+import { dayOf, fmtTL, round, today } from '../lib/units'
+
+/** Kutucuk: solda ikon, sağda başlık ve tutar. */
+function Kutu({
+  ikon,
+  renk,
+  baslik,
+  tutar,
+  ek,
+  ton,
+}: {
+  ikon: string
+  renk: string
+  baslik: string
+  tutar: number
+  ek?: string
+  ton?: 'good' | 'bad'
+}) {
+  return (
+    <div className="rbox">
+      <span className="rbox-ic" style={{ background: renk }}>
+        {ikon}
+      </span>
+      <div className="rbox-txt">
+        <div className="rbox-k">{baslik}</div>
+        <div className={`rbox-v ${ton ?? ''}`}>
+          {fmtTL(tutar)}
+          {ek && <span className="rbox-ek">{ek}</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Rapor() {
   const { s } = useStore()
   const [date, setDate] = useState(today())
   const r = dayReport(s, date)
 
+  // Kutulara girecek, günlük rapordan türeyen ek rakamlar
+  const alimlar = s.purchases
+    .filter((p) => dayOf(p.date) === date)
+    .reduce((n, p) => n + p.total, 0)
+  const fisSayisi = s.sales.filter((x) => dayOf(x.date) === date).length
+  const karOran = r.ciro > 0 ? (r.brutKar / r.ciro) * 100 : 0
+
   return (
     <>
-      <h1>Günlük Rapor</h1>
+      <h1>Rapor</h1>
       <p className="sub">Gün eksiyle başlar (sabit gider payı), satış geldikçe artıya geçer.</p>
 
       <div className="row" style={{ marginBottom: 16 }}>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <span className="tag">{fisSayisi} fiş</span>
       </div>
 
-      <div className="stats">
-        <div className="stat">
-          <div className="k">Ciro</div>
-          <div className="v">{fmtTL(r.ciro)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Satılan malın maliyeti</div>
-          <div className="v bad">−{fmtTL(r.satilanMalMaliyeti)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Brüt kâr</div>
-          <div className="v good">{fmtTL(r.brutKar)}</div>
-        </div>
-        <div className="stat" style={{ borderColor: r.netKar >= 0 ? 'var(--good)' : 'var(--bad)' }}>
-          <div className="k">NET KÂR</div>
-          <div className={`v ${r.netKar >= 0 ? 'good' : 'bad'}`}>{fmtTL(r.netKar)}</div>
-        </div>
+      <div className="rgrid">
+        {/* --- 1. satır: para nereden geldi --- */}
+        <Kutu ikon="💵" renk="#e6f4ec" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
+        <Kutu ikon="💳" renk="#e9ecf7" baslik="POS / Kart" tutar={r.kartSatis} />
+        <Kutu ikon="📒" renk="#fbeaea" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
+        <Kutu ikon="🧾" renk="#e9f0fb" baslik="Toplam Ciro" tutar={r.ciro} />
+
+        {/* --- 2. satır: para nereye gitti --- */}
+        <Kutu ikon="🤝" renk="#e6f4ec" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
+        <Kutu ikon="🚚" renk="#f4eee6" baslik="Bugünkü alımlar" tutar={alimlar} />
+        <Kutu
+          ikon="💸"
+          renk="#fbeaea"
+          baslik="Giderler"
+          tutar={r.gunlukGider + r.sabitGiderPayi}
+          ton="bad"
+        />
+        <Kutu ikon="🗑️" renk="#fbeaea" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
+
+        {/* --- 3. satır: sonuç --- */}
+        <Kutu ikon="🏦" renk="#e9f0fb" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
+        <Kutu
+          ikon="📈"
+          renk="#e6f4ec"
+          baslik="Brüt kâr"
+          tutar={r.brutKar}
+          ek={r.ciro > 0 ? `(%${round(karOran, 1)})` : undefined}
+          ton="good"
+        />
+        <Kutu ikon="📦" renk="#f4eee6" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
+        <Kutu
+          ikon="🎯"
+          renk={r.netKar >= 0 ? '#e6f4ec' : '#fbeaea'}
+          baslik="NET KÂR"
+          tutar={r.netKar}
+          ton={r.netKar >= 0 ? 'good' : 'bad'}
+        />
       </div>
 
-      <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
+      <div className="row" style={{ alignItems: 'flex-start', gap: 16, marginTop: 20 }}>
         <div className="card" style={{ flex: 1, minWidth: 300 }}>
           <strong>Günün hesabı</strong>
           <table style={{ marginTop: 10 }}>
@@ -78,23 +138,15 @@ export default function Rapor() {
         </div>
 
         <div className="card" style={{ flex: 1, minWidth: 300 }}>
-          <strong>Ödeme kırılımı</strong>
+          <strong>Veresiye durumu</strong>
           <table style={{ marginTop: 10 }}>
             <tbody>
               <tr>
-                <td>Nakit</td>
-                <td className="num">{fmtTL(r.nakitSatis)}</td>
-              </tr>
-              <tr>
-                <td>Kart</td>
-                <td className="num">{fmtTL(r.kartSatis)}</td>
-              </tr>
-              <tr>
-                <td>Veresiye (bugün yazılan)</td>
+                <td>Bugün yazılan veresiye</td>
                 <td className="num">{fmtTL(r.veresiyeSatis)}</td>
               </tr>
               <tr>
-                <td>Tahsil edilen borç</td>
+                <td>Bugün tahsil edilen</td>
                 <td className="num">{fmtTL(r.tahsilat)}</td>
               </tr>
               <tr>
