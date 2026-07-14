@@ -4,10 +4,13 @@ import type {
   Expense,
   Item,
   Payment,
+  PaymentPart,
   SaleLine,
   State,
+  Table,
+  Variant,
 } from './types'
-import { applyStock, unitCost } from './lib/cost'
+import { applyStock, unitCost, variantCost } from './lib/cost'
 import { today, uid } from './lib/units'
 import { bosState } from './seed'
 import { dataKey } from './auth'
@@ -40,12 +43,15 @@ interface Store {
   addWaste: (itemId: string, qty: number, reason: 'fire' | 'ikram') => void
 
   // satış
-  addToTable: (tableId: string, itemId: string, qty?: number) => void
+  addToTable: (tableId: string, itemId: string, qty?: number, variant?: Variant) => void
   removeFromTable: (tableId: string, index: number) => void
   setTableQty: (tableId: string, index: number, qty: number) => void
   renameTable: (tableId: string, name: string) => void
+  setTableCustomer: (tableId: string, customerId?: string) => void
   closeTable: (tableId: string, payment: Payment, customerId?: string) => void
   quickSale: (lines: SaleLine[], payment: Payment, customerId?: string) => void
+  /** Parçalı ödeme: hesap bölünür, her parça ayrı ödenir. Veresiye parçası müşteriye yazılır. */
+  paySplit: (lines: SaleLine[], parts: PaymentPart[], tableId?: string) => void
   cancelSale: (saleId: string) => void
 
   // müşteri
@@ -62,6 +68,18 @@ interface Store {
   finishSetup: (patch: Pick<State, 'items' | 'expenses' | 'business'>) => void
 }
 
+/** Hesap kapandı: masa boşalır, özel ismi ve müşterisi düşer, varsayılan adına döner. */
+function bosalt(t: Table, tableId: string, index: number): Table {
+  if (t.id !== tableId) return t
+  return {
+    ...t,
+    lines: [],
+    openedAt: undefined,
+    customerId: undefined,
+    name: `Masa ${index + 1}`,
+  }
+}
+
 const Ctx = createContext<Store | null>(null)
 
 export function StoreProvider({ userId, children }: { userId: string; children: ReactNode }) {
@@ -75,38 +93,56 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     const set = (fn: (s: State) => State) => setS(fn)
 
     /** Satış satırı kur: fiyat ve o anki maliyet satırın içine donar. */
-    const mkLine = (items: Item[], itemId: string, qty: number): SaleLine | null => {
+    const mkLine = (
+      items: Item[],
+      itemId: string,
+      qty: number,
+      variant?: Variant,
+    ): SaleLine | null => {
       const item = items.find((i) => i.id === itemId)
       if (!item) return null
       return {
         itemId,
-        name: item.name,
+        name: variant ? `${item.name} (${variant.name})` : item.name,
         qty,
-        unitPrice: item.price ?? 0,
-        unitCost: unitCost(itemId, items),
+        unitPrice: (item.price ?? 0) + (variant?.priceDelta ?? 0),
+        unitCost: variantCost(itemId, items, variant),
+        variantId: variant?.id,
+        variantName: variant?.name,
       }
     }
 
+    /** Satırın çeşidini ürün kartından bul — stok düşerken lazım. */
+    const variantOf = (items: Item[], l: SaleLine): Variant | undefined =>
+      l.variantId
+        ? items.find((i) => i.id === l.itemId)?.variants?.find((v) => v.id === l.variantId)
+        : undefined
+
+    /** Ortak satış kaydı. parts verilirse hesap parçalı ödenmiştir. */
     const commitSale = (
       st: State,
       lines: SaleLine[],
-      payment: Payment,
-      customerId?: string,
+      parts: PaymentPart[],
       tableId?: string,
     ): State => {
-      if (lines.length === 0) return st
+      if (lines.length === 0 || parts.length === 0) return st
+
       let items = st.items
-      for (const l of lines) items = applyStock(items, l.itemId, l.qty)
+      for (const l of lines) items = applyStock(items, l.itemId, l.qty, variantOf(st.items, l))
 
       const total = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
       const cost = lines.reduce((n, l) => n + l.qty * l.unitCost, 0)
 
-      const customers =
-        payment === 'veresiye' && customerId
-          ? st.customers.map((c) =>
-              c.id === customerId ? { ...c, balance: c.balance + total } : c,
-            )
-          : st.customers
+      // Veresiye parçalarının tutarı ilgili müşterinin borcuna yazılır.
+      let customers = st.customers
+      for (const p of parts) {
+        if (p.payment !== 'veresiye' || !p.customerId) continue
+        customers = customers.map((c) =>
+          c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+        )
+      }
+
+      const veresiyeParca = parts.find((p) => p.payment === 'veresiye')
 
       return {
         ...st,
@@ -120,8 +156,9 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             lines,
             total,
             cost,
-            payment,
-            customerId,
+            payment: parts[0].payment,
+            payments: parts.length > 1 ? parts : undefined,
+            customerId: veresiyeParca?.customerId,
             tableId,
           },
         ],
@@ -190,14 +227,17 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           }
         }),
 
-      addToTable: (tableId, itemId, qty = 1) =>
+      addToTable: (tableId, itemId, qty = 1, variant) =>
         set((st) => ({
           ...st,
           tables: st.tables.map((t) => {
             if (t.id !== tableId) return t
-            const line = mkLine(st.items, itemId, qty)
+            const line = mkLine(st.items, itemId, qty, variant)
             if (!line) return t
-            const idx = t.lines.findIndex((l) => l.itemId === itemId)
+            // Aynı ürünün farklı çeşidi ayrı satır olur — duble çay ile açık çay karışmasın.
+            const idx = t.lines.findIndex(
+              (l) => l.itemId === itemId && l.variantId === variant?.id,
+            )
             const lines =
               idx >= 0
                 ? t.lines.map((l, i) => (i === idx ? { ...l, qty: l.qty + qty } : l))
@@ -236,24 +276,38 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           tables: st.tables.map((t) => (t.id === tableId ? { ...t, name } : t)),
         })),
 
+      setTableCustomer: (tableId, customerId) =>
+        set((st) => ({
+          ...st,
+          tables: st.tables.map((t) => (t.id === tableId ? { ...t, customerId } : t)),
+        })),
+
       closeTable: (tableId, payment, customerId) =>
         set((st) => {
           const table = st.tables.find((t) => t.id === tableId)
           if (!table || table.lines.length === 0) return st
-          const next = commitSale(st, table.lines, payment, customerId, tableId)
-          return {
-            ...next,
-            tables: next.tables.map((t, i) =>
-              t.id === tableId
-                ? // Hesap kapandı: verilen özel isim düşer, masa varsayılan adına döner.
-                  { ...t, lines: [], openedAt: undefined, name: `Masa ${i + 1}` }
-                : t,
-            ),
-          }
+          const total = table.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+          const next = commitSale(
+            st,
+            table.lines,
+            [{ payment, amount: total, customerId }],
+            tableId,
+          )
+          return { ...next, tables: next.tables.map((t, i) => bosalt(t, tableId, i)) }
         }),
 
       quickSale: (lines, payment, customerId) =>
-        set((st) => commitSale(st, lines, payment, customerId)),
+        set((st) => {
+          const total = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+          return commitSale(st, lines, [{ payment, amount: total, customerId }])
+        }),
+
+      paySplit: (lines, parts, tableId) =>
+        set((st) => {
+          const next = commitSale(st, lines, parts, tableId)
+          if (!tableId) return next
+          return { ...next, tables: next.tables.map((t, i) => bosalt(t, tableId, i)) }
+        }),
 
       /** Yanlış satışı geri al: stok geri döner, veresiyeyse borç silinir. */
       cancelSale: (saleId) =>
@@ -262,14 +316,24 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           if (!sale) return st
 
           let items = st.items
-          for (const l of sale.lines) items = applyStock(items, l.itemId, -l.qty)
+          for (const l of sale.lines) {
+            const v = l.variantId
+              ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+              : undefined
+            items = applyStock(items, l.itemId, -l.qty, v)
+          }
 
-          const customers =
-            sale.payment === 'veresiye' && sale.customerId
-              ? st.customers.map((c) =>
-                  c.id === sale.customerId ? { ...c, balance: c.balance - sale.total } : c,
-                )
-              : st.customers
+          // Parçalı ödemede her veresiye parçası ayrı müşteriden düşer.
+          const parts = sale.payments ?? [
+            { payment: sale.payment, amount: sale.total, customerId: sale.customerId },
+          ]
+          let customers = st.customers
+          for (const p of parts) {
+            if (p.payment !== 'veresiye' || !p.customerId) continue
+            customers = customers.map((c) =>
+              c.id === p.customerId ? { ...c, balance: c.balance - p.amount } : c,
+            )
+          }
 
           return {
             ...st,

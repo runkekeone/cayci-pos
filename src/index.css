@@ -402,6 +402,19 @@ h1 {
   line-height: 1;
 }
 
+/* detaylı modda: bu ürünün çeşitleri var */
+.var-dot {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
 /* ---- sepet ---- */
 .cart {
   position: sticky;

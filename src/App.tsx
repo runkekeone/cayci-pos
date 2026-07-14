@@ -19,7 +19,7 @@ const SAYFALAR = [
   { id: 'rapor', ad: 'Rapor', ic: '📊', el: Rapor },
   { id: 'urunler', ad: 'Ürünler & Tarif', ic: '🍵', el: Urunler },
   { id: 'stok', ad: 'Stok & Alış', ic: '📦', el: Stok },
-  { id: 'musteriler', ad: 'Veresiye', ic: '📒', el: Musteriler },
+  { id: 'musteriler', ad: 'Müşteriler', ic: '📒', el: Musteriler },
   { id: 'giderler', ad: 'Giderler', ic: '💸', el: Giderler },
   { id: 'kasa', ad: 'Kasa', ic: '💵', el: Kasa },
   { id: 'takvim', ad: 'Takvim', ic: '📅', el: Takvim },

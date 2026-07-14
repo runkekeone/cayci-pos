@@ -13,6 +13,22 @@ export interface Recipe {
   yield: number
 }
 
+/**
+ * Ürün çeşidi. Aynı üründen çıkar ama tarifi/fiyatı biraz oynar.
+ * Duble çay 2 kat çay çeker, açık çay az çeker, şekersiz çayda şeker düşmez,
+ * "kuşburnu" oraletiyle "elma" oraletinin maliyeti aynıdır — sadece adı değişir.
+ */
+export interface Variant {
+  id: string
+  name: string
+  /** Satış fiyatına eklenir (eksi de olabilir). */
+  priceDelta?: number
+  /** Tarif miktarlarını çarpar. Duble 2, açık 0.6. */
+  factor?: number
+  /** Bu kalemler tarifden düşülmesin. Şekersiz çay -> şeker. */
+  skip?: string[]
+}
+
 export interface Item {
   id: string
   name: string
@@ -33,6 +49,8 @@ export interface Item {
   price?: number
   /** Tarifli ürünün kendi stoğu tutulmaz; satışta içindekiler düşer. */
   recipe?: Recipe
+  /** Çeşitleri. Sadece "detaylı satış" modunda sorulur. */
+  variants?: Variant[]
   stock: number
   minStock?: number
   /** Son alış: maliyet bundan hesaplanır (ortalama yok). */
@@ -54,9 +72,18 @@ export interface SaleLine {
   qty: number
   unitPrice: number
   unitCost: number
+  variantId?: string
+  variantName?: string
 }
 
 export type Payment = 'nakit' | 'kart' | 'veresiye'
+
+/** Parçalı ödemenin bir parçası. Veresiye parçası mutlaka bir müşteriye yazılır. */
+export interface PaymentPart {
+  payment: Payment
+  amount: number
+  customerId?: string
+}
 
 export interface Sale {
   id: string
@@ -64,7 +91,10 @@ export interface Sale {
   lines: SaleLine[]
   total: number
   cost: number
+  /** Tek ödemede kullanılır. Parçalı ödemede ilk parçanın tipi yazılır. */
   payment: Payment
+  /** Hesap bölündüyse parçalar burada. Raporlar önce buraya bakar. */
+  payments?: PaymentPart[]
   customerId?: string
   tableId?: string
 }
@@ -74,6 +104,8 @@ export interface Table {
   name: string
   lines: SaleLine[]
   openedAt?: string
+  /** Masaya oturan müşteri (detaylı mod). Veresiyede varsayılan olarak seçilir. */
+  customerId?: string
 }
 
 export interface Customer {

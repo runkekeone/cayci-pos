@@ -1,4 +1,4 @@
-import type { Item } from '../types'
+import type { Item, Variant } from '../types'
 
 /**
  * Maliyet motoru.
@@ -62,9 +62,49 @@ export function explode(
   return out
 }
 
+/** Bir çeşidin tek adet maliyeti. Çeşit yoksa normal maliyet. */
+export function variantCost(itemId: string, items: Item[], v?: Variant): number {
+  if (!v || (!v.factor && !v.skip?.length)) return unitCost(itemId, items)
+
+  const item = items.find((i) => i.id === itemId)
+  if (!item?.recipe) return unitCost(itemId, items) * (v.factor ?? 1)
+
+  const y = item.recipe.yield > 0 ? item.recipe.yield : 1
+  const f = v.factor ?? 1
+  const batch = item.recipe.lines
+    .filter((l) => !v.skip?.includes(l.itemId))
+    .reduce((sum, l) => sum + l.qty * f * unitCost(l.itemId, items), 0)
+  return batch / y
+}
+
+/** Çeşide göre hangi hammaddeden ne kadar düşecek. */
+export function variantExplode(
+  itemId: string,
+  qty: number,
+  items: Item[],
+  v?: Variant,
+): Map<string, number> {
+  if (!v || (!v.factor && !v.skip?.length)) return explode(itemId, qty, items)
+
+  const item = items.find((i) => i.id === itemId)
+  if (!item?.recipe) return explode(itemId, qty * (v.factor ?? 1), items)
+
+  const y = item.recipe.yield > 0 ? item.recipe.yield : 1
+  const f = v.factor ?? 1
+  const out = new Map<string, number>()
+  for (const line of item.recipe.lines) {
+    if (v.skip?.includes(line.itemId)) continue
+    const need = (line.qty / y) * f * qty
+    for (const [id, n] of explode(line.itemId, need, items)) {
+      out.set(id, (out.get(id) ?? 0) + n)
+    }
+  }
+  return out
+}
+
 /** Stok düşümü. Tarifli ürün kendi stoğundan değil, içindekilerden düşer. */
-export function applyStock(items: Item[], itemId: string, qty: number): Item[] {
-  const needs = explode(itemId, qty, items)
+export function applyStock(items: Item[], itemId: string, qty: number, v?: Variant): Item[] {
+  const needs = variantExplode(itemId, qty, items, v)
   return items.map((i) => (needs.has(i.id) ? { ...i, stock: i.stock - needs.get(i.id)! } : i))
 }
 

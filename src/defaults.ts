@@ -1,5 +1,50 @@
-import type { Item, Unit } from './types'
+import type { Item, Unit, Variant } from './types'
 import { alisToBase, uid } from './lib/units'
+
+/**
+ * ÇEŞİTLER. Sadece "detaylı satış" modunda sorulur, hızlı satışta karşına çıkmaz.
+ *
+ * factor: tarif miktarını çarpar (duble 2 kat çay çeker, açık az çeker)
+ * skip:   o kalem tarifden düşmez (şekersiz çayda şeker eksilmez)
+ * priceDelta: satış fiyatına eklenir
+ */
+export const CAY_CESITLERI: Variant[] = [
+  { id: 'normal', name: 'Normal' },
+  { id: 'acik', name: 'Açık', factor: 0.6 },
+  { id: 'koyu', name: 'Koyu', factor: 1.4 },
+  { id: 'duble', name: 'Duble', factor: 2, priceDelta: 15 },
+  { id: 'sekersiz', name: 'Şekersiz', skip: ['seker'] },
+  { id: 'limonlu', name: 'Limonlu' },
+]
+
+export const ORALET_CESITLERI: Variant[] = [
+  'Oralet',
+  'Kuşburnu',
+  'Elma',
+  'Kivi',
+  'Karadut',
+  'Limon',
+  'Nane-Limon',
+  'Kakao',
+  'Sahlep',
+  'Muz',
+  'Tarçın',
+  'Kokteyl',
+].map((n) => ({ id: n.toLowerCase().replace(/[^a-z]/g, ''), name: n }))
+
+export const MEYVE_SUYU_CESITLERI: Variant[] = [
+  'Şeftali',
+  'Vişne',
+  'Portakal',
+  'Kayısı',
+  'Karışık',
+  'Nar',
+].map((n) => ({ id: n.toLowerCase().replace(/[^a-z]/g, ''), name: n }))
+
+export const SODA_CESITLERI: Variant[] = ['Elma', 'Limon', 'Karışık meyveli', 'Şeftali'].map((n) => ({
+  id: n.toLowerCase().replace(/[^a-z]/g, ''),
+  name: n,
+}))
 
 /**
  * HAZIR KATALOG — gerçek bir kıraathanenin sattığı kalemler ve tarifleri.
@@ -65,6 +110,7 @@ export interface UrunTanim {
   alsat?: { buyUnit: string; packSize?: number; buyQty: number; buyTotal: number }
   /** Bu ürün seçilirse gereken kalemler — hammadde veya başka ürün olabilir. */
   needs?: string[]
+  variants?: Variant[]
 }
 
 export const URUNLER: UrunTanim[] = [
@@ -84,6 +130,7 @@ export const URUNLER: UrunTanim[] = [
       ],
     },
     needs: ['cay', 'seker'],
+    variants: CAY_CESITLERI,
   },
   {
     id: 'turk-kahvesi',
@@ -134,6 +181,7 @@ export const URUNLER: UrunTanim[] = [
     price: 20,
     recipe: { yield: 1, lines: [{ itemId: 'oralet-toz', qty: 15 }] },
     needs: ['oralet-toz'],
+    variants: ORALET_CESITLERI,
   },
 
   // ---------- YİYECEK (tarifli) ----------
@@ -186,6 +234,7 @@ export const URUNLER: UrunTanim[] = [
     category: 'Soğuk',
     price: 40,
     alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 320 },
+    variants: SODA_CESITLERI,
   },
   {
     id: 'gazoz',
@@ -226,6 +275,7 @@ export const URUNLER: UrunTanim[] = [
     category: 'Soğuk',
     price: 60,
     alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 600 },
+    variants: MEYVE_SUYU_CESITLERI,
   },
   {
     id: 'enerji',
@@ -337,6 +387,7 @@ export function urunleriKur(
         icon: u.icon,
         sellable: true,
         price: urunFiyat[id] ?? u.price,
+        variants: u.variants,
         stock: base,
         minStock: Math.max(1, Math.round(base * 0.25)),
         lastCost: { total: alis.total, qty: base },
@@ -353,6 +404,7 @@ export function urunleriKur(
       icon: u.icon,
       sellable: true,
       price: urunFiyat[id] ?? u.price,
+      variants: u.variants,
       stock: 0,
       recipe: u.recipe ? { yield: u.recipe.yield, lines: u.recipe.lines.map((l) => ({ ...l })) } : undefined,
     })

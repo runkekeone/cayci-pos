@@ -51,8 +51,12 @@ export function dayReport(s: State, date: string): DayReport {
   const wastes = s.wastes.filter((w) => dayOf(w.date) === date)
   const cashDay = s.cashDays.find((c) => c.date === date)
 
+  // Hesap parçalı ödendiyse her parça kendi ödeme tipine yazılır.
   const by = (p: string) =>
-    sales.filter((x) => x.payment === p).reduce((n, x) => n + x.total, 0)
+    sales.reduce((n, x) => {
+      const parts = x.payments ?? [{ payment: x.payment, amount: x.total }]
+      return n + parts.filter((q) => q.payment === p).reduce((m, q) => m + q.amount, 0)
+    }, 0)
 
   const ciro = sales.reduce((n, x) => n + x.total, 0)
   const satilanMalMaliyeti = sales.reduce((n, x) => n + x.cost, 0)
