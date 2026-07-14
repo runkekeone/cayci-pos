@@ -29,6 +29,8 @@ export default function Satis() {
   const [adlandir, setAdlandir] = useState<string | null>(null)
   const [cesitSec, setCesitSec] = useState<Item | null>(null)
   const [parcali, setParcali] = useState(false)
+  // Mobilde sepet alttan açılan panel. Masaüstünde CSS bunu yok sayar.
+  const [sepetAcik, setSepetAcik] = useState(false)
 
   const sellable = s.items.filter((i) => i.sellable)
   // Kategori sırası sabit; kullanıcının eklediği yeni kategoriler sona düşer.
@@ -128,6 +130,7 @@ export default function Satis() {
       setQuick([])
     }
     setCustomerId('')
+    setSepetAcik(false)
   }
 
   function parcaliOde(parts: PaymentPart[]) {
@@ -135,6 +138,7 @@ export default function Satis() {
     if (target.kind === 'hizli') setQuick([])
     setCustomerId('')
     setParcali(false)
+    setSepetAcik(false)
   }
 
   return (
@@ -243,7 +247,7 @@ export default function Satis() {
       {/* ---- ürünler + sepet ---- */}
       <div className="grid2" style={{ marginTop: 16 }}>
         <div>
-          <div className="row" style={{ marginBottom: 12 }}>
+          <div className="row cat-row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
               <button
                 key={c}
@@ -280,14 +284,23 @@ export default function Satis() {
           </div>
         </div>
 
-        <div className="card cart">
+        <div className={`card cart ${sepetAcik ? 'open' : ''}`}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <strong>{target.kind === 'masa' ? table?.name : 'Hızlı satış'}</strong>
-            {lines.length > 0 && (
-              <button className="btn sm ghost" onClick={temizle}>
-                Temizle
+            <div className="row">
+              {lines.length > 0 && (
+                <button className="btn sm ghost" onClick={temizle}>
+                  Temizle
+                </button>
+              )}
+              <button
+                className="btn sm ghost only-mobile"
+                onClick={() => setSepetAcik(false)}
+                title="Kapat"
+              >
+                ▼
               </button>
-            )}
+            </div>
           </div>
 
           <div className="cart-lines">
@@ -355,6 +368,17 @@ export default function Satis() {
           </button>
         </div>
       </div>
+
+      {/* ---- mobil: sepet çubuğu ve panel örtüsü ---- */}
+      {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}
+
+      {lines.length > 0 && !sepetAcik && (
+        <div className="sepet-bar only-mobile" onClick={() => setSepetAcik(true)}>
+          <span className="sb-adet">{lines.reduce((n, l) => n + l.qty, 0)}</span>
+          <span className="sb-tut">{fmtTL(total)}</span>
+          <button className="sb-btn">Ödeme al</button>
+        </div>
+      )}
 
       {/* ---- son satışlar ---- */}
       <div className="section-title">Son satışlar</div>

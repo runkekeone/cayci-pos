@@ -14,27 +14,38 @@ import Kasa from './screens/Kasa'
 import Rapor from './screens/Rapor'
 import Takvim from './screens/Takvim'
 
+/**
+ * ana: telefonda alt çubukta doğrudan görünür (5 tane — parmakla rahat).
+ * Gerisi "Daha" panelinde. Masaüstünde hepsi yan menüde.
+ */
 const SAYFALAR = [
-  { id: 'satis', ad: 'Satış', ic: '🧾', el: Satis },
-  { id: 'rapor', ad: 'Rapor', ic: '📊', el: Rapor },
-  { id: 'urunler', ad: 'Ürünler & Tarif', ic: '🍵', el: Urunler },
-  { id: 'stok', ad: 'Stok & Alış', ic: '📦', el: Stok },
-  { id: 'musteriler', ad: 'Müşteriler', ic: '📒', el: Musteriler },
-  { id: 'giderler', ad: 'Giderler', ic: '💸', el: Giderler },
-  { id: 'kasa', ad: 'Kasa', ic: '💵', el: Kasa },
-  { id: 'takvim', ad: 'Takvim', ic: '📅', el: Takvim },
+  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', el: Satis, ana: true },
+  { id: 'rapor', ad: 'Rapor', kisa: 'Rapor', ic: '📊', el: Rapor, ana: true },
+  { id: 'urunler', ad: 'Ürünler & Tarif', kisa: 'Ürünler', ic: '🍵', el: Urunler, ana: true },
+  { id: 'stok', ad: 'Stok & Alış', kisa: 'Stok', ic: '📦', el: Stok, ana: true },
+  { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '📒', el: Musteriler, ana: true },
+  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸', el: Giderler, ana: false },
+  { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵', el: Kasa, ana: false },
+  { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '📅', el: Takvim, ana: false },
 ]
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
 function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   const { s } = useStore()
   const [sayfa, setSayfa] = useState('satis')
+  const [daha, setDaha] = useState(false)
 
   // Kurulum bitmeden uygulamaya girilemez.
   if (!s.setupDone) return <Kurulum businessName={user.businessName} />
 
   const Ekran = SAYFALAR.find((p) => p.id === sayfa)?.el ?? Satis
   const r = dayReport(s, today())
+  const gizliAktif = SAYFALAR.some((p) => !p.ana && p.id === sayfa)
+
+  function git(id: string) {
+    setSayfa(id)
+    setDaha(false)
+  }
 
   return (
     <div className="app">
@@ -47,15 +58,26 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
         {SAYFALAR.map((p) => (
           <button
             key={p.id}
-            className={`nav ${sayfa === p.id ? 'on' : ''}`}
-            onClick={() => setSayfa(p.id)}
+            // ana olmayan sayfalar telefonda çubukta değil, "Daha" panelinde
+            className={`nav ${sayfa === p.id ? 'on' : ''} ${p.ana ? '' : 'nav-gizli'}`}
+            onClick={() => git(p.id)}
           >
             <span>{p.ic}</span>
-            <span>{p.ad}</span>
+            <span className="nav-ad">{p.ad}</span>
+            <span className="nav-kisa">{p.kisa}</span>
           </button>
         ))}
 
-        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+        {/* telefonda: kalan sayfalar + yedek + çıkış */}
+        <button
+          className={`nav only-mobile ${gizliAktif ? 'on' : ''}`}
+          onClick={() => setDaha(true)}
+        >
+          <span>⋯</span>
+          <span className="nav-kisa">Daha</span>
+        </button>
+
+        <div className="side-alt">
           <div className="hint" style={{ padding: '8px 12px' }}>
             Bugün net:{' '}
             <strong className={r.netKar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 13 }}>
@@ -71,6 +93,39 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           </button>
         </div>
       </aside>
+
+      {daha && (
+        <div className="modal-bg only-mobile" onClick={() => setDaha(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{s.business.name || user.businessName}</h2>
+
+            {SAYFALAR.filter((p) => !p.ana).map((p) => (
+              <button
+                key={p.id}
+                className={`nav ${sayfa === p.id ? 'on' : ''}`}
+                onClick={() => git(p.id)}
+              >
+                <span>{p.ic}</span>
+                <span>{p.ad}</span>
+              </button>
+            ))}
+
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+              <div className="hint" style={{ padding: '0 12px 8px' }}>
+                Bugün net:{' '}
+                <strong className={r.netKar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 13 }}>
+                  {fmtTL(r.netKar)}
+                </strong>
+              </div>
+              <Yedek />
+              <button className="nav" onClick={onOut}>
+                <span>🚪</span>
+                <span>Çıkış ({user.username})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="main">
         <Ekran />

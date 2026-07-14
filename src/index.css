@@ -22,6 +22,9 @@ body {
   margin: 0;
   background: var(--bg);
   -webkit-tap-highlight-color: transparent;
+  /* Sayfa asla yana kaymaz. Geniş içerik (tablolar) kendi kutusunda kayar. */
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 button {
@@ -104,6 +107,11 @@ select:focus {
   font-weight: 600;
 }
 
+/* masaüstünde uzun ad, telefonda kısa ad */
+.nav-kisa {
+  display: none;
+}
+
 .main {
   flex: 1;
   padding: 24px 28px 60px;
@@ -143,6 +151,13 @@ h1 {
   grid-template-columns: 1fr 360px;
   gap: 16px;
   align-items: start;
+}
+
+/* Izgara/flex çocuklarının varsayılan min-width'i "auto"dur: içindeki yatay
+   kayan kutu (kategori şeridi, masa şeridi, tablo) hücreyi genişletip sayfayı
+   taşırır. Sıfırlayınca kutu kendi içinde kayar, sayfa sabit kalır. */
+.grid2 > * {
+  min-width: 0;
 }
 
 .stats {
@@ -644,40 +659,305 @@ tr:last-child td {
   letter-spacing: 0.04em;
 }
 
-/* ---- mobil ---- */
+/* ================= MOBİL =================
+   Telefonda kabuk değişir: yan menü alta iner, sepet alttan açılan panel olur.
+   Tezgâhta tek elle kullanılacak — dokunma hedefleri büyük, önemli tuşlar altta. */
+
+/* sadece mobilde görünenler */
+.only-mobile {
+  display: none;
+}
+
 @media (max-width: 860px) {
+  .only-mobile {
+    display: flex;
+  }
+
   .app {
     flex-direction: column;
   }
 
+  /* --- alt sekme çubuğu: 5 ana sayfa + "Daha". Kaydırma yok, hepsi görünür. --- */
   .side {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 45;
     width: 100%;
     height: auto;
-    position: static;
     flex-direction: row;
-    overflow-x: auto;
-    padding: 8px;
-    gap: 4px;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 2px;
+    overflow: visible;
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 20px rgba(28, 26, 23, 0.07);
   }
 
   .brand {
     display: none;
   }
 
-  .nav {
+  /* telefonda çubuğa girmeyenler */
+  .side .nav-gizli,
+  .side-alt {
+    display: none;
+  }
+
+  .side .nav {
     width: auto;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    min-width: 0;
+    min-height: 48px;
     white-space: nowrap;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 10px;
+  }
+
+  .side .nav span:first-child {
+    font-size: 19px;
+    line-height: 1.1;
+  }
+
+  /* çubukta kısa ad kullanılır */
+  .side .nav-ad {
+    display: none;
+  }
+
+  .side .nav-kisa {
+    display: inline;
+  }
+
+  /* "Daha" panelindeki menü satırları normal genişlikte */
+  .modal .nav {
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  /* --- dokunma hedefleri: parmak için en az 44px --- */
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn.sm {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .x {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 20px;
   }
 
   .main {
-    padding: 16px 14px 40px;
+    padding: 14px 12px 120px;
+  }
+
+  h1 {
+    font-size: 19px;
   }
 
   .grid2 {
     grid-template-columns: 1fr;
   }
 
+  /* --- masalar: yatay şerit. 12 masa 4 satır kaplayıp ürünleri aşağı itmesin. --- */
+  .tables {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .tables::-webkit-scrollbar {
+    display: none;
+  }
+
+  .table-btn {
+    flex: 0 0 86px;
+    scroll-snap-align: start;
+  }
+
+  /* kategori düğmeleri de tek satırda kaysın */
+  .cat-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cat-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cat-row .btn {
+    flex: 0 0 auto;
+  }
+
+  /* --- ürünler: parmakla basılacak, biraz büyük --- */
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(102px, 1fr));
+    gap: 8px;
+  }
+
+  .tile {
+    padding: 12px 6px;
+    min-height: 92px;
+  }
+
+  .tile .nm {
+    font-size: 13px;
+  }
+
+  /* iOS: 16px altındaki inputlara odaklanınca sayfayı zoomluyor */
+  input,
+  select {
+    font-size: 16px;
+    padding: 10px;
+  }
+
+  .cline .qty {
+    width: 56px;
+    font-size: 16px;
+  }
+
+  /* --- sepet: alttan açılan panel --- */
   .cart {
-    position: static;
+    position: fixed;
+    /* masaüstündeki "top: 24px" burada geçerli kalırsa panel aşağı inemez,
+       alt menüyü örter. Açıkça iptal ediyoruz. */
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    margin: 0;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    max-height: 82vh;
+    overflow-y: auto;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 40px rgba(28, 26, 23, 0.25);
+    transform: translateY(105%);
+    transition:
+      transform 0.22s ease,
+      visibility 0.22s;
+    /* kapalıyken tıklamaları yutmasın */
+    visibility: hidden;
+  }
+
+  .cart.open {
+    transform: none;
+    visibility: visible;
+  }
+
+  .cart-lines {
+    max-height: 40vh;
+  }
+
+  .pays .btn {
+    padding: 14px 10px;
+  }
+
+  /* --- sepet çubuğu: her zaman altta, tek dokunuşla panel açılır --- */
+  .sepet-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: #fff;
+    border-radius: 14px;
+    margin: 0 10px;
+    box-shadow: 0 6px 24px rgba(28, 26, 23, 0.3);
+  }
+
+  .sepet-bar .sb-adet {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .sepet-bar .sb-tut {
+    flex: 1;
+    font-weight: 700;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sepet-bar .sb-btn {
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-weight: 700;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(28, 26, 23, 0.45);
+  }
+
+  /* --- tablolar yatay kaysın, sayfayı taşırmasın --- */
+  .card > table,
+  .modal table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modal {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .modal-bg {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .row {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .tiles {
+    grid-template-columns: repeat(3, 1fr);
   }
 }

@@ -8,3 +8,12 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Çevrimdışı kabuk. Sadece derlenmiş sürümde — geliştirirken önbellek kafa karıştırır.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // kayıt olmazsa uygulama yine çalışır, sadece çevrimdışı açılmaz
+    })
+  })
+}

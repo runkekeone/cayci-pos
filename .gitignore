@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# mobil test ekran görüntüleri
+mobil-ss/

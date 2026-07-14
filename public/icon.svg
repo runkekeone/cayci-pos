@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#a3562a" />
+  <!-- ince belli bardak -->
+  <path
+    d="M182 130h148l-18 150c-4 34-25 54-56 54s-52-20-56-54l-18-150z"
+    fill="#f4e7dd"
+  />
+  <path d="M196 148h120l-14 118c-3 25-16 38-46 38s-43-13-46-38l-14-118z" fill="#8b3f1d" />
+  <ellipse cx="256" cy="150" rx="60" ry="10" fill="#f4e7dd" opacity="0.55" />
+  <!-- tabak -->
+  <rect x="140" y="352" width="232" height="18" rx="9" fill="#f4e7dd" />
+  <!-- buhar -->
+  <path
+    d="M232 92c0-14 12-18 12-30s-8-14-8-24"
+    stroke="#f4e7dd"
+    stroke-width="12"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.75"
+  />
+  <path
+    d="M280 92c0-14 12-18 12-30s-8-14-8-24"
+    stroke="#f4e7dd"
+    stroke-width="12"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.75"
+  />
+</svg>
