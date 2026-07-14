@@ -31,8 +31,17 @@ export default function Satis() {
   const [parcali, setParcali] = useState(false)
 
   const sellable = s.items.filter((i) => i.sellable)
-  const cats = ['Hepsi', ...new Set(sellable.map((i) => i.category))]
-  const shown = cat === 'Hepsi' ? sellable : sellable.filter((i) => i.category === cat)
+  // Kategori sırası sabit; kullanıcının eklediği yeni kategoriler sona düşer.
+  const SIRA = ['Sıcak', 'Soğuk', 'Yiyecek', 'Atıştırmalık']
+  const mevcut = [...new Set(sellable.map((i) => i.category))].sort((a, b) => {
+    const ia = SIRA.indexOf(a)
+    const ib = SIRA.indexOf(b)
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+  })
+  const cats = ['Hepsi', ...mevcut]
+  const shown = (cat === 'Hepsi' ? sellable : sellable.filter((i) => i.category === cat))
+    .slice()
+    .sort((a, b) => mevcut.indexOf(a.category) - mevcut.indexOf(b.category))
 
   const table = target.kind === 'masa' ? s.tables.find((t) => t.id === target.id) : undefined
   const lines = target.kind === 'masa' ? (table?.lines ?? []) : quick

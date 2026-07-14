@@ -14,7 +14,7 @@ import {
 import type { Business, Expense } from '../types'
 
 const ZORUNLU = 'cay-bardak'
-const KATEGORILER = ['Sıcak', 'Soğuk', 'Yiyecek']
+const KATEGORILER = ['Sıcak', 'Soğuk', 'Yiyecek', 'Atıştırmalık']
 
 type Alis = { qty: number; total: number; packSize?: number }
 

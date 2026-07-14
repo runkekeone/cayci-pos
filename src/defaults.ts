@@ -293,6 +293,33 @@ export const URUNLER: UrunTanim[] = [
     price: 20,
     alsat: { buyUnit: 'koli', packSize: 40, buyQty: 1, buyTotal: 280 },
   },
+
+  // ---------- ATIŞTIRMALIK (al-sat) ----------
+  // Satış fiyatları adet maliyetine %40 kâr eklenip yuvarlandı.
+  {
+    id: 'gofret',
+    name: 'Çikolatalı Gofret',
+    icon: '🍫',
+    category: 'Atıştırmalık',
+    price: 15, // 10,83 x 1,40 = 15,17 -> 15
+    alsat: { buyUnit: 'koli', packSize: 36, buyQty: 1, buyTotal: 390 },
+  },
+  {
+    id: 'kraker',
+    name: 'Susamlı Kraker',
+    icon: '🥨',
+    category: 'Atıştırmalık',
+    price: 20, // 13,76 x 1,40 = 19,27 -> 20
+    alsat: { buyUnit: 'koli', packSize: 17, buyQty: 1, buyTotal: 234 },
+  },
+  {
+    id: 'ikram-cikolata',
+    name: 'İkram Çikolatalı',
+    icon: '🍪',
+    category: 'Atıştırmalık',
+    price: 30, // 20,83 x 1,40 = 29,17 -> 30
+    alsat: { buyUnit: 'koli', packSize: 24, buyQty: 1, buyTotal: 500 },
+  },
 ]
 
 /** Kurulumda varsayılan seçili gelenler: hepsi. Liste zaten dar. */
