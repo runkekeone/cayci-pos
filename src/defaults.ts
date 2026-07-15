@@ -46,6 +46,19 @@ export const SODA_CESITLERI: Variant[] = ['Elma', 'Limon', 'Karışık meyveli',
   name: n,
 }))
 
+// Türk kahvesi: şeker miktarı çeşide göre. Sade = şeker düşmez.
+export const KAHVE_CESITLERI: Variant[] = [
+  { id: 'kahve-sade', name: 'Sade', skip: ['seker'] },
+  { id: 'kahve-orta', name: 'Orta' },
+  { id: 'kahve-sekerli', name: 'Şekerli' },
+]
+
+export const TOST_CESITLERI: Variant[] = [
+  { id: 'tost-sade', name: 'Sade' },
+  { id: 'tost-karisik', name: 'Karışık' },
+  { id: 'tost-kavurmali', name: 'Kavurmalı' },
+]
+
 /**
  * HAZIR KATALOG — gerçek bir kıraathanenin sattığı kalemler ve tarifleri.
  *
@@ -148,6 +161,7 @@ export const URUNLER: UrunTanim[] = [
       ],
     },
     needs: ['kahve-toz', 'seker', 'bardak-su'],
+    variants: KAHVE_CESITLERI,
   },
   {
     id: 'nescafe',
@@ -200,6 +214,7 @@ export const URUNLER: UrunTanim[] = [
       ],
     },
     needs: ['ekmek', 'kasar'],
+    variants: TOST_CESITLERI,
   },
 
   // ---------- SOĞUK (al-sat) ----------

@@ -74,6 +74,8 @@ export interface SaleLine {
   unitCost: number
   variantId?: string
   variantName?: string
+  /** İkram/zayi satırı: fiyatı 0, stok masa kapanınca düşer, gelir oluşturmaz. */
+  waste?: 'ikram' | 'fire'
 }
 
 export type Payment = 'nakit' | 'kart' | 'veresiye'
@@ -97,6 +99,8 @@ export interface Sale {
   payments?: PaymentPart[]
   customerId?: string
   tableId?: string
+  /** Kapanış anındaki masa adı (Masa 1, "Bahçe" vb.). Hızlı satışta boş. */
+  tableName?: string
 }
 
 export interface Table {

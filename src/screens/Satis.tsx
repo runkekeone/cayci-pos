@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { availableQty, lowStock, unitCost, variantCost } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
-import type { Item, Payment, PaymentPart, SaleLine, Variant } from '../types'
+import type { Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
 
@@ -18,6 +18,7 @@ export default function Satis() {
     quickSale,
     paySplit,
     cancelSale,
+    editSale,
     saveCustomer,
   } = useStore()
 
@@ -26,9 +27,13 @@ export default function Satis() {
   const [customerId, setCustomerId] = useState('')
   const [cat, setCat] = useState('Hepsi')
   const [detayli, setDetayli] = useState(false)
+  // İkram/zayi modu: doluyken ürüne dokununca sepete gitmez, stoktan düşer.
+  const [zayiMod, setZayiMod] = useState<'ikram' | 'fire' | null>(null)
   const [adlandir, setAdlandir] = useState<string | null>(null)
   const [cesitSec, setCesitSec] = useState<Item | null>(null)
   const [parcali, setParcali] = useState(false)
+  // Yapılmış satışı incele/düzenle modalı.
+  const [incele, setIncele] = useState<Sale | null>(null)
   // Mobilde sepet alttan açılan panel. Masaüstünde CSS bunu yok sayar.
   const [sepetAcik, setSepetAcik] = useState(false)
 
@@ -55,24 +60,33 @@ export default function Satis() {
   // Masaya müşteri atandıysa veresiyede o seçili gelir.
   const aktifMusteri = table?.customerId ?? customerId
 
-  function ekle(item: Item, variant?: Variant) {
+  function ekle(item: Item, variant?: Variant, waste?: 'ikram' | 'fire') {
     if (target.kind === 'masa') {
-      addToTable(target.id, item.id, 1, variant)
+      addToTable(target.id, item.id, 1, variant, waste)
       return
     }
     setQuick((cur) => {
-      const idx = cur.findIndex((l) => l.itemId === item.id && l.variantId === variant?.id)
+      // İkram/zayi satırı normal satırla birleşmez — biri ücretli, biri 0₺.
+      const idx = cur.findIndex(
+        (l) => l.itemId === item.id && l.variantId === variant?.id && l.waste === waste,
+      )
       if (idx >= 0) return cur.map((l, i) => (i === idx ? { ...l, qty: l.qty + 1 } : l))
+      const etiket = waste === 'ikram' ? 'İkram' : waste === 'fire' ? 'Zayi' : undefined
       return [
         ...cur,
         {
           itemId: item.id,
-          name: variant ? `${item.name} (${variant.name})` : item.name,
+          name: etiket
+            ? `${item.name} (${etiket})`
+            : variant
+              ? `${item.name} (${variant.name})`
+              : item.name,
           qty: 1,
-          unitPrice: (item.price ?? 0) + (variant?.priceDelta ?? 0),
+          unitPrice: waste ? 0 : (item.price ?? 0) + (variant?.priceDelta ?? 0),
           unitCost: variantCost(item.id, s.items, variant),
           variantId: variant?.id,
           variantName: variant?.name,
+          waste,
         },
       ]
     })
@@ -80,6 +94,11 @@ export default function Satis() {
 
   /** Detaylı moddaysa ve ürünün çeşidi varsa önce çeşit sorulur. */
   function tikla(item: Item) {
+    // İkram/zayi modu açıksa: masaya 0₺ satır olarak yazılır, stok masa kapanınca düşer.
+    if (zayiMod) {
+      ekle(item, undefined, zayiMod)
+      return
+    }
     if (detayli && item.variants?.length) {
       setCesitSec(item)
       return
@@ -102,7 +121,7 @@ export default function Satis() {
     const item = s.items.find((i) => i.id === l.itemId)
     if (!item) return
     const v = item.variants?.find((x) => x.id === l.variantId)
-    ekle(item, v)
+    ekle(item, v, l.waste)
   }
 
   function setQty(index: number, qty: number) {
@@ -154,8 +173,12 @@ export default function Satis() {
         </div>
         <button
           className={`btn ${detayli ? 'primary' : ''}`}
-          onClick={() => setDetayli(!detayli)}
-          title="Çeşit seçimi ve masaya müşteri atama açılır"
+          onClick={() => {
+            const on = !detayli
+            setDetayli(on)
+            if (!on) setZayiMod(null)
+          }}
+          title="Çeşit seçimi, masaya müşteri atama, ikram/zayi açılır"
         >
           {detayli ? '✓ Detaylı' : 'Detaylı'}
         </button>
@@ -247,6 +270,33 @@ export default function Satis() {
       {/* ---- ürünler + sepet ---- */}
       <div className="grid2" style={{ marginTop: 16 }}>
         <div>
+          {detayli && (
+            <div
+              className="row"
+              style={{ marginBottom: 14, alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+            >
+              <span className="hint" style={{ marginRight: 4 }}>
+                İkram / Zayi:
+              </span>
+              <button
+                className={`btn sm ${zayiMod === 'ikram' ? 'primary' : ''}`}
+                onClick={() => setZayiMod(zayiMod === 'ikram' ? null : 'ikram')}
+              >
+                🎁 İkram
+              </button>
+              <button
+                className={`btn sm ${zayiMod === 'fire' ? 'primary' : ''}`}
+                onClick={() => setZayiMod(zayiMod === 'fire' ? null : 'fire')}
+              >
+                🗑 Zayi
+              </button>
+              {zayiMod && (
+                <span className="tag warn" style={{ marginLeft: 4 }}>
+                  {zayiMod === 'ikram' ? 'İkram' : 'Zayi'} modu — ürüne dokun, masaya 0₺ yazılır
+                </span>
+              )}
+            </div>
+          )}
           <div className="row cat-row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
               <button
@@ -259,7 +309,10 @@ export default function Satis() {
             ))}
           </div>
 
-          <div className="tiles">
+          <div
+            className="tiles"
+            style={zayiMod ? { outline: '2px dashed var(--accent)', borderRadius: 12, padding: 8 } : undefined}
+          >
             {shown.map((i) => {
               const kalan = availableQty(i.id, s.items)
               return (
@@ -267,7 +320,11 @@ export default function Satis() {
                   key={i.id}
                   className="tile"
                   onClick={() => tikla(i)}
-                  title={`Maliyet ${fmtTL(unitCost(i.id, s.items))}`}
+                  title={
+                    zayiMod
+                      ? `${zayiMod === 'ikram' ? 'İkram' : 'Zayi'} düş`
+                      : `Maliyet ${fmtTL(unitCost(i.id, s.items))}`
+                  }
                 >
                   {kalan <= 0 && (
                     <span className="warn-dot" title="Stok bitti — satış yine de yapılabilir">
@@ -289,9 +346,18 @@ export default function Satis() {
             <strong>{target.kind === 'masa' ? table?.name : 'Hızlı satış'}</strong>
             <div className="row">
               {lines.length > 0 && (
-                <button className="btn sm ghost" onClick={temizle}>
-                  Temizle
-                </button>
+                <>
+                  <button className="btn sm ghost" onClick={temizle}>
+                    Temizle
+                  </button>
+                  <button
+                    className="btn sm"
+                    onClick={() => setParcali(true)}
+                    title="Toplamı eşit böl, her parçayı ayrı öde"
+                  >
+                    ⑃ Hesabı böl
+                  </button>
+                </>
               )}
               <button
                 className="btn sm ghost only-mobile"
@@ -334,15 +400,34 @@ export default function Satis() {
           {(!table?.customerId || target.kind === 'hizli') && (
             <div className="field">
               <label>Müşteri (veresiye için zorunlu)</label>
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="">— seçilmedi —</option>
-                {s.customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.balance > 0 ? ` (borç ${fmtTL(c.balance)})` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="row">
+                <select
+                  style={{ flex: 1 }}
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                >
+                  <option value="">— seçilmedi —</option>
+                  {s.customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.balance > 0 ? ` (borç ${fmtTL(c.balance)})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="btn sm"
+                  onClick={() => {
+                    const ad = prompt('Yeni müşteri adı:')
+                    if (!ad?.trim()) return
+                    const id = uid()
+                    saveCustomer({ id, name: ad.trim(), balance: 0 })
+                    if (target.kind === 'masa') setTableCustomer(target.id, id)
+                    else setCustomerId(id)
+                  }}
+                >
+                  + Yeni müş
+                </button>
+              </div>
             </div>
           )}
 
@@ -357,15 +442,6 @@ export default function Satis() {
               Veresiye
             </button>
           </div>
-
-          <button
-            className="btn"
-            style={{ width: '100%', marginTop: 8 }}
-            disabled={!lines.length}
-            onClick={() => setParcali(true)}
-          >
-            ⑃ Parçalı ödeme (hesabı böl)
-          </button>
         </div>
       </div>
 
@@ -387,6 +463,7 @@ export default function Satis() {
           <thead>
             <tr>
               <th>Saat</th>
+              <th>Masa</th>
               <th>Ne satıldı</th>
               <th>Ödeme</th>
               <th className="num">Tutar</th>
@@ -402,45 +479,85 @@ export default function Satis() {
                     minute: '2-digit',
                   })}
                 </td>
-                <td>
-                  <span className="hint">
-                    {sale.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}
-                  </span>
-                </td>
-                <td>
-                  {(sale.payments ?? [{ payment: sale.payment, amount: sale.total }]).map((p, i) => (
-                    <span
-                      key={i}
-                      className={`tag ${p.payment === 'veresiye' ? 'bad' : ''}`}
-                      style={{ marginRight: 4 }}
-                    >
-                      {p.payment}
-                      {sale.payments ? ` ${fmtTL(p.amount)}` : ''}
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {sale.tableName ? (
+                    <span className="tag" style={{ whiteSpace: 'nowrap' }}>
+                      {sale.tableName}
                     </span>
-                  ))}
+                  ) : (
+                    <span className="hint" style={{ whiteSpace: 'nowrap' }}>
+                      Hızlı
+                    </span>
+                  )}
                 </td>
-                <td className="num">{fmtTL(sale.total)}</td>
-                <td className="num">
-                  <button
-                    className="btn sm"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `${fmtTL(sale.total)} tutarındaki satış iptal edilecek.\nStok geri yüklenecek, veresiyeyse borç silinecek.\n\nOnaylıyor musun?`,
-                        )
-                      ) {
-                        cancelSale(sale.id)
-                      }
+                <td>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {sale.lines.map((l, i) => (
+                      <span
+                        key={i}
+                        className={`tag ${l.waste ? 'warn' : ''}`}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {l.qty}× {l.name}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {(sale.payments ?? [{ payment: sale.payment, amount: sale.total }]).map((p, i) => (
+                      <span
+                        key={i}
+                        className={`tag ${p.payment === 'veresiye' ? 'bad' : ''}`}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {p.payment}
+                        {sale.payments ? ` ${fmtTL(p.amount)}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                  {fmtTL(sale.total)}
+                </td>
+                <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      flexWrap: 'nowrap',
+                      justifyContent: 'flex-end',
+                      gap: 8,
                     }}
                   >
-                    İptal et
-                  </button>
+                    <button
+                      className="btn sm"
+                      title="İncele / düzenle"
+                      onClick={() => setIncele(sale)}
+                    >
+                      👁
+                    </button>
+                    <button
+                      className="btn sm"
+                      style={{ whiteSpace: 'nowrap' }}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `${fmtTL(sale.total)} tutarındaki satış iptal edilecek.\nStok geri yüklenecek, veresiyeyse borç silinecek.\n\nOnaylıyor musun?`,
+                          )
+                        ) {
+                          cancelSale(sale.id)
+                        }
+                      }}
+                    >
+                      İptal et
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
             {sonSatislar.length === 0 && (
               <tr>
-                <td colSpan={5} className="hint">
+                <td colSpan={6} className="hint">
                   Henüz satış yok.
                 </td>
               </tr>
@@ -453,10 +570,7 @@ export default function Satis() {
         <CesitModal
           item={cesitSec}
           onClose={() => setCesitSec(null)}
-          onPick={(v) => {
-            ekle(cesitSec, v)
-            setCesitSec(null)
-          }}
+          onPick={(v) => ekle(cesitSec, v)}
         />
       )}
 
@@ -480,7 +594,197 @@ export default function Satis() {
           }}
         />
       )}
+
+      {incele && (
+        <SatisIncele
+          sale={incele}
+          onClose={() => setIncele(null)}
+          onSave={(yeni) => {
+            editSale(incele.id, yeni)
+            setIncele(null)
+          }}
+          onIptal={() => {
+            cancelSale(incele.id)
+            setIncele(null)
+          }}
+        />
+      )}
     </>
+  )
+}
+
+/**
+ * Yapılmış satışı incele ve düzenle.
+ * Satır adedi değiştirilir veya satır çıkarılır. Kaydedince stok ve veresiye
+ * bakiyesi yeniden hesaplanır. Tümü çıkarılırsa satış iptal edilir.
+ */
+function SatisIncele({
+  sale,
+  onClose,
+  onSave,
+  onIptal,
+}: {
+  sale: Sale
+  onClose: () => void
+  onSave: (lines: SaleLine[]) => void
+  onIptal: () => void
+}) {
+  const { s } = useStore()
+  const [lines, setLines] = useState<SaleLine[]>(() => sale.lines.map((l) => ({ ...l })))
+  const [ekleAcik, setEkleAcik] = useState(false)
+  const [ara, setAra] = useState('')
+
+  const total = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+  const degisti =
+    JSON.stringify(lines.map((l) => [l.itemId, l.variantId, l.qty])) !==
+    JSON.stringify(sale.lines.map((l) => [l.itemId, l.variantId, l.qty]))
+
+  const sellable = s.items.filter((i) => i.sellable)
+  const bulunan = ara.trim()
+    ? sellable.filter((i) => i.name.toLowerCase().includes(ara.trim().toLowerCase())).slice(0, 8)
+    : sellable.slice(0, 8)
+
+  function setQty(idx: number, qty: number) {
+    setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, qty: Math.max(0, qty) } : l)))
+  }
+
+  /** Yeni ürünü satışa ekle. Aynı ürün (çeşitsiz) varsa adedini artırır. */
+  function urunEkle(item: Item) {
+    setLines((cur) => {
+      const idx = cur.findIndex((l) => l.itemId === item.id && !l.variantId && !l.waste)
+      if (idx >= 0) return cur.map((l, i) => (i === idx ? { ...l, qty: l.qty + 1 } : l))
+      return [
+        ...cur,
+        {
+          itemId: item.id,
+          name: item.name,
+          qty: 1,
+          unitPrice: item.price ?? 0,
+          unitCost: unitCost(item.id, s.items),
+        },
+      ]
+    })
+    setAra('')
+  }
+
+  const saat = new Date(sale.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <h2>Satış — {saat}</h2>
+        <p className="hint" style={{ marginBottom: 14 }}>
+          Adedi değiştir veya satırı çıkar. Kaydedince stok ve veresiye borcu yeniden hesaplanır.
+        </p>
+
+        {lines.map((l, idx) => (
+          <div className="row" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`} style={{ marginBottom: 8 }}>
+            <button className="x" onClick={() => setQty(idx, l.qty - 1)} title="Bir azalt">
+              −
+            </button>
+            <input
+              type="number"
+              min={0}
+              style={{ width: 70 }}
+              value={l.qty}
+              onChange={(e) => setQty(idx, Number(e.target.value))}
+            />
+            <button className="x" onClick={() => setQty(idx, l.qty + 1)} title="Bir artır">
+              +
+            </button>
+            <span style={{ flex: 1 }}>{l.name}</span>
+            <span className="hint" style={{ width: 90, textAlign: 'right' }}>
+              {fmtTL(l.qty * l.unitPrice)}
+            </span>
+            <button
+              className="x"
+              title="Satırı çıkar"
+              onClick={() => setLines((cur) => cur.filter((_, i) => i !== idx))}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+
+        {lines.length === 0 && (
+          <p className="hint" style={{ color: 'var(--bad)' }}>
+            Satır kalmadı — kaydedersen satış iptal edilir.
+          </p>
+        )}
+
+        {/* ---- ürün ekle ---- */}
+        {!ekleAcik ? (
+          <button className="btn sm" style={{ marginTop: 6 }} onClick={() => setEkleAcik(true)}>
+            + Ürün ekle
+          </button>
+        ) : (
+          <div className="field" style={{ marginTop: 6 }}>
+            <input
+              autoFocus
+              placeholder="Ürün ara..."
+              value={ara}
+              onChange={(e) => setAra(e.target.value)}
+            />
+            <div
+              className="card"
+              style={{ padding: 6, marginTop: 6, maxHeight: 220, overflowY: 'auto' }}
+            >
+              {bulunan.map((i) => (
+                <button
+                  key={i.id}
+                  className="btn sm ghost"
+                  style={{ display: 'flex', width: '100%', justifyContent: 'space-between', marginBottom: 4 }}
+                  onClick={() => urunEkle(i)}
+                >
+                  <span>
+                    {i.icon} {i.name}
+                  </span>
+                  <span className="hint">{fmtTL(i.price ?? 0)}</span>
+                </button>
+              ))}
+              {bulunan.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
+            </div>
+            <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={() => setEkleAcik(false)}>
+              Kapat
+            </button>
+          </div>
+        )}
+
+        <div className="total" style={{ marginTop: 12 }}>
+          <span>Yeni toplam</span>
+          <span className="v">{fmtTL(total)}</span>
+        </div>
+        {sale.payments && degisti && (
+          <p className="hint" style={{ marginTop: 6 }}>
+            Bu satış parçalı ödenmişti — parça tutarları yeni toplama göre oranlanır.
+          </p>
+        )}
+
+        <div className="row" style={{ marginTop: 20, justifyContent: 'space-between' }}>
+          <button className="btn ghost" onClick={onIptal} style={{ color: 'var(--bad)' }}>
+            Satışı iptal et
+          </button>
+          <div className="row">
+            <button className="btn ghost" onClick={onClose}>
+              Vazgeç
+            </button>
+            {lines.length === 0 ? (
+              <button className="btn primary" onClick={onIptal}>
+                İptal et
+              </button>
+            ) : (
+              <button
+                className="btn primary"
+                disabled={!degisti || lines.some((l) => l.qty <= 0)}
+                onClick={() => onSave(lines.filter((l) => l.qty > 0))}
+              >
+                Kaydet
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -495,6 +799,8 @@ function CesitModal({
   onPick: (v: Variant) => void
 }) {
   const { s } = useStore()
+  // Bu oturumda kaç adet eklendi — modal açık kalır, sayacı gösterir.
+  const [eklenen, setEklenen] = useState(0)
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -502,12 +808,22 @@ function CesitModal({
         <h2>
           {item.icon} {item.name} — çeşit seç
         </h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          İstediğin kadar dokun, sepete eklenir. Bitince “Bitti”ye bas.
+        </p>
         <div className="tiles">
           {item.variants!.map((v) => {
             const m = variantCost(item.id, s.items, v)
             const f = (item.price ?? 0) + (v.priceDelta ?? 0)
             return (
-              <button key={v.id} className="tile" onClick={() => onPick(v)}>
+              <button
+                key={v.id}
+                className="tile"
+                onClick={() => {
+                  onPick(v)
+                  setEklenen((n) => n + 1)
+                }}
+              >
                 <span className="nm">{v.name}</span>
                 <span className="pr">{fmtTL(f)}</span>
                 <span className="st">maliyet {fmtTL(m)}</span>
@@ -515,9 +831,12 @@ function CesitModal({
             )
           })}
         </div>
-        <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onClose}>
-            Vazgeç
+        <div className="row" style={{ marginTop: 16, justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="hint">
+            {eklenen > 0 ? `${eklenen} adet eklendi` : 'Henüz eklemedin'}
+          </span>
+          <button className="btn primary" onClick={onClose}>
+            Bitti
           </button>
         </div>
       </div>
@@ -561,9 +880,9 @@ function ParcaliModal({
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
-        <h2>Parçalı ödeme</h2>
+        <h2>Hesabı böl</h2>
         <p className="hint" style={{ marginBottom: 14 }}>
-          Toplam <strong>{fmtTL(toplam)}</strong>. Hesabı kaça bölüyorsun? Ödenmeyen parçalar
+          Toplam <strong>{fmtTL(toplam)}</strong> eşit bölündü. Kaça bölüyorsun? Ödenmeyen parçalar
           veresiye olarak bir müşteriye yazılmak zorunda.
         </p>
 

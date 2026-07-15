@@ -1,0 +1,8 @@
+{
+  "appId": "co.cayocagi.pos",
+  "appName": "Çay Ocağı",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -14,11 +14,24 @@ import { applyStock, unitCost, variantCost } from './lib/cost'
 import { today, uid } from './lib/units'
 import { bosState } from './seed'
 import { dataKey } from './auth'
+import { URUNLER } from './defaults'
+
+/** Katalogda çeşidi olup kullanıcının kaydında henüz çeşidi olmayan ürünlere ekle. */
+function cesitleriTamamla(items: Item[]): Item[] {
+  return items.map((it) => {
+    if (it.variants?.length) return it
+    const kat = URUNLER.find((u) => u.id === it.id)
+    return kat?.variants?.length ? { ...it, variants: kat.variants } : it
+  })
+}
 
 function load(userId: string): State {
   try {
     const raw = localStorage.getItem(dataKey(userId))
-    if (raw) return { ...bosState, ...(JSON.parse(raw) as State) }
+    if (raw) {
+      const st = { ...bosState, ...(JSON.parse(raw) as State) }
+      return { ...st, items: cesitleriTamamla(st.items) }
+    }
   } catch {
     // bozuk kayıt: boş başla
   }
@@ -43,7 +56,13 @@ interface Store {
   addWaste: (itemId: string, qty: number, reason: 'fire' | 'ikram') => void
 
   // satış
-  addToTable: (tableId: string, itemId: string, qty?: number, variant?: Variant) => void
+  addToTable: (
+    tableId: string,
+    itemId: string,
+    qty?: number,
+    variant?: Variant,
+    waste?: 'ikram' | 'fire',
+  ) => void
   removeFromTable: (tableId: string, index: number) => void
   setTableQty: (tableId: string, index: number, qty: number) => void
   renameTable: (tableId: string, name: string) => void
@@ -53,6 +72,8 @@ interface Store {
   /** Parçalı ödeme: hesap bölünür, her parça ayrı ödenir. Veresiye parçası müşteriye yazılır. */
   paySplit: (lines: SaleLine[], parts: PaymentPart[], tableId?: string) => void
   cancelSale: (saleId: string) => void
+  /** Yapılmış satışın satırlarını düzenle: stok ve veresiye bakiyesi yeniden hesaplanır. */
+  editSale: (saleId: string, newLines: SaleLine[]) => void
 
   // müşteri
   saveCustomer: (c: Customer) => void
@@ -98,17 +119,25 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       itemId: string,
       qty: number,
       variant?: Variant,
+      waste?: 'ikram' | 'fire',
     ): SaleLine | null => {
       const item = items.find((i) => i.id === itemId)
       if (!item) return null
+      const etiket = waste === 'ikram' ? 'İkram' : waste === 'fire' ? 'Zayi' : undefined
       return {
         itemId,
-        name: variant ? `${item.name} (${variant.name})` : item.name,
+        name: etiket
+          ? `${item.name} (${etiket})`
+          : variant
+            ? `${item.name} (${variant.name})`
+            : item.name,
         qty,
-        unitPrice: (item.price ?? 0) + (variant?.priceDelta ?? 0),
+        // İkram/zayi bedava: fiyat 0, gelir oluşmaz. Maliyet yine düşülür.
+        unitPrice: waste ? 0 : (item.price ?? 0) + (variant?.priceDelta ?? 0),
         unitCost: variantCost(itemId, items, variant),
         variantId: variant?.id,
         variantName: variant?.name,
+        waste,
       }
     }
 
@@ -124,6 +153,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       lines: SaleLine[],
       parts: PaymentPart[],
       tableId?: string,
+      tableName?: string,
     ): State => {
       if (lines.length === 0 || parts.length === 0) return st
 
@@ -160,6 +190,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             payments: parts.length > 1 ? parts : undefined,
             customerId: veresiyeParca?.customerId,
             tableId,
+            tableName,
           },
         ],
       }
@@ -227,16 +258,17 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           }
         }),
 
-      addToTable: (tableId, itemId, qty = 1, variant) =>
+      addToTable: (tableId, itemId, qty = 1, variant, waste) =>
         set((st) => ({
           ...st,
           tables: st.tables.map((t) => {
             if (t.id !== tableId) return t
-            const line = mkLine(st.items, itemId, qty, variant)
+            const line = mkLine(st.items, itemId, qty, variant, waste)
             if (!line) return t
             // Aynı ürünün farklı çeşidi ayrı satır olur — duble çay ile açık çay karışmasın.
+            // İkram/zayi satırı da ücretli satırla birleşmez.
             const idx = t.lines.findIndex(
-              (l) => l.itemId === itemId && l.variantId === variant?.id,
+              (l) => l.itemId === itemId && l.variantId === variant?.id && l.waste === waste,
             )
             const lines =
               idx >= 0
@@ -292,6 +324,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             table.lines,
             [{ payment, amount: total, customerId }],
             tableId,
+            table.name,
           )
           return { ...next, tables: next.tables.map((t, i) => bosalt(t, tableId, i)) }
         }),
@@ -304,7 +337,8 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
 
       paySplit: (lines, parts, tableId) =>
         set((st) => {
-          const next = commitSale(st, lines, parts, tableId)
+          const tableName = tableId ? st.tables.find((t) => t.id === tableId)?.name : undefined
+          const next = commitSale(st, lines, parts, tableId, tableName)
           if (!tableId) return next
           return { ...next, tables: next.tables.map((t, i) => bosalt(t, tableId, i)) }
         }),
@@ -341,6 +375,81 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             customers,
             sales: st.sales.filter((x) => x.id !== saleId),
           }
+        }),
+
+      /** Satış düzenle: eski stok/borç geri alınır, yeni satırlar uygulanır. */
+      editSale: (saleId, newLines) =>
+        set((st) => {
+          const sale = st.sales.find((x) => x.id === saleId)
+          if (!sale) return st
+
+          // 1) Eski satırların stoğunu geri yükle.
+          let items = st.items
+          for (const l of sale.lines) {
+            const v = l.variantId
+              ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+              : undefined
+            items = applyStock(items, l.itemId, -l.qty, v)
+          }
+          // 2) Yeni satırların stoğunu düş.
+          for (const l of newLines) {
+            const v = l.variantId
+              ? items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+              : undefined
+            items = applyStock(items, l.itemId, l.qty, v)
+          }
+
+          const oldTotal = sale.total
+          const newTotal = newLines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+          const newCost = newLines.reduce((n, l) => n + l.qty * l.unitCost, 0)
+
+          const oldParts = sale.payments ?? [
+            { payment: sale.payment, amount: sale.total, customerId: sale.customerId },
+          ]
+
+          // 3) Eski veresiye borçlarını geri al.
+          let customers = st.customers
+          for (const p of oldParts) {
+            if (p.payment !== 'veresiye' || !p.customerId) continue
+            customers = customers.map((c) =>
+              c.id === p.customerId ? { ...c, balance: c.balance - p.amount } : c,
+            )
+          }
+
+          // 4) Yeni parçalar: eski oranlar korunur, tutarlar yeni toplama göre ölçeklenir.
+          let newParts: PaymentPart[]
+          if (oldTotal > 0) {
+            const k = newTotal / oldTotal
+            newParts = oldParts.map((p) => ({ ...p, amount: Math.round(p.amount * k * 100) / 100 }))
+            // Yuvarlama sapması ilk parçaya yazılır.
+            const drift = Math.round((newTotal - newParts.reduce((a, p) => a + p.amount, 0)) * 100) / 100
+            if (newParts.length) {
+              newParts[0] = { ...newParts[0], amount: Math.round((newParts[0].amount + drift) * 100) / 100 }
+            }
+          } else {
+            newParts = [{ payment: sale.payment, amount: newTotal, customerId: sale.customerId }]
+          }
+
+          // 5) Yeni veresiye borçlarını uygula.
+          for (const p of newParts) {
+            if (p.payment !== 'veresiye' || !p.customerId) continue
+            customers = customers.map((c) =>
+              c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+            )
+          }
+
+          const veresiyeParca = newParts.find((p) => p.payment === 'veresiye')
+          const updated = {
+            ...sale,
+            lines: newLines,
+            total: newTotal,
+            cost: newCost,
+            payment: newParts[0].payment,
+            payments: newParts.length > 1 ? newParts : undefined,
+            customerId: veresiyeParca?.customerId,
+          }
+
+          return { ...st, items, customers, sales: st.sales.map((x) => (x.id === saleId ? updated : x)) }
         }),
 
       saveCustomer: (c) =>
