@@ -107,6 +107,22 @@ select:focus {
   font-weight: 600;
 }
 
+/* grup: wrapper düzenden çıkar, çocuklar doğrudan .side'ın flex öğesi olur */
+.nav-grup {
+  display: contents;
+}
+
+.nav-alt {
+  padding-left: 34px;
+  font-size: 14px;
+}
+
+.nav-caret {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* masaüstünde uzun ad, telefonda kısa ad */
 .nav-kisa {
   display: none;

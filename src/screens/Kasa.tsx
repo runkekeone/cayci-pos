@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useStore } from '../store'
+import { useStore, aktifOturum } from '../store'
 import { dayReport } from '../lib/report'
 import { fmtTL, today } from '../lib/units'
 
 export default function Kasa() {
   const { s, setOpeningCash, setCountedCash } = useStore()
-  const d = today()
+  // Açık oturum varsa onun gününü göster, yoksa takvim bugünü.
+  const d = aktifOturum(s)?.date ?? today()
   const r = dayReport(s, d)
   const [sayim, setSayim] = useState('')
 

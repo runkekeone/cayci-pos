@@ -340,6 +340,8 @@ export const URUNLER: UrunTanim[] = [
 /** Kurulumda varsayılan seçili gelenler: hepsi. Liste zaten dar. */
 export const VARSAYILAN_SECILI = URUNLER.map((u) => u.id)
 
+// Sadece işletmenin temel hizmet giderleri (aylık bazda). Sarf malzemeleri
+// (peçete, deterjan, çöp poşeti vb.) ürün olarak girilir — miktar/maliyet takibi için.
 export const VARSAYILAN_AYLIK_GIDER = [
   { name: 'Kira', amount: 15000 },
   { name: 'Elektrik', amount: 3000 },
@@ -347,12 +349,6 @@ export const VARSAYILAN_AYLIK_GIDER = [
   { name: 'Doğalgaz', amount: 1500 },
   { name: 'İnternet', amount: 500 },
   { name: 'Vergi / muhasebe', amount: 2000 },
-  // Tarife girmeyen ama tükenen sarf malzemeleri — unutulursa kâr yüksek görünür.
-  { name: 'Peçete', amount: 800 },
-  { name: 'Temizlik / deterjan', amount: 600 },
-  { name: 'Çöp poşeti', amount: 200 },
-  { name: 'Kırılan bardak / fincan', amount: 500 },
-  { name: 'Kayıp şişe (depozito kesintisi)', amount: 300 },
 ]
 
 export const VARSAYILAN_GUNLUK_GIDER = [{ name: 'Eleman yevmiyesi', amount: 1000 }]

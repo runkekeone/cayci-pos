@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../store'
+import { useStore, aktifOturum } from '../store'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { dayOf, fmtTL, round, today } from '../lib/units'
 
@@ -37,14 +37,14 @@ function Kutu({
 
 export default function Rapor() {
   const { s } = useStore()
-  const [date, setDate] = useState(today())
+  const [date, setDate] = useState(aktifOturum(s)?.date ?? today())
   const r = dayReport(s, date)
 
   // Kutulara girecek, günlük rapordan türeyen ek rakamlar
   const alimlar = s.purchases
-    .filter((p) => dayOf(p.date) === date)
+    .filter((p) => (p.bizDay ?? dayOf(p.date)) === date)
     .reduce((n, p) => n + p.total, 0)
-  const fisSayisi = s.sales.filter((x) => dayOf(x.date) === date).length
+  const fisSayisi = s.sales.filter((x) => (x.bizDay ?? dayOf(x.date)) === date).length
   const karOran = r.ciro > 0 ? (r.brutKar / r.ciro) * 100 : 0
 
   return (

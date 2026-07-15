@@ -64,6 +64,7 @@ export interface Purchase {
   qty: number
   total: number
   supplier?: string
+  bizDay?: string
 }
 
 export interface SaleLine {
@@ -101,6 +102,8 @@ export interface Sale {
   tableId?: string
   /** Kapanış anındaki masa adı (Masa 1, "Bahçe" vb.). Hızlı satışta boş. */
   tableName?: string
+  /** Ait olduğu iş günü oturumu (YYYY-MM-DD). Gece yarısını aşan gün için takvim gününden farklı olabilir. */
+  bizDay?: string
 }
 
 export interface Table {
@@ -126,6 +129,7 @@ export interface CustomerPayment {
   customerId: string
   amount: number
   method: 'nakit' | 'kart'
+  bizDay?: string
 }
 
 export interface Expense {
@@ -151,6 +155,7 @@ export interface Waste {
   qty: number
   reason: 'fire' | 'ikram'
   cost: number
+  bizDay?: string
 }
 
 export interface CashDay {
@@ -160,6 +165,10 @@ export interface CashDay {
   opening: number
   /** Gün sonu sayılan nakit. */
   counted?: number
+  /** Gün başlatıldı — ISO zaman. Doluysa ve closedAt boşsa oturum AÇIK. */
+  openedAt?: string
+  /** Gün kapatıldı — ISO zaman. */
+  closedAt?: string
 }
 
 export interface Business {
@@ -184,5 +193,6 @@ export interface State {
   business: Business
   /** Kurulum sihirbazı tamamlandı mı. Tamamlanmadan uygulamaya girilemez. */
   setupDone: boolean
-  settings: { showImages: boolean }
+  /** otoGun: açılış/kapanış saatine göre günü otomatik başlat/bitir. Şimdilik kapalı, ileride açılacak. */
+  settings: { showImages: boolean; otoGun?: boolean; sarfTemizlendi?: boolean }
 }

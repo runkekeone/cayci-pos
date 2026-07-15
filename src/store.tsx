@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
+  CashDay,
   Customer,
   Expense,
   Item,
@@ -16,6 +17,11 @@ import { bosState } from './seed'
 import { dataKey } from './auth'
 import { URUNLER } from './defaults'
 
+/** Açık iş günü oturumu (başlatıldı, kapatılmadı). Yoksa gün kapalıdır. */
+export function aktifOturum(s: State): CashDay | undefined {
+  return s.cashDays.find((c) => c.openedAt && !c.closedAt)
+}
+
 /** Katalogda çeşidi olup kullanıcının kaydında henüz çeşidi olmayan ürünlere ekle. */
 function cesitleriTamamla(items: Item[]): Item[] {
   return items.map((it) => {
@@ -25,12 +31,31 @@ function cesitleriTamamla(items: Item[]): Item[] {
   })
 }
 
+// Ürün olarak girilmesi gereken sarf malzemeleri — aylık sabit giderden tek sefer temizlenir.
+const SARF_GIDERLER = [
+  'Peçete',
+  'Temizlik / deterjan',
+  'Çöp poşeti',
+  'Kırılan bardak / fincan',
+  'Kayıp şişe (depozito kesintisi)',
+]
+
+/** Eski kayıtta aylık sabit gidere düşmüş sarf malzemelerini tek sefer temizle. */
+function sarfGideriTemizle(st: State): State {
+  if (st.settings?.sarfTemizlendi) return st
+  return {
+    ...st,
+    expenses: st.expenses.filter((e) => !(e.kind === 'aylik' && SARF_GIDERLER.includes(e.name))),
+    settings: { ...st.settings, sarfTemizlendi: true },
+  }
+}
+
 function load(userId: string): State {
   try {
     const raw = localStorage.getItem(dataKey(userId))
     if (raw) {
       const st = { ...bosState, ...(JSON.parse(raw) as State) }
-      return { ...st, items: cesitleriTamamla(st.items) }
+      return sarfGideriTemizle({ ...st, items: cesitleriTamamla(st.items) })
     }
   } catch {
     // bozuk kayıt: boş başla
@@ -74,6 +99,12 @@ interface Store {
   cancelSale: (saleId: string) => void
   /** Yapılmış satışın satırlarını düzenle: stok ve veresiye bakiyesi yeniden hesaplanır. */
   editSale: (saleId: string, newLines: SaleLine[]) => void
+
+  // iş günü oturumu
+  /** Günü başlat: açık oturum aç, açılış nakdini yaz. */
+  startDay: (openingCash: number) => void
+  /** Günü bitir: aktif oturumu kapat (kilitlemez, sadece kapatır). */
+  endDay: (counted?: number) => void
 
   // müşteri
   saveCustomer: (c: Customer) => void
@@ -191,6 +222,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             customerId: veresiyeParca?.customerId,
             tableId,
             tableName,
+            bizDay: aktifOturum(st)?.date ?? today(),
           },
         ],
       }
@@ -231,7 +263,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           ),
           purchases: [
             ...st.purchases,
-            { id: uid(), date: new Date().toISOString(), itemId, qty, total, supplier },
+            {
+              id: uid(),
+              date: new Date().toISOString(),
+              itemId,
+              qty,
+              total,
+              supplier,
+              bizDay: aktifOturum(st)?.date ?? today(),
+            },
           ],
         })),
 
@@ -253,6 +293,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
                 qty,
                 reason,
                 cost,
+                bizDay: aktifOturum(st)?.date ?? today(),
               },
             ],
           }
@@ -468,7 +509,14 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           ),
           payments: [
             ...st.payments,
-            { id: uid(), date: new Date().toISOString(), customerId, amount, method },
+            {
+              id: uid(),
+              date: new Date().toISOString(),
+              customerId,
+              amount,
+              method,
+              bizDay: aktifOturum(st)?.date ?? today(),
+            },
           ],
         })),
 
@@ -502,6 +550,38 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             cashDays: st.cashDays.some((c) => c.date === d)
               ? st.cashDays.map((c) => (c.date === d ? { ...c, counted: amount } : c))
               : [...st.cashDays, { date: d, opening: 0, counted: amount }],
+          }
+        }),
+
+      startDay: (openingCash) =>
+        set((st) => {
+          const d = today()
+          const now = new Date().toISOString()
+          const varMi = st.cashDays.some((c) => c.date === d)
+          return {
+            ...st,
+            cashDays: varMi
+              ? st.cashDays.map((c) =>
+                  c.date === d
+                    ? { ...c, opening: openingCash, openedAt: now, closedAt: undefined }
+                    : c,
+                )
+              : [...st.cashDays, { date: d, opening: openingCash, openedAt: now }],
+          }
+        }),
+
+      endDay: (counted) =>
+        set((st) => {
+          const acik = aktifOturum(st)
+          if (!acik) return st
+          const now = new Date().toISOString()
+          return {
+            ...st,
+            cashDays: st.cashDays.map((c) =>
+              c.date === acik.date
+                ? { ...c, closedAt: now, counted: counted ?? c.counted }
+                : c,
+            ),
           }
         }),
 

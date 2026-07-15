@@ -1,10 +1,12 @@
-import { useState } from 'react'
-import { StoreProvider, useStore } from './store'
+import { useState, type ComponentType } from 'react'
+import { StoreProvider, useStore, aktifOturum } from './store'
 import { currentUser, logout, type User } from './auth'
 import { dayReport } from './lib/report'
-import { fmtTL, today } from './lib/units'
+import { fmtTL } from './lib/units'
 import Giris from './screens/Giris'
 import Kurulum from './screens/Kurulum'
+import GunBaslat from './screens/GunBaslat'
+import GunSonu from './screens/GunSonu'
 import Satis from './screens/Satis'
 import Urunler from './screens/Urunler'
 import Stok from './screens/Stok'
@@ -13,34 +15,78 @@ import Giderler from './screens/Giderler'
 import Kasa from './screens/Kasa'
 import Rapor from './screens/Rapor'
 import Takvim from './screens/Takvim'
+import Profil from './screens/Profil'
+
+/** id → ekran bileşeni. */
+const EKRANLAR: Record<string, ComponentType> = {
+  satis: Satis,
+  rapor: Rapor,
+  urunler: Urunler,
+  stok: Stok,
+  musteriler: Musteriler,
+  giderler: Giderler,
+  kasa: Kasa,
+  takvim: Takvim,
+}
+
+type MenuLeaf = { id: string; ad: string; kisa: string; ic: string }
+type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
 
 /**
- * ana: telefonda alt çubukta doğrudan görünür (5 tane — parmakla rahat).
- * Gerisi "Daha" panelinde. Masaüstünde hepsi yan menüde.
+ * Sol menü. `ana` olanlar telefonda alt çubukta çıkar; gerisi "Daha" panelinde.
+ * `alt` olan bir grup (Raporlar) masaüstünde açılıp alt başlıklarını gösterir.
  */
-const SAYFALAR = [
-  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', el: Satis, ana: true },
-  { id: 'rapor', ad: 'Rapor', kisa: 'Rapor', ic: '📊', el: Rapor, ana: true },
-  { id: 'urunler', ad: 'Ürünler & Tarif', kisa: 'Ürünler', ic: '🍵', el: Urunler, ana: true },
-  { id: 'stok', ad: 'Stok & Alış', kisa: 'Stok', ic: '📦', el: Stok, ana: true },
-  { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '📒', el: Musteriler, ana: true },
-  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸', el: Giderler, ana: false },
-  { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵', el: Kasa, ana: false },
-  { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '📅', el: Takvim, ana: false },
+const MENU: MenuItem[] = [
+  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: true },
+  {
+    id: 'rapor',
+    ad: 'Raporlar',
+    kisa: 'Rapor',
+    ic: '📊',
+    ana: true,
+    alt: [
+      { id: 'rapor', ad: 'Genel Bakış', kisa: 'Rapor', ic: '📈' },
+      { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵' },
+      { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '🗓️' },
+    ],
+  },
+  { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: '🍵', ana: true },
+  { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: '📦', ana: true },
+  { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '👥', ana: true },
+  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸', ana: false },
+]
+
+/** "Daha" panelinde (telefon) gösterilecek — çubuğa girmeyen tüm başlıklar. */
+const DAHA: MenuLeaf[] = [
+  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸' },
+  { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵' },
+  { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '🗓️' },
 ]
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
 function Shell({ user, onOut }: { user: User; onOut: () => void }) {
-  const { s } = useStore()
+  const { s, startDay } = useStore()
   const [sayfa, setSayfa] = useState('satis')
   const [daha, setDaha] = useState(false)
+  const [gunSonu, setGunSonu] = useState(false)
+  const [acikGruplar, setAcikGruplar] = useState<string[]>(['rapor'])
 
   // Kurulum bitmeden uygulamaya girilemez.
   if (!s.setupDone) return <Kurulum businessName={user.businessName} />
 
-  const Ekran = SAYFALAR.find((p) => p.id === sayfa)?.el ?? Satis
-  const r = dayReport(s, today())
-  const gizliAktif = SAYFALAR.some((p) => !p.ana && p.id === sayfa)
+  // Gün başlatılmadan uygulamaya girilemez (tam kapı).
+  const aktif = aktifOturum(s)
+  if (!aktif)
+    return (
+      <GunBaslat
+        isletme={s.business.name || user.businessName}
+        onBaslat={(nakit) => startDay(nakit)}
+      />
+    )
+
+  const Ekran = EKRANLAR[sayfa] ?? Satis
+  const r = dayReport(s, aktif.date)
+  const gizliAktif = DAHA.some((p) => p.id === sayfa)
 
   function git(id: string) {
     setSayfa(id)
@@ -55,18 +101,52 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <small>çay ocağı POS</small>
         </div>
 
-        {SAYFALAR.map((p) => (
-          <button
-            key={p.id}
-            // ana olmayan sayfalar telefonda çubukta değil, "Daha" panelinde
-            className={`nav ${sayfa === p.id ? 'on' : ''} ${p.ana ? '' : 'nav-gizli'}`}
-            onClick={() => git(p.id)}
-          >
-            <span>{p.ic}</span>
-            <span className="nav-ad">{p.ad}</span>
-            <span className="nav-kisa">{p.kisa}</span>
-          </button>
-        ))}
+        {MENU.map((p) => {
+          // Grup değilse: düz menü satırı.
+          if (!p.alt) {
+            return (
+              <button
+                key={p.id}
+                className={`nav ${sayfa === p.id ? 'on' : ''} ${p.ana ? '' : 'nav-gizli'}`}
+                onClick={() => git(p.id)}
+              >
+                <span>{p.ic}</span>
+                <span className="nav-ad">{p.ad}</span>
+                <span className="nav-kisa">{p.kisa}</span>
+              </button>
+            )
+          }
+          // Grup: masaüstünde açılır alt başlıklar; telefonda çubukta ilk alta gider.
+          const acik = acikGruplar.includes(p.id)
+          const cocukAktif = p.alt.some((a) => a.id === sayfa)
+          return (
+            <div key={p.id} className="nav-grup">
+              <button
+                className={`nav ${cocukAktif ? 'on' : ''}`}
+                onClick={() => {
+                  git(p.alt![0].id)
+                  setAcikGruplar((c) => (c.includes(p.id) ? c.filter((x) => x !== p.id) : [...c, p.id]))
+                }}
+              >
+                <span>{p.ic}</span>
+                <span className="nav-ad">{p.ad}</span>
+                <span className="nav-kisa">{p.kisa}</span>
+                <span className="nav-caret nav-ad">{acik ? '▾' : '▸'}</span>
+              </button>
+              {acik &&
+                p.alt.map((a) => (
+                  <button
+                    key={a.id}
+                    className={`nav nav-alt nav-gizli ${sayfa === a.id ? 'on' : ''}`}
+                    onClick={() => git(a.id)}
+                  >
+                    <span>{a.ic}</span>
+                    <span className="nav-ad">{a.ad}</span>
+                  </button>
+                ))}
+            </div>
+          )
+        })}
 
         {/* telefonda: kalan sayfalar + yedek + çıkış */}
         <button
@@ -84,11 +164,17 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
               {fmtTL(r.netKar)}
             </strong>
           </div>
-          <Yedek />
-          <button className="nav" onClick={onOut}>
-            <span>🚪</span>
+          <button className="nav" onClick={() => setGunSonu(true)}>
+            <span>🌙</span>
+            <span>Gün Sonu</span>
+          </button>
+          <button
+            className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
+            onClick={() => git('profil')}
+          >
+            <span>👤</span>
             <span>
-              Çıkış <span className="hint">({user.username})</span>
+              Profil <span className="hint">({user.username})</span>
             </span>
           </button>
         </div>
@@ -99,7 +185,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>{s.business.name || user.businessName}</h2>
 
-            {SAYFALAR.filter((p) => !p.ana).map((p) => (
+            {DAHA.map((p) => (
               <button
                 key={p.id}
                 className={`nav ${sayfa === p.id ? 'on' : ''}`}
@@ -117,10 +203,22 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
                   {fmtTL(r.netKar)}
                 </strong>
               </div>
-              <Yedek />
-              <button className="nav" onClick={onOut}>
-                <span>🚪</span>
-                <span>Çıkış ({user.username})</span>
+              <button
+                className="nav"
+                onClick={() => {
+                  setGunSonu(true)
+                  setDaha(false)
+                }}
+              >
+                <span>🌙</span>
+                <span>Gün Sonu</span>
+              </button>
+              <button
+                className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
+                onClick={() => git('profil')}
+              >
+                <span>👤</span>
+                <span>Profil ({user.username})</span>
               </button>
             </div>
           </div>
@@ -128,68 +226,11 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
       )}
 
       <main className="main">
-        <Ekran />
+        {sayfa === 'profil' ? <Profil user={user} onOut={onOut} /> : <Ekran />}
       </main>
+
+      {gunSonu && <GunSonu gun={aktif.date} onKapat={() => setGunSonu(false)} />}
     </div>
-  )
-}
-
-/**
- * Veri yedeği. Tarayıcı temizlenirse her şey gider — dosyaya al, gerektiğinde geri yükle.
- * Sunucu gelene kadar tek koruma bu.
- */
-function Yedek() {
-  const { s, set } = useStore()
-
-  function yedekAl() {
-    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `cayci-yedek-${today()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  function geriYukle(file: File) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        const veri = JSON.parse(String(reader.result))
-        if (!veri.items || !veri.sales) throw new Error('geçersiz')
-        if (
-          confirm('Yedekteki veri şu anki verinin ÜZERİNE yazılacak. Devam edilsin mi?')
-        ) {
-          set(() => veri)
-        }
-      } catch {
-        alert('Dosya okunamadı — geçerli bir yedek dosyası değil.')
-      }
-    }
-    reader.readAsText(file)
-  }
-
-  return (
-    <>
-      <button className="nav" onClick={yedekAl}>
-        <span>💾</span>
-        <span>Yedek al</span>
-      </button>
-      <label className="nav" style={{ cursor: 'pointer' }}>
-        <span>📂</span>
-        <span>Geri yükle</span>
-        <input
-          type="file"
-          accept="application/json"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) geriYukle(f)
-            e.target.value = ''
-          }}
-        />
-      </label>
-    </>
   )
 }
 
