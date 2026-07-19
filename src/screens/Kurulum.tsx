@@ -216,7 +216,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
             ))}
 
             <div className="section-title">Hammadde alışların</div>
-            <table style={{ marginBottom: 20 }}>
+            <table className="gtablo" style={{ marginBottom: 20 }}>
               <thead>
                 <tr>
                   <th>Hammadde</th>
@@ -290,7 +290,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
             </table>
 
             <div className="section-title">Satış fiyatların</div>
-            <table>
+            <table className="gtablo">
               <thead>
                 <tr>
                   <th>Ürün</th>

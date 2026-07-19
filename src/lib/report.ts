@@ -29,6 +29,7 @@ export interface DayReport {
   brutKar: number
   gunlukGider: number
   nakitGider: number
+  nakitAlis: number
   sabitGiderPayi: number
   fireIkramMaliyeti: number
   netKar: number
@@ -50,6 +51,7 @@ export function dayReport(s: State, date: string): DayReport {
   )
   const payments = s.payments.filter((p) => (p.bizDay ?? dayOf(p.date)) === date)
   const wastes = s.wastes.filter((w) => (w.bizDay ?? dayOf(w.date)) === date)
+  const purchases = s.purchases.filter((p) => (p.bizDay ?? dayOf(p.date)) === date)
   const cashDay = s.cashDays.find((c) => c.date === date)
 
   // Hesap parçalı ödendiyse her parça kendi ödeme tipine yazılır.
@@ -65,6 +67,8 @@ export function dayReport(s: State, date: string): DayReport {
 
   const gunlukGider = expenses.reduce((n, e) => n + e.amount, 0)
   const nakitGider = expenses.filter((e) => e.paidCash).reduce((n, e) => n + e.amount, 0)
+  // Kasadan nakit ödenen stok alışları da çekmeceden çıkar.
+  const nakitAlis = purchases.filter((p) => p.paidCash).reduce((n, p) => n + p.total, 0)
   const sabitGiderPayi = dailyFixedShare(s)
   const fireIkramMaliyeti = wastes.reduce((n, w) => n + w.cost, 0)
 
@@ -74,7 +78,7 @@ export function dayReport(s: State, date: string): DayReport {
   const nakitTahsilat = payments.filter((p) => p.method === 'nakit').reduce((n, p) => n + p.amount, 0)
 
   const acilisNakit = cashDay?.opening ?? 0
-  const beklenenNakit = acilisNakit + by('nakit') + nakitTahsilat - nakitGider
+  const beklenenNakit = acilisNakit + by('nakit') + nakitTahsilat - nakitGider - nakitAlis
 
   // Ürün kırılımı
   const map = new Map<string, { name: string; qty: number; ciro: number; kar: number }>()
@@ -98,6 +102,7 @@ export function dayReport(s: State, date: string): DayReport {
     brutKar,
     gunlukGider,
     nakitGider,
+    nakitAlis,
     sabitGiderPayi,
     fireIkramMaliyeti,
     netKar,

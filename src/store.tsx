@@ -1,11 +1,21 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type {
   CashDay,
   Customer,
   Expense,
   Item,
+  Order,
   Payment,
   PaymentPart,
+  Sale,
   SaleLine,
   State,
   Table,
@@ -16,6 +26,7 @@ import { today, uid } from './lib/units'
 import { bosState } from './seed'
 import { dataKey } from './auth'
 import { URUNLER } from './defaults'
+import { cloudGet, cloudSet } from './lib/cloud'
 
 /** Açık iş günü oturumu (başlatıldı, kapatılmadı). Yoksa gün kapalıdır. */
 export function aktifOturum(s: State): CashDay | undefined {
@@ -50,13 +61,16 @@ function sarfGideriTemizle(st: State): State {
   }
 }
 
+/** Ham State'i (yerel ya da buluttan) güncel şemaya normalize et. */
+function normalize(raw: State): State {
+  const st = { ...bosState, ...raw }
+  return sarfGideriTemizle({ ...st, items: cesitleriTamamla(st.items) })
+}
+
 function load(userId: string): State {
   try {
     const raw = localStorage.getItem(dataKey(userId))
-    if (raw) {
-      const st = { ...bosState, ...(JSON.parse(raw) as State) }
-      return sarfGideriTemizle({ ...st, items: cesitleriTamamla(st.items) })
-    }
+    if (raw) return normalize(JSON.parse(raw) as State)
   } catch {
     // bozuk kayıt: boş başla
   }
@@ -77,6 +91,8 @@ interface Store {
     supplier?: string,
     /** Alış birimi değiştiyse kalemin kartına da yansısın (koli -> adet gibi). */
     birim?: { buyUnit: string; packSize?: number },
+    /** Kasadan nakit mi ödendi — beklenen kasadan düşülür. */
+    paidCash?: boolean,
   ) => void
   addWaste: (itemId: string, qty: number, reason: 'fire' | 'ikram') => void
 
@@ -99,6 +115,8 @@ interface Store {
   cancelSale: (saleId: string) => void
   /** Yapılmış satışın satırlarını düzenle: stok ve veresiye bakiyesi yeniden hesaplanır. */
   editSale: (saleId: string, newLines: SaleLine[]) => void
+  /** İptal edilen satışı geri getir (undo): stok yeniden düşer, veresiye borcu geri yazılır. */
+  restoreSale: (sale: Sale) => void
 
   // iş günü oturumu
   /** Günü başlat: açık oturum aç, açılış nakdini yaz. */
@@ -118,6 +136,10 @@ interface Store {
 
   // kurulum
   finishSetup: (patch: Pick<State, 'items' | 'expenses' | 'business'>) => void
+
+  // --- sipariş (kıraathane → toptancı) ---
+  /** Kıraathane: toptancıya gönderilen siparişi geçmişe kaydet. */
+  saveOrder: (order: Order) => void
 }
 
 /** Hesap kapandı: masa boşalır, özel ismi ve müşterisi düşer, varsayılan adına döner. */
@@ -136,10 +158,48 @@ const Ctx = createContext<Store | null>(null)
 
 export function StoreProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [s, setS] = useState<State>(() => load(userId))
+  // Bulut çekilene kadar buluta YAZMA — yoksa yeni cihazda boş state buluttaki
+  // gerçek veriyi ezer. hydrate bitince true olur.
+  const hydrated = useRef(false)
 
+  // Her değişimde yerele yaz (kaynak). hydrate sonrası buluta da it (debounce).
   useEffect(() => {
-    localStorage.setItem(dataKey(userId), JSON.stringify(s))
+    const k = dataKey(userId)
+    localStorage.setItem(k, JSON.stringify(s))
+    if (!hydrated.current) return
+    const t = setTimeout(() => {
+      const ts = new Date().toISOString()
+      localStorage.setItem(k + ':ts', ts)
+      void cloudSet(k, s, ts)
+    }, 800)
+    return () => clearTimeout(t)
   }, [s, userId])
+
+  // Açılış: buluttan çek. Bulut daha yeniyse benimse; yerel daha yeni ya da
+  // bulut boşsa yereli buluta it. Çevrimdışıysa sessizce yerelle devam.
+  useEffect(() => {
+    let alive = true
+    const k = dataKey(userId)
+    void (async () => {
+      const localTs = localStorage.getItem(k + ':ts') ?? ''
+      const cloud = await cloudGet(k)
+      if (!alive) return
+      if (cloud && cloud.value && (!localTs || cloud.updatedAt > localTs)) {
+        localStorage.setItem(k, JSON.stringify(cloud.value))
+        localStorage.setItem(k + ':ts', cloud.updatedAt)
+        setS(normalize(cloud.value as State))
+      } else if (!cloud || (localTs && localTs > cloud.updatedAt)) {
+        const ts = localTs || new Date().toISOString()
+        localStorage.setItem(k + ':ts', ts)
+        const raw = localStorage.getItem(k)
+        if (raw) void cloudSet(k, JSON.parse(raw), ts)
+      }
+      hydrated.current = true
+    })()
+    return () => {
+      alive = false
+    }
+  }, [userId])
 
   const store = useMemo<Store>(() => {
     const set = (fn: (s: State) => State) => setS(fn)
@@ -246,7 +306,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           items: st.items.filter((i) => i.id !== id),
         })),
 
-      addPurchase: (itemId, qty, total, supplier, birim) =>
+      addPurchase: (itemId, qty, total, supplier, birim, paidCash) =>
         set((st) => ({
           ...st,
           // Son alış maliyeti = bu alış. Ortalama yok.
@@ -270,6 +330,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
               qty,
               total,
               supplier,
+              paidCash: paidCash ?? false,
               bizDay: aktifOturum(st)?.date ?? today(),
             },
           ],
@@ -493,6 +554,28 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           return { ...st, items, customers, sales: st.sales.map((x) => (x.id === saleId ? updated : x)) }
         }),
 
+      /** İptali geri al: stok yeniden düşülür, veresiye borcu geri yazılır, satış listeye döner. */
+      restoreSale: (sale) =>
+        set((st) => {
+          if (st.sales.some((x) => x.id === sale.id)) return st
+
+          let items = st.items
+          for (const l of sale.lines) items = applyStock(items, l.itemId, l.qty, variantOf(st.items, l))
+
+          const parts = sale.payments ?? [
+            { payment: sale.payment, amount: sale.total, customerId: sale.customerId },
+          ]
+          let customers = st.customers
+          for (const p of parts) {
+            if (p.payment !== 'veresiye' || !p.customerId) continue
+            customers = customers.map((c) =>
+              c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+            )
+          }
+
+          return { ...st, items, customers, sales: [...st.sales, sale] }
+        }),
+
       saveCustomer: (c) =>
         set((st) => ({
           ...st,
@@ -533,7 +616,8 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
 
       setOpeningCash: (amount) =>
         set((st) => {
-          const d = today()
+          // Açık oturum varsa onun gününe yaz — rapor/Kasa da o günü okur (gece yarısı sapması önlenir).
+          const d = aktifOturum(st)?.date ?? today()
           return {
             ...st,
             cashDays: st.cashDays.some((c) => c.date === d)
@@ -544,7 +628,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
 
       setCountedCash: (amount) =>
         set((st) => {
-          const d = today()
+          const d = aktifOturum(st)?.date ?? today()
           return {
             ...st,
             cashDays: st.cashDays.some((c) => c.date === d)
@@ -592,6 +676,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           expenses: patch.expenses,
           business: patch.business,
           setupDone: true,
+        })),
+
+      // --- sipariş (kıraathane → toptancı) ---
+      saveOrder: (order) =>
+        set((st) => ({
+          ...st,
+          orders: (st.orders ?? []).some((o) => o.id === order.id)
+            ? (st.orders ?? []).map((o) => (o.id === order.id ? order : o))
+            : [...(st.orders ?? []), order],
         })),
     }
   }, [s])

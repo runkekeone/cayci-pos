@@ -1,6 +1,6 @@
-import { useState, type ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { StoreProvider, useStore, aktifOturum } from './store'
-import { currentUser, logout, type User } from './auth'
+import { currentUser, logout, syncUsers, type User } from './auth'
 import { dayReport } from './lib/report'
 import { fmtTL } from './lib/units'
 import Giris from './screens/Giris'
@@ -16,9 +16,12 @@ import Kasa from './screens/Kasa'
 import Rapor from './screens/Rapor'
 import Takvim from './screens/Takvim'
 import Profil from './screens/Profil'
+import Siparis from './screens/Siparis'
+import Anasayfa from './screens/Anasayfa'
 
 /** id → ekran bileşeni. */
 const EKRANLAR: Record<string, ComponentType> = {
+  anasayfa: Anasayfa,
   satis: Satis,
   rapor: Rapor,
   urunler: Urunler,
@@ -27,6 +30,7 @@ const EKRANLAR: Record<string, ComponentType> = {
   giderler: Giderler,
   kasa: Kasa,
   takvim: Takvim,
+  siparis: Siparis,
 }
 
 type MenuLeaf = { id: string; ad: string; kisa: string; ic: string }
@@ -36,40 +40,52 @@ type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
  * Sol menü. `ana` olanlar telefonda alt çubukta çıkar; gerisi "Daha" panelinde.
  * `alt` olan bir grup (Raporlar) masaüstünde açılıp alt başlıklarını gösterir.
  */
+/**
+ * Telefonda alt çubuk mockup düzeni: Ana Ekran / Satış / (+) Hızlı Satış /
+ * Adisyonlar / Profil. Diğer modüllere Anasayfa'daki Hızlı İşlemler
+ * ızgarasından gidilir; masaüstünde hepsi solda durur.
+ */
 const MENU: MenuItem[] = [
+  { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: '🏠', ana: true },
   { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: true },
+  { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: '🚚', ana: true },
   {
     id: 'rapor',
     ad: 'Raporlar',
     kisa: 'Rapor',
     ic: '📊',
-    ana: true,
+    ana: false,
     alt: [
-      { id: 'rapor', ad: 'Genel Bakış', kisa: 'Rapor', ic: '📈' },
+      { id: 'rapor', ad: 'Günlük Rapor', kisa: 'Günlük', ic: '📈' },
+      { id: 'takvim', ad: 'Tarihsel Rapor', kisa: 'Tarihsel', ic: '🗓️' },
       { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵' },
-      { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '🗓️' },
+      { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: '🍵' },
+      { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: '📦' },
+      { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '👥' },
+      { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸' },
     ],
   },
-  { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: '🍵', ana: true },
-  { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: '📦', ana: true },
-  { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '👥', ana: true },
-  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸', ana: false },
-]
-
-/** "Daha" panelinde (telefon) gösterilecek — çubuğa girmeyen tüm başlıklar. */
-const DAHA: MenuLeaf[] = [
-  { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸' },
-  { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵' },
-  { id: 'takvim', ad: 'Takvim', kisa: 'Takvim', ic: '🗓️' },
 ]
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
 function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   const { s, startDay } = useStore()
-  const [sayfa, setSayfa] = useState('satis')
-  const [daha, setDaha] = useState(false)
+  const [sayfa, setSayfa] = useState('anasayfa')
   const [gunSonu, setGunSonu] = useState(false)
   const [acikGruplar, setAcikGruplar] = useState<string[]>(['rapor'])
+
+  // Anasayfa'daki Hızlı İşlemler ızgarası gibi ekran dışı yerlerden sayfa
+  // değiştirmek için: window'a 'cayci-git' olayı at, burada yakala.
+  useEffect(() => {
+    const f = (e: Event) => setSayfa((e as CustomEvent<string>).detail)
+    const g = () => setGunSonu(true) // telefonda Gün Sonu artık Anasayfa ızgarasından açılır
+    window.addEventListener('cayci-git', f)
+    window.addEventListener('cayci-gunsonu', g)
+    return () => {
+      window.removeEventListener('cayci-git', f)
+      window.removeEventListener('cayci-gunsonu', g)
+    }
+  }, [])
 
   // Kurulum bitmeden uygulamaya girilemez.
   if (!s.setupDone) return <Kurulum businessName={user.businessName} />
@@ -86,11 +102,10 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
 
   const Ekran = EKRANLAR[sayfa] ?? Satis
   const r = dayReport(s, aktif.date)
-  const gizliAktif = DAHA.some((p) => p.id === sayfa)
+  const doluMasa = s.tables.filter((t) => t.lines.length > 0).length
 
   function git(id: string) {
     setSayfa(id)
-    setDaha(false)
   }
 
   return (
@@ -122,7 +137,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           return (
             <div key={p.id} className="nav-grup">
               <button
-                className={`nav ${cocukAktif ? 'on' : ''}`}
+                className={`nav nav-gizli ${cocukAktif ? 'on' : ''}`}
                 onClick={() => {
                   git(p.alt![0].id)
                   setAcikGruplar((c) => (c.includes(p.id) ? c.filter((x) => x !== p.id) : [...c, p.id]))
@@ -148,13 +163,34 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           )
         })}
 
-        {/* telefonda: kalan sayfalar + yedek + çıkış */}
+        {/* telefonda: ortada yükseltilmiş (+) hızlı satış, adisyonlar, profil */}
         <button
-          className={`nav only-mobile ${gizliAktif ? 'on' : ''}`}
-          onClick={() => setDaha(true)}
+          className="nav only-mobile nav-arti"
+          onClick={() => {
+            git('satis')
+            window.dispatchEvent(new CustomEvent('cayci-hizli'))
+          }}
+          aria-label="Hızlı Satış"
         >
-          <span>⋯</span>
-          <span className="nav-kisa">Daha</span>
+          <span className="arti-yuvarlak">＋</span>
+          <span className="nav-kisa">Hızlı Satış</span>
+        </button>
+        <button
+          className={`nav only-mobile ${sayfa === 'satis' && doluMasa > 0 ? '' : ''}`}
+          onClick={() => git('satis')}
+        >
+          <span className="nav-rozetli">
+            🧾
+            {doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
+          </span>
+          <span className="nav-kisa">Adisyonlar</span>
+        </button>
+        <button
+          className={`nav only-mobile ${sayfa === 'profil' ? 'on' : ''}`}
+          onClick={() => git('profil')}
+        >
+          <span>👤</span>
+          <span className="nav-kisa">Profil</span>
         </button>
 
         <div className="side-alt">
@@ -180,51 +216,6 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
         </div>
       </aside>
 
-      {daha && (
-        <div className="modal-bg only-mobile" onClick={() => setDaha(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>{s.business.name || user.businessName}</h2>
-
-            {DAHA.map((p) => (
-              <button
-                key={p.id}
-                className={`nav ${sayfa === p.id ? 'on' : ''}`}
-                onClick={() => git(p.id)}
-              >
-                <span>{p.ic}</span>
-                <span>{p.ad}</span>
-              </button>
-            ))}
-
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-              <div className="hint" style={{ padding: '0 12px 8px' }}>
-                Bugün net:{' '}
-                <strong className={r.netKar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 13 }}>
-                  {fmtTL(r.netKar)}
-                </strong>
-              </div>
-              <button
-                className="nav"
-                onClick={() => {
-                  setGunSonu(true)
-                  setDaha(false)
-                }}
-              >
-                <span>🌙</span>
-                <span>Gün Sonu</span>
-              </button>
-              <button
-                className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
-                onClick={() => git('profil')}
-              >
-                <span>👤</span>
-                <span>Profil ({user.username})</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <main className="main">
         {sayfa === 'profil' ? <Profil user={user} onOut={onOut} /> : <Ekran />}
       </main>
@@ -236,18 +227,40 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => currentUser())
+  // Açılışta bulut kullanıcı listesini senkronla; bitene kadar girişi beklet
+  // (başka cihazda açılmış hesapla giriş çalışsın diye).
+  const [booted, setBooted] = useState(false)
+  useEffect(() => {
+    let alive = true
+    syncUsers().finally(() => {
+      if (alive) setBooted(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (!booted) {
+    return (
+      <div className="acilis">
+        <div className="acilis-ic">
+          <div className="acilis-logo">🍵</div>
+          <div>Yükleniyor…</div>
+        </div>
+      </div>
+    )
+  }
 
   if (!user) return <Giris onIn={setUser} />
 
+  const cikis = () => {
+    logout()
+    setUser(null)
+  }
+
   return (
     <StoreProvider userId={user.id} key={user.id}>
-      <Shell
-        user={user}
-        onOut={() => {
-          logout()
-          setUser(null)
-        }}
-      />
+      <Shell user={user} onOut={cikis} />
     </StoreProvider>
   )
 }

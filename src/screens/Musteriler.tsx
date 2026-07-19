@@ -208,7 +208,7 @@ function MusteriKarti({
         </div>
 
         <div className="section-title">Hesap hareketleri</div>
-        <table>
+        <table className="gtablo">
           <thead>
             <tr>
               <th>Tarih</th>

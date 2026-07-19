@@ -13,7 +13,7 @@
 // GitHub Pages'te uygulama depo adının altında yayınlanır: /cayci-pos/
 const TABAN = new URL('./', self.location).pathname
 
-const CACHE = 'cayci-pos-v2'
+const CACHE = 'cayci-pos-v3'
 const KABUK = [
   TABAN,
   TABAN + 'index.html',

@@ -139,6 +139,7 @@ function AlisModal({
     total: number,
     supplier?: string,
     birim?: { buyUnit: string; packSize?: number },
+    paidCash?: boolean,
   ) => void
 }) {
   const { s } = useStore()
@@ -148,6 +149,8 @@ function AlisModal({
   const [unitLabel, setUnitLabel] = useState('')
   const [total, setTotal] = useState(0)
   const [supplier, setSupplier] = useState('')
+  // Ödeme kaynağı: kasadan nakit çıktıysa beklenen kasadan düşülür.
+  const [nakit, setNakit] = useState(true)
 
   const item = s.items.find((i) => i.id === itemId)
   // Adetle kullanılan kalem kiloyla/koliyle de alınabilir; o zaman "içinde kaç adet" sorulur.
@@ -188,7 +191,7 @@ function AlisModal({
         <div className="row">
           <div className="field" style={{ flex: 1 }}>
             <label>Ne kadar aldın</label>
-            <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
+            <input type="number" min={0} value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))} />
           </div>
           <div className="field" style={{ width: 110 }}>
             <label>Birim</label>
@@ -205,20 +208,44 @@ function AlisModal({
               <label>İçinde kaç adet var</label>
               <input
                 type="number"
+                min={1}
                 value={packSize}
-                onChange={(e) => setPackSize(Number(e.target.value))}
+                onChange={(e) => setPackSize(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
           )}
           <div className="field" style={{ flex: 1 }}>
             <label>Kaç ₺ ödedin</label>
-            <input type="number" value={total} onChange={(e) => setTotal(Number(e.target.value))} />
+            <input type="number" min={0} value={total} onChange={(e) => setTotal(Math.max(0, Number(e.target.value) || 0))} />
           </div>
         </div>
 
         <div className="field">
           <label>Tedarikçi (isteğe bağlı)</label>
           <input value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Nasıl ödedin</label>
+          <div className="row">
+            <button
+              type="button"
+              className={`btn sm ${nakit ? 'primary' : 'ghost'}`}
+              onClick={() => setNakit(true)}
+            >
+              💵 Kasadan nakit
+            </button>
+            <button
+              type="button"
+              className={`btn sm ${!nakit ? 'primary' : 'ghost'}`}
+              onClick={() => setNakit(false)}
+            >
+              💳 Kart / havale
+            </button>
+          </div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Nakit ödediysen çekmeceden çıkar — “Kasada olması gereken” bu tutar kadar azalır.
+          </p>
         </div>
 
         {item && base > 0 && (
@@ -237,10 +264,14 @@ function AlisModal({
             className="btn primary"
             disabled={!item || base <= 0 || total <= 0}
             onClick={() => {
-              onSave(itemId, base, total, supplier || undefined, {
-                buyUnit: label,
-                packSize: packGerek ? packSize : undefined,
-              })
+              onSave(
+                itemId,
+                base,
+                total,
+                supplier || undefined,
+                { buyUnit: label, packSize: packGerek ? packSize : undefined },
+                nakit,
+              )
               onClose()
             }}
           >

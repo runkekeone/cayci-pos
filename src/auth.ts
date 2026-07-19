@@ -9,6 +9,8 @@
  * değişmez.
  */
 
+import { cloudGet, cloudSet } from './lib/cloud'
+
 export type Role = 'admin' | 'uye'
 
 export interface User {
@@ -21,6 +23,7 @@ export interface User {
 }
 
 const USERS_KEY = 'cayci-pos:users'
+const USERS_TS_KEY = 'cayci-pos:users:ts'
 const SESSION_KEY = 'cayci-pos:session'
 
 /** Şimdilik 1 admin tanımlı, kapasite 3. */
@@ -48,7 +51,29 @@ export function getUsers(): User[] {
 }
 
 function saveUsers(users: User[]) {
+  const ts = new Date().toISOString()
   localStorage.setItem(USERS_KEY, JSON.stringify(users))
+  localStorage.setItem(USERS_TS_KEY, ts)
+  // buluta it (çevrimdışıysa sessizce başarısız olur; sonraki senkron düzeltir)
+  void cloudSet(USERS_KEY, users, ts)
+}
+
+/**
+ * Uygulama açılışında çağrılır: bulut kullanıcı listesini yerelle karşılaştırır.
+ * Bulut daha yeniyse benimser (başka cihazda açılan hesapla giriş için); yerel
+ * daha yeni ya da bulut boşsa yereli buluta iter. Çevrimdışıysa hiçbir şey yapmaz.
+ */
+export async function syncUsers(): Promise<void> {
+  const localTs = localStorage.getItem(USERS_TS_KEY) ?? ''
+  const cloud = await cloudGet(USERS_KEY)
+  if (cloud && Array.isArray(cloud.value) && (!localTs || cloud.updatedAt > localTs)) {
+    localStorage.setItem(USERS_KEY, JSON.stringify(cloud.value))
+    localStorage.setItem(USERS_TS_KEY, cloud.updatedAt)
+  } else if (!cloud || (localTs && localTs > cloud.updatedAt)) {
+    const ts = localTs || new Date().toISOString()
+    localStorage.setItem(USERS_TS_KEY, ts)
+    await cloudSet(USERS_KEY, getUsers(), ts)
+  }
 }
 
 export function adminCount(): number {

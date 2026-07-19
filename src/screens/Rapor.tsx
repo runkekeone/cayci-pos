@@ -38,6 +38,7 @@ function Kutu({
 export default function Rapor() {
   const { s } = useStore()
   const [date, setDate] = useState(aktifOturum(s)?.date ?? today())
+  const [detay, setDetay] = useState(false)
   const r = dayReport(s, date)
 
   // Kutulara girecek, günlük rapordan türeyen ek rakamlar
@@ -58,43 +59,51 @@ export default function Rapor() {
       </div>
 
       <div className="rgrid">
-        {/* --- 1. satır: para nereden geldi --- */}
+        {/* Her zaman görünen 4 kutu: para nereden geldi */}
         <Kutu ikon="💵" renk="#e6f4ec" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
         <Kutu ikon="💳" renk="#e9ecf7" baslik="POS / Kart" tutar={r.kartSatis} />
         <Kutu ikon="📒" renk="#fbeaea" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
         <Kutu ikon="🧾" renk="#e9f0fb" baslik="Toplam Ciro" tutar={r.ciro} />
 
-        {/* --- 2. satır: para nereye gitti --- */}
-        <Kutu ikon="🤝" renk="#e6f4ec" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
-        <Kutu ikon="🚚" renk="#f4eee6" baslik="Bugünkü alımlar" tutar={alimlar} />
-        <Kutu
-          ikon="💸"
-          renk="#fbeaea"
-          baslik="Giderler"
-          tutar={r.gunlukGider + r.sabitGiderPayi}
-          ton="bad"
-        />
-        <Kutu ikon="🗑️" renk="#fbeaea" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
+        {detay && (
+          <>
+            {/* --- para nereye gitti --- */}
+            <Kutu ikon="🤝" renk="#e6f4ec" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
+            <Kutu ikon="🚚" renk="#f4eee6" baslik="Bugünkü alımlar" tutar={alimlar} />
+            <Kutu
+              ikon="💸"
+              renk="#fbeaea"
+              baslik="Giderler"
+              tutar={r.gunlukGider + r.sabitGiderPayi}
+              ton="bad"
+            />
+            <Kutu ikon="🗑️" renk="#fbeaea" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
 
-        {/* --- 3. satır: sonuç --- */}
-        <Kutu ikon="🏦" renk="#e9f0fb" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
-        <Kutu
-          ikon="📈"
-          renk="#e6f4ec"
-          baslik="Brüt kâr"
-          tutar={r.brutKar}
-          ek={r.ciro > 0 ? `(%${round(karOran, 1)})` : undefined}
-          ton="good"
-        />
-        <Kutu ikon="📦" renk="#f4eee6" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
-        <Kutu
-          ikon="🎯"
-          renk={r.netKar >= 0 ? '#e6f4ec' : '#fbeaea'}
-          baslik="NET KÂR"
-          tutar={r.netKar}
-          ton={r.netKar >= 0 ? 'good' : 'bad'}
-        />
+            {/* --- sonuç --- */}
+            <Kutu ikon="🏦" renk="#e9f0fb" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
+            <Kutu
+              ikon="📈"
+              renk="#e6f4ec"
+              baslik="Brüt kâr"
+              tutar={r.brutKar}
+              ek={r.ciro > 0 ? `(%${round(karOran, 1)})` : undefined}
+              ton="good"
+            />
+            <Kutu ikon="📦" renk="#f4eee6" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
+            <Kutu
+              ikon="🎯"
+              renk={r.netKar >= 0 ? '#e6f4ec' : '#fbeaea'}
+              baslik="NET KÂR"
+              tutar={r.netKar}
+              ton={r.netKar >= 0 ? 'good' : 'bad'}
+            />
+          </>
+        )}
       </div>
+
+      <button className="btn" style={{ marginTop: 12 }} onClick={() => setDetay((d) => !d)}>
+        {detay ? '▴ Detayı gizle' : '▾ Detaylı'}
+      </button>
 
       <div className="row" style={{ alignItems: 'flex-start', gap: 16, marginTop: 20 }}>
         <div className="card" style={{ flex: 1, minWidth: 300 }}>

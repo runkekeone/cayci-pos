@@ -27,3 +27,6 @@ dist-ssr
 mobil-ss/
 dev-log.txt
 src-yedek-*/
+
+# Android imza anahtarı — asla commit etme
+*.keystore

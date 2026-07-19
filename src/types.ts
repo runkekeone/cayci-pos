@@ -64,6 +64,8 @@ export interface Purchase {
   qty: number
   total: number
   supplier?: string
+  /** Kasadan nakit mi ödendi — beklenen kasadan düşülür. Eski kayıtlarda yok (undefined = bilinmiyor). */
+  paidCash?: boolean
   bizDay?: string
 }
 
@@ -180,6 +182,54 @@ export interface Business {
   closeTime: string
 }
 
+// ---- Toptancı (B2B) katmanı ----
+
+/** Toptancı katalog kalemi. Koli veya adet olarak sipariş edilir. */
+export interface CatalogItem {
+  id: string
+  name: string
+  brand?: string
+  category: string
+  /** İçindeki temel birim — çoğu HORECA kaleminde 'adet'. */
+  unit: 'adet' | 'g' | 'ml'
+  /** Sipariş birimi: koli / paket / adet. */
+  buyUnit: string
+  /** Bir alış biriminde kaç adet var (1 koli = 24 adet). */
+  packSize: number
+  /** Koli (alış birimi) fiyatı. */
+  koliPrice: number
+  /** Tek adet fiyatı. */
+  adetPrice: number
+  /** Toptancının koli alış maliyeti. Kâr marjı = koliPrice − cost. BenimPOS alış fiyatından. */
+  cost?: number
+  /** Ürün barkodu (BenimPOS kataloğundan gelenler için). */
+  barcode?: string
+  firmId?: string
+  active: boolean
+}
+
+export interface OrderLine {
+  catalogItemId: string
+  name: string
+  /** Sipariş edilen birim: 'koli' | 'adet'. */
+  birim: 'koli' | 'adet'
+  qty: number
+  /** O birimin fiyatı (koliPrice veya adetPrice). */
+  unitPrice: number
+}
+
+/** Kıraathanenin toptancıya geçtiği sipariş (giden). */
+export interface Order {
+  id: string
+  date: string
+  status: 'taslak' | 'gonderildi'
+  lines: OrderLine[]
+  note?: string
+  gonderim?: 'qr' | 'whatsapp' | 'dosya'
+  /** Gönderen kıraathane bilgisi — karşı tarafta bayi eşleşmesi için. */
+  from?: { name: string; phone?: string }
+}
+
 export interface State {
   items: Item[]
   purchases: Purchase[]
@@ -191,6 +241,8 @@ export interface State {
   wastes: Waste[]
   cashDays: CashDay[]
   business: Business
+  /** Kıraathanenin toptancıya geçtiği siparişler (giden). */
+  orders?: Order[]
   /** Kurulum sihirbazı tamamlandı mı. Tamamlanmadan uygulamaya girilemez. */
   setupDone: boolean
   /** otoGun: açılış/kapanış saatine göre günü otomatik başlat/bitir. Şimdilik kapalı, ileride açılacak. */

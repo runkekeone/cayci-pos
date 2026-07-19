@@ -35,6 +35,10 @@ export default function Kasa() {
           <div className="k">Nakit gider</div>
           <div className="v bad">−{fmtTL(r.nakitGider)}</div>
         </div>
+        <div className="stat">
+          <div className="k">Nakit alış (stok)</div>
+          <div className="v bad">−{fmtTL(r.nakitAlis)}</div>
+        </div>
         <div className="stat" style={{ borderColor: 'var(--accent)' }}>
           <div className="k">Kasada olması gereken</div>
           <div className="v">{fmtTL(r.beklenenNakit)}</div>

@@ -1,10 +1,42 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { availableQty, lowStock, unitCost, variantCost } from '../lib/cost'
+import { urunGorsel } from '../lib/urunGorsel'
 import { fmtTL, uid } from '../lib/units'
-import type { Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
+import type { Business, Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
+
+/**
+ * Adet kutusu. Doğrudan store'a yazan input, kutu boşaltılınca (5 sil → 12 yaz)
+ * satırı anında siliyordu. Bu yüzden yarı kontrollü: boş/0/geçersizken store'a
+ * dokunmaz, yeni rakamı bekler; kutudan çıkınca hâlâ boşsa eski adede döner.
+ * Satır silme yalnız − ve ✕ düğmesiyle.
+ */
+function QtyInput({ qty, onQty }: { qty: number; onQty: (n: number) => void }) {
+  const [val, setVal] = useState(String(qty))
+  useEffect(() => setVal(String(qty)), [qty])
+  return (
+    <input
+      className="qty"
+      type="number"
+      min={1}
+      value={val}
+      // Mobilde klavye açılınca kutuyu ortala — ödeme düğmeleri klavye altında kaybolmasın.
+      onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+      onChange={(e) => {
+        const v = e.target.value
+        setVal(v)
+        const n = Number(v)
+        if (v !== '' && Number.isFinite(n) && n > 0) onQty(n)
+      }}
+      onBlur={() => {
+        const n = Number(val)
+        if (val === '' || !Number.isFinite(n) || n <= 0) setVal(String(qty))
+      }}
+    />
+  )
+}
 
 export default function Satis() {
   const {
@@ -19,6 +51,7 @@ export default function Satis() {
     paySplit,
     cancelSale,
     editSale,
+    restoreSale,
     saveCustomer,
   } = useStore()
 
@@ -26,6 +59,7 @@ export default function Satis() {
   const [quick, setQuick] = useState<SaleLine[]>([])
   const [customerId, setCustomerId] = useState('')
   const [cat, setCat] = useState('Hepsi')
+  const [ara, setAra] = useState('')
   const [detayli, setDetayli] = useState(false)
   // İkram/zayi modu: doluyken ürüne dokununca sepete gitmez, stoktan düşer.
   const [zayiMod, setZayiMod] = useState<'ikram' | 'fire' | null>(null)
@@ -36,6 +70,24 @@ export default function Satis() {
   const [incele, setIncele] = useState<Sale | null>(null)
   // Mobilde sepet alttan açılan panel. Masaüstünde CSS bunu yok sayar.
   const [sepetAcik, setSepetAcik] = useState(false)
+  // Satış bitince çıkan onay balonu — "oldu mu olmadı mı" belirsizliğini bitirir.
+  const [onay, setOnay] = useState<{ tutar: number; payment: Payment } | null>(null)
+  // Veresiyeye basıldı ama müşteri seçilmedi: seçiciyi öne çıkar.
+  const [musteriSor, setMusteriSor] = useState(false)
+  // Yeni müşteri adı modalı — WebView'de prompt() çalışmadığı için uygulama-içi.
+  const [yeniAd, setYeniAd] = useState<((ad: string) => void) | null>(null)
+  // İptal onayı — confirm() yerine uygulama-içi modal.
+  const [iptalSale, setIptalSale] = useState<Sale | null>(null)
+  // Son iptal — birkaç saniye geri alma imkânı (undo).
+  const [undo, setUndo] = useState<Sale | null>(null)
+  // Fiş görüntüle/paylaş.
+  const [fisSale, setFisSale] = useState<Sale | null>(null)
+
+  // İptali uygula ama satışı sakla: undo balonu geri getirebilsin.
+  function iptalEt(sale: Sale) {
+    cancelSale(sale.id)
+    setUndo(sale)
+  }
 
   const sellable = s.items.filter((i) => i.sellable)
   // Kategori sırası sabit; kullanıcının eklediği yeni kategoriler sona düşer.
@@ -46,7 +98,16 @@ export default function Satis() {
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
   })
   const cats = ['Hepsi', ...mevcut]
+  const KAT_IKON: Record<string, string> = {
+    Hepsi: '▦',
+    Sıcak: '☕',
+    Soğuk: '❄️',
+    Yiyecek: '🍞',
+    Atıştırmalık: '🍪',
+  }
+  const aranan = ara.trim().toLowerCase()
   const shown = (cat === 'Hepsi' ? sellable : sellable.filter((i) => i.category === cat))
+    .filter((i) => !aranan || i.name.toLowerCase().includes(aranan))
     .slice()
     .sort((a, b) => mevcut.indexOf(a.category) - mevcut.indexOf(b.category))
 
@@ -139,9 +200,11 @@ export default function Satis() {
 
   function ode(payment: Payment) {
     if (payment === 'veresiye' && !aktifMusteri) {
-      alert('Veresiye kişiye yazılır. Önce müşteri seç.')
+      // Müşteri yoksa uyarıp bırakmak yerine seçiciyi aç — akış kesilmesin.
+      setMusteriSor(true)
       return
     }
+    const tutar = total
     if (target.kind === 'masa') {
       closeTable(target.id, payment, payment === 'veresiye' ? aktifMusteri : undefined)
     } else {
@@ -150,7 +213,34 @@ export default function Satis() {
     }
     setCustomerId('')
     setSepetAcik(false)
+    setMusteriSor(false)
+    // Satış olduğunu göster: eskiden ekran sessizce temizleniyordu.
+    setOnay({ tutar, payment })
   }
+
+  // Onay balonu 2,5 sn sonra kendi kapanır.
+  useEffect(() => {
+    if (!onay) return
+    const t = setTimeout(() => setOnay(null), 2500)
+    return () => clearTimeout(t)
+  }, [onay])
+
+  // Undo balonu 6 sn açık kalır — geri alma penceresi.
+  useEffect(() => {
+    if (!undo) return
+    const t = setTimeout(() => setUndo(null), 6000)
+    return () => clearTimeout(t)
+  }, [undo])
+
+  // Alt çubuktaki (+) Hızlı Satış: ekranı hızlı tezgâha alır.
+  useEffect(() => {
+    const f = () => {
+      setTarget({ kind: 'hizli' })
+      setSepetAcik(false)
+    }
+    window.addEventListener('cayci-hizli', f)
+    return () => window.removeEventListener('cayci-hizli', f)
+  }, [])
 
   function parcaliOde(parts: PaymentPart[]) {
     paySplit(lines, parts, target.kind === 'masa' ? target.id : undefined)
@@ -184,7 +274,10 @@ export default function Satis() {
         </button>
       </div>
 
-      {/* ---- masalar ---- */}
+      {/* ---- masalar ----
+           Kategori sırasıyla üst üste iki benzer pil şeridi oluşuyordu ve hangisinin
+           ne olduğu anlaşılmıyordu. Artık her şerit ne seçtiğini söylüyor. */}
+      <div className="serit-etiket">Masa seçin</div>
       <div className="tables">
         <button
           className={`table-btn ${target.kind === 'hizli' ? 'on' : ''}`}
@@ -240,13 +333,13 @@ export default function Satis() {
               </select>
               <button
                 className="btn sm"
-                onClick={() => {
-                  const ad = prompt('Yeni müşteri adı:')
-                  if (!ad?.trim()) return
-                  const id = uid()
-                  saveCustomer({ id, name: ad.trim(), balance: 0 })
-                  setTableCustomer(target.id, id)
-                }}
+                onClick={() =>
+                  setYeniAd(() => (ad: string) => {
+                    const id = uid()
+                    saveCustomer({ id, name: ad, balance: 0 })
+                    if (target.kind === 'masa') setTableCustomer(target.id, id)
+                  })
+                }
               >
                 + Yeni müşteri
               </button>
@@ -297,13 +390,28 @@ export default function Satis() {
               )}
             </div>
           )}
+          <div className="ara-kutu">
+            <span className="ara-ic">🔍</span>
+            <input
+              value={ara}
+              onChange={(e) => setAra(e.target.value)}
+              placeholder="Ürün ara..."
+              aria-label="Ürün ara"
+            />
+            {ara && (
+              <button className="ara-sil" onClick={() => setAra('')} aria-label="Aramayı temizle">
+                ✕
+              </button>
+            )}
+          </div>
           <div className="row cat-row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
               <button
                 key={c}
-                className={`btn sm ${cat === c ? 'primary' : 'ghost'}`}
+                className={`kat ${cat === c ? 'on' : ''}`}
                 onClick={() => setCat(c)}
               >
+                {KAT_IKON[c] && <span className="kat-ic">{KAT_IKON[c]}</span>}
                 {c}
               </button>
             ))}
@@ -332,7 +440,11 @@ export default function Satis() {
                     </span>
                   )}
                   {detayli && i.variants?.length ? <span className="var-dot">çeşitli</span> : null}
-                  <span className="ic">{i.icon}</span>
+                  {urunGorsel(i.id) ? (
+                    <img className="ic-img" src={urunGorsel(i.id)!} alt="" />
+                  ) : (
+                    <span className="ic">{i.icon}</span>
+                  )}
                   <span className="nm">{i.name}</span>
                   <span className="pr">{fmtTL(i.price ?? 0)}</span>
                 </button>
@@ -343,46 +455,53 @@ export default function Satis() {
 
         <div className={`card cart ${sepetAcik ? 'open' : ''}`}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <strong>{target.kind === 'masa' ? table?.name : 'Hızlı satış'}</strong>
-            <div className="row">
-              {lines.length > 0 && (
-                <>
-                  <button className="btn sm ghost" onClick={temizle}>
-                    Temizle
-                  </button>
-                  <button
-                    className="btn sm"
-                    onClick={() => setParcali(true)}
-                    title="Toplamı eşit böl, her parçayı ayrı öde"
-                  >
-                    ⑃ Hesabı böl
-                  </button>
-                </>
-              )}
-              <button
-                className="btn sm ghost only-mobile"
-                onClick={() => setSepetAcik(false)}
-                title="Kapat"
-              >
-                ▼
-              </button>
-            </div>
+            <strong className="row" style={{ gap: 8 }}>
+              Adisyon
+              <span className="tag warn">
+                {target.kind === 'masa' ? `🪑 ${table?.name}` : '⚡ Hızlı satış'}
+              </span>
+            </strong>
+            <button
+              className="btn sm ghost only-mobile"
+              onClick={() => setSepetAcik(false)}
+              title="Kapat"
+            >
+              ▼
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button
+              className="btn sm"
+              onClick={() => setMusteriSor((v) => !v)}
+              title="Adisyona müşteri bağla (veresiye için gerekli)"
+            >
+              👤 {aktifMusteri ? (s.customers.find((c) => c.id === aktifMusteri)?.name ?? 'Müşteri') : 'Müşteri Seç'}
+            </button>
+            {lines.length > 0 && (
+              <>
+                <button
+                  className="btn sm"
+                  onClick={() => setParcali(true)}
+                  title="Toplamı eşit böl, her parçayı ayrı öde"
+                >
+                  ⑃ Hesabı böl
+                </button>
+                <button className="btn sm ghost" onClick={temizle}>
+                  Temizle
+                </button>
+              </>
+            )}
           </div>
 
           <div className="cart-lines">
             {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
             {lines.map((l, idx) => (
               <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}`}>
+                {urunGorsel(l.itemId) && <img className="cl-img" src={urunGorsel(l.itemId)!} alt="" />}
                 <button className="x" onClick={() => azalt(idx)} title="Bir azalt">
                   −
                 </button>
-                <input
-                  className="qty"
-                  type="number"
-                  min={0}
-                  value={l.qty}
-                  onChange={(e) => setQty(idx, Number(e.target.value))}
-                />
+                <QtyInput qty={l.qty} onQty={(n) => setQty(idx, n)} />
                 <button className="x" onClick={() => artir(idx)} title="Bir artır">
                   +
                 </button>
@@ -397,9 +516,11 @@ export default function Satis() {
             <span className="v">{fmtTL(total)}</span>
           </div>
 
-          {(!table?.customerId || target.kind === 'hizli') && (
-            <div className="field">
-              <label>Müşteri (veresiye için zorunlu)</label>
+          {/* Müşteri seçici: nakit/kart satışta gereksiz. Sadece veresiyeye basılınca
+              ya da zaten bir müşteri seçiliyken görünür. */}
+          {(!table?.customerId || target.kind === 'hizli') && (musteriSor || customerId) && (
+            <div className={`field ${musteriSor && !customerId ? 'sor' : ''}`}>
+              <label>{musteriSor && !customerId ? 'Veresiye kime yazılsın?' : 'Müşteri'}</label>
               <div className="row">
                 <select
                   style={{ flex: 1 }}
@@ -416,14 +537,14 @@ export default function Satis() {
                 </select>
                 <button
                   className="btn sm"
-                  onClick={() => {
-                    const ad = prompt('Yeni müşteri adı:')
-                    if (!ad?.trim()) return
-                    const id = uid()
-                    saveCustomer({ id, name: ad.trim(), balance: 0 })
-                    if (target.kind === 'masa') setTableCustomer(target.id, id)
-                    else setCustomerId(id)
-                  }}
+                  onClick={() =>
+                    setYeniAd(() => (ad: string) => {
+                      const id = uid()
+                      saveCustomer({ id, name: ad, balance: 0 })
+                      if (target.kind === 'masa') setTableCustomer(target.id, id)
+                      else setCustomerId(id)
+                    })
+                  }
                 >
                   + Yeni müş
                 </button>
@@ -431,19 +552,32 @@ export default function Satis() {
             </div>
           )}
 
+          {/* Üçü de satışı bitirir. Mockup düzeni: Nakit (en sık) tam genişlik yeşil,
+              altında Kart turuncu + Veresiye koyu. */}
           <div className="pays">
-            <button className="btn primary" disabled={!lines.length} onClick={() => ode('nakit')}>
-              Nakit
+            <button className="pay nakit genis" disabled={!lines.length} onClick={() => ode('nakit')}>
+              <b>💵 Nakit — Ödeme Al</b>
+              <small>parayı aldım</small>
             </button>
-            <button className="btn" disabled={!lines.length} onClick={() => ode('kart')}>
-              Kart
+            <button className="pay kart" disabled={!lines.length} onClick={() => ode('kart')}>
+              <b>💳 Kart</b>
+              <small>POS cihazı</small>
             </button>
-            <button className="btn" disabled={!lines.length} onClick={() => ode('veresiye')}>
-              Veresiye
+            <button className="pay veresiye" disabled={!lines.length} onClick={() => ode('veresiye')}>
+              <b>📒 Veresiye</b>
+              <small>deftere yaz</small>
             </button>
           </div>
         </div>
       </div>
+
+      {/* ---- satış onayı ---- */}
+      {onay && (
+        <div className="onay" role="status">
+          ✓ Satış tamam · <b>{fmtTL(onay.tutar)}</b> ·{' '}
+          {onay.payment === 'nakit' ? 'Nakit' : onay.payment === 'kart' ? 'Kart' : 'Veresiye'}
+        </div>
+      )}
 
       {/* ---- mobil: sepet çubuğu ve panel örtüsü ---- */}
       {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}
@@ -531,6 +665,13 @@ export default function Satis() {
                   >
                     <button
                       className="btn sm"
+                      title="Fiş göster / paylaş"
+                      onClick={() => setFisSale(sale)}
+                    >
+                      🧾
+                    </button>
+                    <button
+                      className="btn sm"
                       title="İncele / düzenle"
                       onClick={() => setIncele(sale)}
                     >
@@ -539,15 +680,7 @@ export default function Satis() {
                     <button
                       className="btn sm"
                       style={{ whiteSpace: 'nowrap' }}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `${fmtTL(sale.total)} tutarındaki satış iptal edilecek.\nStok geri yüklenecek, veresiyeyse borç silinecek.\n\nOnaylıyor musun?`,
-                          )
-                        ) {
-                          cancelSale(sale.id)
-                        }
-                      }}
+                      onClick={() => setIptalSale(sale)}
                     >
                       İptal et
                     </button>
@@ -604,11 +737,56 @@ export default function Satis() {
             setIncele(null)
           }}
           onIptal={() => {
-            cancelSale(incele.id)
+            iptalEt(incele)
             setIncele(null)
           }}
         />
       )}
+
+      {/* Yeni müşteri adı — WebView'de prompt() yerine. */}
+      {yeniAd && (
+        <AdModal
+          baslik="Yeni müşteri"
+          onClose={() => setYeniAd(null)}
+          onOk={(ad) => {
+            yeniAd(ad)
+            setYeniAd(null)
+          }}
+        />
+      )}
+
+      {/* Satış iptal onayı — confirm() yerine. */}
+      {iptalSale && (
+        <OnayModal
+          baslik="Satışı iptal et"
+          mesaj={`${fmtTL(iptalSale.total)} tutarındaki satış iptal edilecek. Stok geri yüklenecek, veresiyeyse borç silinecek.`}
+          onayYazi="İptal et"
+          onClose={() => setIptalSale(null)}
+          onOk={() => {
+            iptalEt(iptalSale)
+            setIptalSale(null)
+          }}
+        />
+      )}
+
+      {/* İptal sonrası geri alma balonu. */}
+      {undo && (
+        <div className="onay" role="status" style={{ background: 'var(--ink)' }}>
+          Satış iptal edildi ·{' '}
+          <button
+            className="btn sm"
+            style={{ marginLeft: 6 }}
+            onClick={() => {
+              restoreSale(undo)
+              setUndo(null)
+            }}
+          >
+            ↩ Geri al
+          </button>
+        </div>
+      )}
+
+      {fisSale && <FisModal sale={fisSale} business={s.business} onClose={() => setFisSale(null)} />}
     </>
   )
 }
@@ -682,13 +860,7 @@ function SatisIncele({
             <button className="x" onClick={() => setQty(idx, l.qty - 1)} title="Bir azalt">
               −
             </button>
-            <input
-              type="number"
-              min={0}
-              style={{ width: 70 }}
-              value={l.qty}
-              onChange={(e) => setQty(idx, Number(e.target.value))}
-            />
+            <QtyInput qty={l.qty} onQty={(n) => setQty(idx, n)} />
             <button className="x" onClick={() => setQty(idx, l.qty + 1)} title="Bir artır">
               +
             </button>
@@ -861,6 +1033,8 @@ function ParcaliModal({
   const [parts, setParts] = useState<PaymentPart[]>(() =>
     Array.from({ length: 2 }, () => ({ payment: 'nakit' as Payment, amount: toplam / 2 })),
   )
+  // Yeni müşteri adı modalı — WebView'de prompt() yerine.
+  const [yeniAd, setYeniAd] = useState<((ad: string) => void) | null>(null)
 
   function boluntu(adet: number) {
     setN(adet)
@@ -876,6 +1050,8 @@ function ParcaliModal({
   const dagitilan = parts.reduce((a, p) => a + p.amount, 0)
   const fark = Math.round((toplam - dagitilan) * 100) / 100
   const eksikMusteri = parts.some((p) => p.payment === 'veresiye' && !p.customerId)
+  // Negatif ya da geçersiz parça: toplam tutsa bile kabul edilmez (borç azaltma sömürüsü).
+  const gecersizParca = parts.some((p) => !Number.isFinite(p.amount) || p.amount < 0)
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -904,8 +1080,10 @@ function ParcaliModal({
               <strong style={{ width: 70 }}>{i + 1}. parça</strong>
               <input
                 type="number"
+                min={0}
                 style={{ width: 100 }}
                 value={p.amount}
+                onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'center', behavior: 'smooth' })}
                 onChange={(e) =>
                   setParts(
                     parts.map((x, j) =>
@@ -961,13 +1139,13 @@ function ParcaliModal({
                   </select>
                   <button
                     className="btn sm"
-                    onClick={() => {
-                      const ad = prompt('Yeni müşteri adı:')
-                      if (!ad?.trim()) return
-                      const id = uid()
-                      saveCustomer({ id, name: ad.trim(), balance: 0 })
-                      setParts(parts.map((x, j) => (j === i ? { ...x, customerId: id } : x)))
-                    }}
+                    onClick={() =>
+                      setYeniAd(() => (ad: string) => {
+                        const id = uid()
+                        saveCustomer({ id, name: ad, balance: 0 })
+                        setParts(parts.map((x, j) => (j === i ? { ...x, customerId: id } : x)))
+                      })
+                    }
                   >
                     + Yeni
                   </button>
@@ -994,6 +1172,11 @@ function ParcaliModal({
             Veresiye parçalarına müşteri seçmelisin.
           </p>
         )}
+        {gecersizParca && (
+          <p className="hint" style={{ color: 'var(--bad)' }}>
+            Parça tutarı eksi olamaz.
+          </p>
+        )}
 
         <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
           <button className="btn ghost" onClick={onClose}>
@@ -1001,13 +1184,24 @@ function ParcaliModal({
           </button>
           <button
             className="btn primary"
-            disabled={Math.abs(fark) >= 0.01 || eksikMusteri}
+            disabled={Math.abs(fark) >= 0.01 || eksikMusteri || gecersizParca}
             onClick={() => onOk(parts)}
           >
             Ödemeyi tamamla
           </button>
         </div>
       </div>
+
+      {yeniAd && (
+        <AdModal
+          baslik="Yeni müşteri"
+          onClose={() => setYeniAd(null)}
+          onOk={(ad) => {
+            yeniAd(ad)
+            setYeniAd(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1054,6 +1248,159 @@ function MasaAdi({
               Kaydet
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** İsim girişi — WebView'de prompt() çalışmadığı için uygulama-içi modal. */
+function AdModal({
+  baslik,
+  onClose,
+  onOk,
+}: {
+  baslik: string
+  onClose: () => void
+  onOk: (ad: string) => void
+}) {
+  const [ad, setAd] = useState('')
+  const gecerli = ad.trim().length > 0
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+        <h2>{baslik}</h2>
+        <div className="field">
+          <label>İsim</label>
+          <input
+            autoFocus
+            value={ad}
+            onChange={(e) => setAd(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && gecerli) onOk(ad.trim())
+            }}
+            placeholder="Müşteri adı"
+          />
+        </div>
+        <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          <button className="btn primary" disabled={!gecerli} onClick={() => onOk(ad.trim())}>
+            Ekle
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Onay kutusu — confirm() yerine. */
+function OnayModal({
+  baslik,
+  mesaj,
+  onayYazi = 'Onayla',
+  onClose,
+  onOk,
+}: {
+  baslik: string
+  mesaj: string
+  onayYazi?: string
+  onClose: () => void
+  onOk: () => void
+}) {
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+        <h2>{baslik}</h2>
+        <p className="hint" style={{ margin: '10px 0 18px', color: 'var(--ink)' }}>
+          {mesaj}
+        </p>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          <button className="btn primary" onClick={onOk}>
+            {onayYazi}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Satışın müşteri fişi — düz metin (yazdır / paylaş / kopyala). */
+function fisMetni(sale: Sale, business: Business): string {
+  const tarih = new Date(sale.date).toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const satirlar = sale.lines
+    .map((l) => `${l.qty} x ${l.name}`.padEnd(24) + fmtTL(l.qty * l.unitPrice).padStart(12))
+    .join('\n')
+  const odeme = (sale.payments ?? [{ payment: sale.payment, amount: sale.total }])
+    .map((p) => `  ${p.payment}: ${fmtTL(p.amount)}`)
+    .join('\n')
+  return [
+    business.name || 'Çay Ocağı',
+    business.address || '',
+    tarih,
+    sale.tableName ? `Masa: ${sale.tableName}` : 'Hızlı satış',
+    '--------------------------------',
+    satirlar,
+    '--------------------------------',
+    `TOPLAM: ${fmtTL(sale.total)}`,
+    'Ödeme:',
+    odeme,
+    '--------------------------------',
+    'Teşekkür ederiz, yine bekleriz.',
+  ]
+    .filter((x) => x !== '')
+    .join('\n')
+}
+
+function FisModal({
+  sale,
+  business,
+  onClose,
+}: {
+  sale: Sale
+  business: Business
+  onClose: () => void
+}) {
+  const metin = fisMetni(sale, business)
+
+  async function paylas() {
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: metin })
+        return
+      }
+      await navigator.clipboard.writeText(metin)
+      alert('Fiş panoya kopyalandı.')
+    } catch {
+      // kullanıcı iptal etti veya izin yok — sessiz geç
+    }
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <h2>Fiş</h2>
+        <pre className="fis-yazdir">{metin}</pre>
+        <div className="row no-print" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Kapat
+          </button>
+          <button className="btn" onClick={paylas}>
+            📤 Paylaş
+          </button>
+          <button className="btn primary" onClick={() => window.print()}>
+            🖨 Yazdır
+          </button>
         </div>
       </div>
     </div>

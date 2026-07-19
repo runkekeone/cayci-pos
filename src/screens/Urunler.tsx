@@ -30,13 +30,60 @@ function bosUrun(sellable: boolean): Item {
   }
 }
 
+type SiraAnahtar = 'ad' | 'maliyet' | 'satis' | 'kar' | 'karp'
+
 export default function Urunler() {
   const { s, saveItem, deleteItem } = useStore()
   const [edit, setEdit] = useState<Item | null>(null)
   const [katalog, setKatalog] = useState(false)
+  const [filtre, setFiltre] = useState<string>('tumu') // tumu | tarifli | tarifsiz | cat:<ad>
+  const [sira, setSira] = useState<SiraAnahtar | null>(null)
+  const [yon, setYon] = useState<'artan' | 'azalan'>('azalan')
 
-  const satilan = s.items.filter((i) => i.sellable)
   const hammadde = s.items.filter((i) => !i.sellable)
+
+  // Satış ürünlerini hesaplanmış rakamlarıyla birlikte türet (filtre + sıralama için).
+  const satilanHam = s.items
+    .filter((i) => i.sellable)
+    .map((i) => {
+      const c = unitCost(i.id, s.items)
+      const p = i.price ?? 0
+      const kar = p - c
+      return { i, c, p, kar, karp: p > 0 ? (kar / p) * 100 : 0, tarifli: !!i.recipe?.lines.length }
+    })
+
+  const kategoriler = [...new Set(satilanHam.map((r) => r.i.category))]
+
+  const filtreli = satilanHam.filter((r) => {
+    if (filtre === 'tarifli') return r.tarifli
+    if (filtre === 'tarifsiz') return !r.tarifli
+    if (filtre.startsWith('cat:')) return r.i.category === filtre.slice(4)
+    return true
+  })
+
+  const satilan = [...filtreli]
+  if (sira) {
+    const carp = yon === 'artan' ? 1 : -1
+    const alan: Record<Exclude<SiraAnahtar, 'ad'>, 'c' | 'p' | 'kar' | 'karp'> = {
+      maliyet: 'c',
+      satis: 'p',
+      kar: 'kar',
+      karp: 'karp',
+    }
+    satilan.sort((a, b) => {
+      if (sira === 'ad') return carp * a.i.name.localeCompare(b.i.name, 'tr')
+      return carp * (a[alan[sira]] - b[alan[sira]])
+    })
+  }
+
+  function basligaTikla(k: SiraAnahtar) {
+    if (sira === k) setYon((y) => (y === 'azalan' ? 'artan' : 'azalan'))
+    else {
+      setSira(k)
+      setYon(k === 'ad' ? 'artan' : 'azalan')
+    }
+  }
+  const ok = (k: SiraAnahtar) => (sira === k ? (yon === 'azalan' ? ' ▾' : ' ▴') : '')
 
   // Hazır katalogda olup bu işletmede olmayan ürünler.
   const eksikler = URUNLER.filter((u) => !s.items.some((i) => i.id === u.id))
@@ -67,24 +114,49 @@ export default function Urunler() {
       </div>
 
       <div className="section-title">Satış ürünleri</div>
+
+      <div className="row" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+        {[
+          { k: 'tumu', ad: 'Tümü' },
+          { k: 'tarifli', ad: 'Tarifli' },
+          { k: 'tarifsiz', ad: 'Tarifsiz' },
+          ...kategoriler.map((c) => ({ k: `cat:${c}`, ad: c })),
+        ].map((f) => (
+          <button
+            key={f.k}
+            className={`btn sm ${filtre === f.k ? 'primary' : 'ghost'}`}
+            onClick={() => setFiltre(f.k)}
+          >
+            {f.ad}
+          </button>
+        ))}
+      </div>
+
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table>
           <thead>
             <tr>
-              <th>Ürün</th>
+              <th className="sortable" onClick={() => basligaTikla('ad')} style={{ cursor: 'pointer' }}>
+                Ürün{ok('ad')}
+              </th>
               <th>Tarif</th>
-              <th className="num">Maliyet</th>
-              <th className="num">Satış</th>
-              <th className="num">Kâr</th>
-              <th className="num">Kâr %</th>
+              <th className="num sortable" onClick={() => basligaTikla('maliyet')} style={{ cursor: 'pointer' }}>
+                Maliyet{ok('maliyet')}
+              </th>
+              <th className="num sortable" onClick={() => basligaTikla('satis')} style={{ cursor: 'pointer' }}>
+                Satış{ok('satis')}
+              </th>
+              <th className="num sortable" onClick={() => basligaTikla('kar')} style={{ cursor: 'pointer' }}>
+                Kâr{ok('kar')}
+              </th>
+              <th className="num sortable" onClick={() => basligaTikla('karp')} style={{ cursor: 'pointer' }}>
+                Kâr %{ok('karp')}
+              </th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {satilan.map((i) => {
-              const c = unitCost(i.id, s.items)
-              const p = i.price ?? 0
-              const kar = p - c
+            {satilan.map(({ i, c, p, kar }) => {
               return (
                 <tr key={i.id}>
                   <td>
@@ -411,8 +483,9 @@ function UrunKarti({
               <label>Satış fiyatı ₺</label>
               <input
                 type="number"
+                min={0}
                 value={d.price ?? 0}
-                onChange={(e) => setD({ ...d, price: Number(e.target.value) })}
+                onChange={(e) => setD({ ...d, price: Math.max(0, Number(e.target.value) || 0) })}
               />
             </div>
           )}
@@ -424,9 +497,10 @@ function UrunKarti({
             <div className="row">
               <input
                 type="number"
+                min={0}
                 style={{ width: 80 }}
                 value={alisMiktar}
-                onChange={(e) => setAlisMiktar(Number(e.target.value))}
+                onChange={(e) => setAlisMiktar(Math.max(0, Number(e.target.value) || 0))}
               />
               <span className="hint">{d.buyUnit} aldım,</span>
               {packGerek && (
@@ -434,9 +508,10 @@ function UrunKarti({
                   <span className="hint">içinde</span>
                   <input
                     type="number"
+                    min={1}
                     style={{ width: 70 }}
                     value={d.packSize ?? 1}
-                    onChange={(e) => setD({ ...d, packSize: Number(e.target.value) })}
+                    onChange={(e) => setD({ ...d, packSize: Math.max(1, Number(e.target.value) || 1) })}
                   />
                   <span className="hint">adet var,</span>
                 </>
@@ -464,8 +539,9 @@ function UrunKarti({
                 <label>Kritik stok ({d.unit})</label>
                 <input
                   type="number"
+                  min={0}
                   value={d.minStock ?? 0}
-                  onChange={(e) => setD({ ...d, minStock: Number(e.target.value) })}
+                  onChange={(e) => setD({ ...d, minStock: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </div>
             )}
@@ -529,11 +605,12 @@ function UrunKarti({
                       </select>
                       <input
                         type="number"
+                        min={0}
                         style={{ width: 90 }}
                         value={line.qty}
                         onChange={(e) => {
                           const lines = [...d.recipe!.lines]
-                          lines[idx] = { ...line, qty: Number(e.target.value) }
+                          lines[idx] = { ...line, qty: Math.max(0, Number(e.target.value) || 0) }
                           setD({ ...d, recipe: { ...d.recipe!, lines } })
                         }}
                       />
