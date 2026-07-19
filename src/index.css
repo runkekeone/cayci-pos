@@ -201,6 +201,60 @@ h1 {
   min-width: 0;
 }
 
+/* --- Toptancı katalog: satır yerine kart ızgarası, sırada 4 kart --- */
+.katalog-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+/* Sırada hep 4 kutu. Sadece küçük telefonda azalt. */
+@media (max-width: 560px) {
+  .katalog-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 400px) {
+  .katalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.kat-kart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.kat-kart .kk-ad {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+.kat-kart .kk-fiyat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.kat-kart .kk-fiyat b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.kat-kart .kk-butonlar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+.kat-kart .kk-butonlar .btn.sm {
+  flex: 1;
+  white-space: nowrap;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1204,51 +1258,6 @@ tr:last-child td {
     display: none;
   }
 
-  /* --- sipariş katalogu: dar ekranda tabloyu dikey karta çevir.
-     4 sütunlu tablo dar pencereye sığmıyordu, taşan hücreler
-     .card overflow:hidden ile kırpılıyordu (isim/butonlar görünmüyordu). --- */
-  .katalog-tablo thead {
-    display: none;
-  }
-  .katalog-tablo table,
-  .katalog-tablo tbody,
-  .katalog-tablo tr,
-  .katalog-tablo td {
-    display: block;
-    width: 100%;
-  }
-  .katalog-tablo tr {
-    padding: 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  .katalog-tablo tr:last-child {
-    border-bottom: 0;
-  }
-  .katalog-tablo td {
-    padding: 0;
-    border-bottom: 0;
-    text-align: left;
-  }
-  .katalog-tablo td.fiyat {
-    display: inline-block;
-    width: 50%;
-    margin-top: 6px;
-    font-weight: 600;
-  }
-  .katalog-tablo td.fiyat::before {
-    content: attr(data-label) ': ';
-    color: var(--muted);
-    font-weight: 600;
-  }
-  .katalog-tablo td.aksiyon {
-    margin-top: 10px;
-  }
-  .katalog-tablo td.aksiyon .row {
-    justify-content: stretch;
-  }
-  .katalog-tablo td.aksiyon .btn.sm {
-    flex: 1 1 auto;
-  }
 
   /* --- ürünler: parmakla basılacak, biraz büyük --- */
   .tiles {
@@ -1400,6 +1409,9 @@ tr:last-child td {
 @media (max-width: 420px) {
   .tiles {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .katalog-grid {
+    grid-template-columns: 1fr;
   }
 }
 

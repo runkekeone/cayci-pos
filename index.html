@@ -27,6 +27,31 @@
     />
 
     <title>Çay Ocağı POS</title>
+
+    <!-- Açılış hatası yakalayıcı: beyaz ekran yerine hatayı ekrana yazar (telefonda teşhis için). -->
+    <script>
+      ;(function () {
+        function goster(baslik, metin) {
+          var el = document.getElementById('booterr')
+          if (!el) {
+            el = document.createElement('pre')
+            el.id = 'booterr'
+            el.style.cssText =
+              'position:fixed;inset:0;margin:0;padding:16px;background:#111;color:#ff6b6b;font:12px/1.5 monospace;white-space:pre-wrap;overflow:auto;z-index:99999'
+            ;(document.body || document.documentElement).appendChild(el)
+          }
+          el.textContent += baslik + ': ' + metin + '\n\n'
+        }
+        window.addEventListener('error', function (e) {
+          var err = e.error
+          goster('HATA', (e.message || err) + '\n' + ((err && err.stack) || e.filename + ':' + e.lineno))
+        })
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason
+          goster('PROMISE HATA', (r && (r.stack || r.message)) || String(r))
+        })
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -2,6 +2,10 @@
   "appId": "co.cayocagi.pos",
   "appName": "Çay Ocağı",
   "webDir": "dist",
+  "server": {
+    "url": "https://runkekeone.github.io/cayci-pos/",
+    "cleartext": false
+  },
   "android": {
     "allowMixedContent": false
   }

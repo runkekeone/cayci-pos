@@ -9,8 +9,10 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Çevrimdışı kabuk. Sadece derlenmiş sürümde — geliştirirken önbellek kafa karıştırır.
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+// Çevrimdışı kabuk. Sadece web (GitHub Pages) sürümünde. Capacitor APK'de dosyalar
+// zaten telefonda yerel — SW gereksiz ve önbellek/beyaz-ekran sorunlarına yol açar.
+const capacitorMi = Boolean((window as unknown as { Capacitor?: unknown }).Capacitor)
+if (import.meta.env.PROD && !capacitorMi && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     // BASE_URL: GitHub Pages'te "/cayci-pos/", yerelde "/"
     const taban = import.meta.env.BASE_URL

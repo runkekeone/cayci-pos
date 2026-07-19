@@ -191,48 +191,37 @@ export default function Siparis() {
             ))}
           </div>
 
-          <div className="card katalog-tablo" style={{ padding: 0, overflow: 'hidden' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Ürün</th>
-                  <th className="num">Koli</th>
-                  <th className="num">Adet</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((k) => (
-                  <tr key={k.id}>
-                    <td>
-                      <strong>{k.name}</strong>
-                      <span className="hint" style={{ display: 'block' }}>
-                        {k.brand} · {k.packSize} {k.unit}/{k.buyUnit}
-                      </span>
-                    </td>
-                    <td className="num fiyat" data-label="Koli">{fmtTL(k.koliPrice)}</td>
-                    <td className="num fiyat" data-label="Adet">{fmtTL(k.adetPrice)}</td>
-                    <td className="num aksiyon">
-                      <div className="row" style={{ gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                        <button className="btn sm" onClick={() => ekle(k, 'koli')}>
-                          + Koli
-                        </button>
-                        <button className="btn sm ghost" onClick={() => ekle(k, 'adet')}>
-                          + Adet
-                        </button>
-                        <button
-                          className="btn sm"
-                          title="Kendi satış listene ekle"
-                          onClick={() => urunumeEkle(k)}
-                        >
-                          🛒 Ürünüme
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="katalog-grid">
+            {shown.map((k) => (
+              <div className="kat-kart" key={k.id}>
+                <div className="kk-ad">
+                  <strong>{k.name}</strong>
+                  <span className="hint">
+                    {k.brand} · {k.packSize} {k.unit}/{k.buyUnit}
+                  </span>
+                </div>
+                <div className="kk-fiyat">
+                  <span>
+                    Koli <b>{fmtTL(k.koliPrice)}</b>
+                  </span>
+                  <span>
+                    Adet <b>{fmtTL(k.adetPrice)}</b>
+                  </span>
+                </div>
+                <div className="kk-butonlar">
+                  <button className="btn sm" onClick={() => ekle(k, 'koli')}>
+                    + Koli
+                  </button>
+                  <button className="btn sm ghost" onClick={() => ekle(k, 'adet')}>
+                    + Adet
+                  </button>
+                  <button className="btn sm" title="Kendi satış listene ekle" onClick={() => urunumeEkle(k)}>
+                    🛒 Ürünüme
+                  </button>
+                </div>
+              </div>
+            ))}
+            {shown.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
           </div>
         </div>
 
