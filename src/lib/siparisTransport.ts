@@ -49,9 +49,9 @@ export function orderToText(order: Order): string {
   return `${bas}\n${satirlar}\nToplam: ${fmtTL(toplam)}${not}`
 }
 
-/** WhatsApp linki: insan-okur özet + panele yapıştırılacak kod. */
+/** WhatsApp linki: sade insan-okur sipariş + iyi dilek. */
 export function whatsappLink(order: Order, tel?: string): string {
-  const govde = `${orderToText(order)}\n\n--- sistem kodu (silme) ---\n${encodeOrder(order)}`
+  const govde = `${orderToText(order)}\n\nHayırlı işler 🙏`
   const numara = (tel ?? '').replace(/\D/g, '')
   return `https://wa.me/${numara}?text=${encodeURIComponent(govde)}`
 }
