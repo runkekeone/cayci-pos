@@ -4,6 +4,7 @@ import { dayReport, totalVeresiye } from '../lib/report'
 import { lowStock } from '../lib/cost'
 import { fmtTL, today } from '../lib/units'
 import { urunGorsel } from '../lib/urunGorsel'
+import type { Table } from '../types'
 
 /**
  * Hızlı İşlemler — ilk 4'ü hep görünür, gerisi ⋯ ile açılır.
@@ -39,6 +40,7 @@ const DUYURULAR = [
 export default function Anasayfa() {
   const { s } = useStore()
   const [hepsi, setHepsi] = useState(false)
+  const [onizle, setOnizle] = useState<Table | null>(null) // bekleyen adisyon önizleme
   const gun = aktifOturum(s)?.date ?? today()
   const r = dayReport(s, gun)
   const kritik = lowStock(s.items).length
@@ -122,12 +124,20 @@ export default function Anasayfa() {
               const tutar = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
               const musteri = s.customers.find((c) => c.id === t.customerId)
               return (
-                <button key={t.id} className="ana-satir" onClick={() => git('satis')}>
+                <button
+                  key={t.id}
+                  className="ana-satir"
+                  onClick={() => setOnizle(t)}
+                  title="İçeriği gör"
+                >
                   <span>
                     <b>{t.name}</b>
                     {musteri && <span className="hint"> · {musteri.name}</span>}
                   </span>
-                  <strong className="v">{fmtTL(tutar)}</strong>
+                  <span className="row" style={{ gap: 8 }}>
+                    <strong className="v">{fmtTL(tutar)}</strong>
+                    <span aria-hidden>👁</span>
+                  </span>
                 </button>
               )
             })}
@@ -250,6 +260,52 @@ export default function Anasayfa() {
           📣 Reklam alanı — ileride buraya reklam alınabilir
         </div>
       </div>
+
+      {/* Bekleyen adisyon önizleme: içeriği hızlıca gör, istersen "Aç" ile satışa geç. */}
+      {onizle && (
+        <div className="modal-bg" onClick={() => setOnizle(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <h2>{onizle.name}</h2>
+            {(() => {
+              const m = s.customers.find((c) => c.id === onizle.customerId)
+              return m ? <p className="hint">Müşteri: {m.name}</p> : null
+            })()}
+            <div className="cart-lines" style={{ maxHeight: '50vh' }}>
+              {onizle.lines.length === 0 && <p className="hint">Bu adisyon boş.</p>}
+              {onizle.lines.map((l, i) => (
+                <div className="cline" key={i}>
+                  <span className="nm">{l.name}</span>
+                  <span className="q">{l.qty}×</span>
+                  <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="total" style={{ marginTop: 10 }}>
+              <span>Toplam</span>
+              <span className="v">
+                {fmtTL(onizle.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0))}
+              </span>
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
+              <button className="btn ghost" style={{ flex: 1 }} onClick={() => setOnizle(null)}>
+                Kapat
+              </button>
+              <button
+                className="btn primary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  // Satış ekranı mount olunca okuması için bekleyen masa id'sini bırak.
+                  ;(window as unknown as { __cayMasaAc?: string }).__cayMasaAc = onizle.id
+                  setOnizle(null)
+                  git('satis')
+                }}
+              >
+                Adisyonu aç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

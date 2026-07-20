@@ -242,6 +242,21 @@ export default function Satis() {
     return () => window.removeEventListener('cayci-hizli', f)
   }, [])
 
+  // Anasayfa "Adisyonu aç": sayfa Satış'a geçince bu ekran yeni mount olur.
+  // Event mount'tan önce atıldığı için kaçardı; bunun yerine window'daki bekleyen
+  // masa id'sini mount anında okuyup seçiyoruz.
+  useEffect(() => {
+    const w = window as unknown as { __cayMasaAc?: string }
+    const id = w.__cayMasaAc
+    w.__cayMasaAc = undefined
+    if (id && s.tables.some((t) => t.id === id)) {
+      setTarget({ kind: 'masa', id })
+      setSepetAcik(true)
+    }
+    // yalnız mount'ta: bekleyen id'yi bir kez tüket
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function parcaliOde(parts: PaymentPart[]) {
     paySplit(lines, parts, target.kind === 'masa' ? target.id : undefined)
     if (target.kind === 'hizli') setQuick([])
@@ -592,7 +607,7 @@ export default function Satis() {
 
       {/* ---- son satışlar ---- */}
       <div className="section-title">Son satışlar</div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card son-satis" style={{ padding: 0, overflow: 'hidden' }}>
         <table>
           <thead>
             <tr>
@@ -679,10 +694,10 @@ export default function Satis() {
                     </button>
                     <button
                       className="btn sm"
-                      style={{ whiteSpace: 'nowrap' }}
+                      title="İptal et"
                       onClick={() => setIptalSale(sale)}
                     >
-                      İptal et
+                      🗑
                     </button>
                   </div>
                 </td>

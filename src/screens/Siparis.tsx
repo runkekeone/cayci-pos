@@ -26,6 +26,7 @@ export default function Siparis() {
   const [not, setNot] = useState('')
   const [qr, setQr] = useState<string | null>(null)
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
+  const [sepetAcik, setSepetAcik] = useState(false) // mobil: alttan açılan sepet paneli
 
   const katalog = TOPTANCI_KATALOG.filter((k) => k.active)
   const kategoriler = ['Hepsi', ...new Set(katalog.map((k) => k.category))]
@@ -124,6 +125,7 @@ export default function Siparis() {
     setNot('')
     setGonderildi(null)
     setQr(null)
+    setSepetAcik(false)
   }
 
   /** Katalog ürününü kendi satış listesine çek: fiyat sor, sellable Item olarak ekle. */
@@ -226,9 +228,14 @@ export default function Siparis() {
         </div>
 
         {/* ---- sepet ---- */}
-        <div className="card">
-          <strong>Sipariş sepeti</strong>
-          <div style={{ marginTop: 10 }}>
+        <div className={`card cart ${sepetAcik ? 'open' : ''}`}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Sipariş sepeti</strong>
+            <button className="btn ghost sm only-mobile" onClick={() => setSepetAcik(false)}>
+              Kapat
+            </button>
+          </div>
+          <div className="cart-lines">
             {lines.length === 0 && <p className="hint">Katalogdan ekle.</p>}
             {lines.map((l) => {
               const key = `${l.catalogItemId}|${l.birim}`
@@ -277,6 +284,16 @@ export default function Siparis() {
           )}
         </div>
       </div>
+
+      {/* mobil: alttan sepet çubuğu + panel örtüsü (satış ekranıyla aynı desen) */}
+      {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}
+      {lines.length > 0 && !sepetAcik && (
+        <div className="sepet-bar only-mobile" onClick={() => setSepetAcik(true)}>
+          <span className="sb-adet">{lines.reduce((n, l) => n + l.qty, 0)}</span>
+          <span className="sb-tut">{fmtTL(toplam)}</span>
+          <button className="sb-btn">Sepeti aç</button>
+        </div>
+      )}
 
       {qr && (
         <div className="modal-bg" onClick={() => setQr(null)}>

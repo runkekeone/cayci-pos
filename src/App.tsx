@@ -172,18 +172,10 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           }}
           aria-label="Hızlı Satış"
         >
-          <span className="arti-yuvarlak">＋</span>
-          <span className="nav-kisa">Hızlı Satış</span>
-        </button>
-        <button
-          className={`nav only-mobile ${sayfa === 'satis' && doluMasa > 0 ? '' : ''}`}
-          onClick={() => git('satis')}
-        >
-          <span className="nav-rozetli">
-            🧾
-            {doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
+          <span className="arti-yuvarlak">
+            ＋{doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
           </span>
-          <span className="nav-kisa">Adisyonlar</span>
+          <span className="nav-kisa">Hızlı Satış</span>
         </button>
         <button
           className={`nav only-mobile ${sayfa === 'profil' ? 'on' : ''}`}

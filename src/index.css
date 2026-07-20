@@ -207,15 +207,16 @@ h1 {
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
-/* Sırada hep 4 kutu. Sadece küçük telefonda azalt. */
+/* Geniş ekran 4 kutu. Telefonda 2-3'e iner ama asla tek sütun (alt-alta) olmaz. */
 @media (max-width: 560px) {
   .katalog-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
 }
 @media (max-width: 400px) {
   .katalog-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 .kat-kart {
@@ -796,7 +797,8 @@ input.qty {
 
 .ana-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  /* 4 işlem + "⋯" = 5 buton, hep tek satır (telefonda da alta kaymasın). */
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
 }
 .ana-islem {
@@ -1117,6 +1119,7 @@ tr:last-child td {
     overflow: visible;
   }
   .nav-arti .arti-yuvarlak {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1130,6 +1133,13 @@ tr:last-child td {
     font-weight: 700;
     box-shadow: 0 6px 16px rgba(249, 115, 22, 0.45);
     border: 3px solid var(--panel);
+  }
+  /* (+) üzerindeki dolu-masa rozeti: accent daire üstünde ayırt edilir dursun */
+  .nav-arti .nav-rozet {
+    background: var(--ink);
+    border: 2px solid var(--panel);
+    top: -4px;
+    right: -4px;
   }
 
   /* Adisyonlar rozetli ikon */
@@ -1234,16 +1244,62 @@ tr:last-child td {
      card'ı x-kaydırmalı yapıp tabloya min genişlik veriyoruz ki
      sütunlar okunur kalsın, kullanıcı parmakla kaydırsın.
      Sipariş katalogu (.katalog-tablo) hariç: o dikey karta dönüşüyor. --- */
-  .card:has(> table):not(.katalog-tablo) {
+  .card:has(> table):not(.katalog-tablo):not(.son-satis) {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
-  .card:has(> table):not(.katalog-tablo)::-webkit-scrollbar {
+  .card:has(> table):not(.katalog-tablo):not(.son-satis)::-webkit-scrollbar {
     display: none;
   }
-  .card:has(> table):not(.katalog-tablo) > table {
+  .card:has(> table):not(.katalog-tablo):not(.son-satis) > table {
     min-width: 520px;
+  }
+
+  /* --- Son satışlar: mobilde tabloyu dikey kompakt kartlara çevir (yatay
+     kaydırma yok). Her satış tek kart: [saat · masa · tutar] üstte, ürünler
+     ve ödemeler tam genişlik, aksiyon ikonları altta. --- */
+  .son-satis {
+    overflow: visible !important;
+  }
+  .son-satis > table,
+  .son-satis > table > tbody {
+    display: block;
+    min-width: 0 !important;
+    white-space: normal !important;
+  }
+  .son-satis thead {
+    display: none;
+  }
+  .son-satis > table > tbody > tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 4px 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .son-satis td {
+    display: block;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .son-satis td:nth-child(1) {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .son-satis td:nth-child(5) {
+    text-align: right;
+    font-weight: 700;
+  }
+  /* ürünler, ödeme, aksiyonlar: tam satır genişliği */
+  .son-satis td:nth-child(3),
+  .son-satis td:nth-child(4),
+  .son-satis td:nth-child(6) {
+    grid-column: 1 / -1;
+  }
+  .son-satis td:nth-child(6) > div {
+    justify-content: flex-start !important;
   }
 
   /* karta sarılı olmayan geniş tablolar: tablonun kendisi yatay kaydırılsın */
@@ -1377,8 +1433,8 @@ tr:last-child td {
     background: rgba(28, 26, 23, 0.45);
   }
 
-  /* --- tablolar yatay kaysın, sayfayı taşırmasın --- */
-  .card > table,
+  /* --- tablolar yatay kaysın, sayfayı taşırmasın (son-satis hariç: o kart olur) --- */
+  .card:not(.son-satis) > table,
   .modal table {
     display: block;
     overflow-x: auto;
@@ -1411,7 +1467,20 @@ tr:last-child td {
     grid-template-columns: repeat(3, 1fr);
   }
   .katalog-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* 5 hızlı işlem butonu dar ekrana sığsın diye küçült. */
+  .ana-grid {
+    gap: 6px;
+  }
+  .ana-islem {
+    min-height: 60px;
+    font-size: 10.5px;
+    gap: 3px;
+    padding: 4px 2px;
+  }
+  .ana-islem .ic {
+    font-size: 18px;
   }
 }
 
