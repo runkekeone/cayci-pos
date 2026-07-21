@@ -45,5 +45,21 @@ Kod YAZMAZ. İnceler + doğrular:
 Bitti: bulut senkron (kv), internet kapısı (iki app), sipariş kanalı (siparisler tablosu, çift yönlü), babuco otomatik güncelleme (server.url → /toptanci/), alt menüden Satış kaldırıldı.
 Supabase: proje `zchubpqbvbhcuxclirur`, tablolar `kv` + `siparisler` kurulu.
 
+## AKTİF GÖREVLER
+
+### 🎨 DESIGNER — babuco toptancı panelini mobil-uyumlu yap
+Sorun: panel masaüstü web arayüzü olarak tasarlandı (sabit sidebar + geniş tablolar). Mobilde/tablette temiz çalışmıyor. Hedef: dokunmatik-uygun, taşmasız, temiz mobil arayüz. Masaüstü görünümü BOZMA (@media ile ayır).
+Dosyalar (designer): `babuco-app/www/styles.css`, `www/index.html` (viewport/markup). **`www/app.js`'e DOKUNMA.**
+Yapılacaklar:
+1. **Sidebar → mobilde çekmece.** ≤768px: sidebar gizli, `#hamburger` ile soldan açılan drawer + arka örtü. Masaüstünde eski sabit sidebar kalsın.
+2. **`.content` tam genişlik, yatay taşma YOK.** Geniş `table`'lar `overflow-x:auto` sarmalayıcıda kaysın; çok dar ekranda kart/stack tercih.
+3. **Dokunma hedefi ≥44px** (buton, menü, form satırları).
+4. **Topbar mobilde sadeleşsin** (arama kutusu + firma etiketi sığmıyorsa gizle/küçült).
+5. Form/modal tam genişlik; input `font-size:16px` (iOS zoom önle).
+6. viewport meta var; gerekiyorsa `viewport-fit=cover` + safe-area padding.
+SINIR: Çekmece aç/kapa JS gerektirir (`#hamburger` davranışı `app.js`/initTopbar'da). Salt-CSS (class-toggle) ile olmuyorsa → İSTEKLER'e "hamburger drawer toggle" yaz, CODER ekler.
+DAĞITIM: styles.css/index.html değişince **CODER** `cayci-pos/public/toptanci`'ye kopyalayıp push eder (tablet oradan yükler). Designer bitince coder'a haber versin.
+DOĞRULAMA: Moderatör 390px playwright ile taşma/görünüm kontrol eder.
+
 ## İSTEKLER (sınır aşan işler — sahibi alır)
 - (boş)
