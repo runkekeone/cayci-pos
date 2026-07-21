@@ -618,3 +618,9 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .pos-totals { grid-template-columns: 1fr; }
   .quick-amts { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Duyurular */
+.duyuru-item { display: flex; flex-direction: column; gap: 8px; }
+.duyuru-ust { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.duyuru-metin { white-space: pre-wrap; line-height: 1.5; }
+.duyuru-input { width: 100%; resize: vertical; }

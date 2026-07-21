@@ -192,11 +192,11 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <span className="nav-kisa">Hizmetler</span>
         </button>
         <button
-          className={`nav only-mobile ${sayfa === 'profil' ? 'on' : ''}`}
-          onClick={() => git('profil')}
+          className={`nav only-mobile ${sayfa === 'rapor' ? 'on' : ''}`}
+          onClick={() => git('rapor')}
         >
-          <span>👤</span>
-          <span className="nav-kisa">Profil</span>
+          <span>📊</span>
+          <span className="nav-kisa">Rapor</span>
         </button>
 
         <div className="side-alt">

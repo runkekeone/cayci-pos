@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore, aktifOturum } from '../store'
+import { cloudGet } from '../lib/cloud'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { lowStock } from '../lib/cost'
 import { fmtTL, today } from '../lib/units'
@@ -20,6 +21,7 @@ const ISLEMLER = [
   { id: 'siparis', ad: 'Sipariş', ic: '🚚' },
   { id: 'musteriler', ad: 'Müşteriler', ic: '👥' },
   { id: 'kasa', ad: 'Kasa', ic: '💵' },
+  { id: 'profil', ad: 'Profil', ic: '👤' },
 ]
 
 function git(id: string) {
@@ -31,7 +33,10 @@ function git(id: string) {
  * Sol: duyurular (+ Kampanya 1). Sağ: güncel durum raporu (+ Kampanya 2).
  * En altta büyük reklam barı (ileride reklam alanı).
  */
-const DUYURULAR = [
+type Duyuru = { id?: string; tarih: string; metin: string }
+
+// Bulut boş/erişilemezse gösterilecek FALLBACK duyurular.
+const DUYURULAR: Duyuru[] = [
   { tarih: '15 Tem', metin: 'Toptancı fiyat listesi güncellendi — Sipariş ekranından yeni fiyatlara bak.' },
   { tarih: '14 Tem', metin: 'Yeni: kritik stoğa düşen ürünler Sipariş ekranında otomatik önerilir.' },
   { tarih: '12 Tem', metin: 'Gün Sonu ekranı eklendi. Günü kapatırken açık hesapları toplamayı unutma.' },
@@ -41,6 +46,19 @@ export default function Anasayfa() {
   const { s } = useStore()
   const [hepsi, setHepsi] = useState(false)
   const [onizle, setOnizle] = useState<Table | null>(null) // bekleyen adisyon önizleme
+  const [duyurular, setDuyurular] = useState<Duyuru[]>(DUYURULAR) // toptancı buluttan yayınlar; yoksa fallback
+
+  // Mount'ta toptancının yayınladığı duyuruları buluttan oku (kv anahtar: "duyurular").
+  useEffect(() => {
+    let iptal = false
+    cloudGet('duyurular').then((r) => {
+      const v = r?.value as Duyuru[] | undefined
+      if (!iptal && Array.isArray(v) && v.length) setDuyurular(v)
+    })
+    return () => {
+      iptal = true
+    }
+  }, [])
   const gun = aktifOturum(s)?.date ?? today()
   const r = dayReport(s, gun)
   const kritik = lowStock(s.items).length
@@ -178,12 +196,12 @@ export default function Anasayfa() {
         <div>
           <div className="section-title">📢 Duyurular</div>
           <div className="card">
-            {DUYURULAR.map((d, i) => (
+            {duyurular.map((d, i) => (
               <div
-                key={i}
+                key={d.id ?? i}
                 style={{
                   padding: '10px 0',
-                  borderBottom: i < DUYURULAR.length - 1 ? '1px solid var(--line)' : 'none',
+                  borderBottom: i < duyurular.length - 1 ? '1px solid var(--line)' : 'none',
                 }}
               >
                 <span className="tag" style={{ marginRight: 8 }}>

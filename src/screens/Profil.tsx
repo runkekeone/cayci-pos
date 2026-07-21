@@ -107,6 +107,32 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
           </div>
         </div>
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: 1, minWidth: 140 }}>
+            <label>TC Kimlik No</label>
+            <input
+              type="text"
+              value={biz.tc ?? ''}
+              onChange={(e) => setBiz({ ...biz, tc: e.target.value })}
+            />
+          </div>
+          <div className="field" style={{ flex: 1, minWidth: 140 }}>
+            <label>Vergi Dairesi</label>
+            <input
+              type="text"
+              value={biz.vergiDairesi ?? ''}
+              onChange={(e) => setBiz({ ...biz, vergiDairesi: e.target.value })}
+            />
+          </div>
+          <div className="field" style={{ flex: 1, minWidth: 140 }}>
+            <label>Vergi No</label>
+            <input
+              type="text"
+              value={biz.vergiNo ?? ''}
+              onChange={(e) => setBiz({ ...biz, vergiNo: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
           <div className="field" style={{ width: 140 }}>
             <label>Açılış saati</label>
             <input

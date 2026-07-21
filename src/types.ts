@@ -180,6 +180,12 @@ export interface Business {
   owner: string
   openTime: string
   closeTime: string
+  /** TC Kimlik No (kurumsal). */
+  tc?: string
+  /** Bağlı vergi dairesi. */
+  vergiDairesi?: string
+  /** Vergi numarası. */
+  vergiNo?: string
 }
 
 // ---- Toptancı (B2B) katmanı ----

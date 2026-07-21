@@ -12,6 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
+    duyurular: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -174,6 +175,7 @@ const MENU = [
   { ico: "▦", label: "Anasayfa", route: "anasayfa" },
   { ico: "🖊", label: "Satış Yap", route: "satis" },
   { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
+  { ico: "📢", label: "Duyurular", route: "duyurular" },
   { ico: "📈", label: "Raporlar", children: [
       { label: "Günlük Rapor", route: "rapor-gunluk" }, { label: "Tarihsel Rapor", route: "rapor-tarihsel" },
       { label: "Ürünsel Rapor", route: "rapor-urunsel" }, { label: "Grupsal Rapor", route: "rapor-grupsal" },
@@ -1284,6 +1286,7 @@ function mountCayOcagi() {
 /* ============ Sayfa tablosu ============ */
 const PAGES = {
   "cay-ocagi": { render: renderCayOcagi, mount: mountCayOcagi },
+  duyurular: { render: renderDuyurular, mount: mountDuyurular },
   anasayfa: { render: renderAnasayfa, mount: mountAnasayfa },
   satis: { render: renderSatis, mount: mountSatis },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
@@ -1345,6 +1348,36 @@ function mountGorevler() {
   document.querySelectorAll("[data-tog]").forEach((b) => b.addEventListener("click", () => { const g = store.gorevler.find((x) => x.id === b.dataset.tog); g.durum = g.durum === "bitti" ? "bekliyor" : "bitti"; saveStore(); render(); }));
   document.querySelectorAll("[data-delg]").forEach((b) => b.addEventListener("click", () => { if (confirm("Silinsin mi?")) { store.gorevler = store.gorevler.filter((x) => x.id !== b.dataset.delg); saveStore(); render(); } }));
   wireTableSearch();
+}
+
+/* ============ DUYURULAR ============ */
+/* Toptancı duyuru yayınlar; çay ocağı uygulaması kv anahtarı "duyurular"dan okur.
+ * Sözleşme: [{ id, tarih: "21 Tem", metin }] — en yeni en üstte. */
+const DUYURU_AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+function duyuruTarihTR() { const d = new Date(); return d.getDate() + " " + DUYURU_AYLAR[d.getMonth()]; }
+function duyuruBulutaYaz() { kvSet("duyurular", store.duyurular, new Date().toISOString()); }
+function renderDuyurular() {
+  const list = store.duyurular.length
+    ? store.duyurular.map((d) => `<div class="card duyuru-item"><div class="duyuru-ust"><span class="badge">${esc(d.tarih)}</span><button class="del" data-deldy="${d.id}">Sil</button></div><div class="duyuru-metin">${esc(d.metin)}</div></div>`).join("")
+    : `<div class="card"><p class="sub">Henüz duyuru yok.</p></div>`;
+  return pageHead("Duyurular", store.duyurular.length + " duyuru · çay ocağı uygulamasına yayınlanır")
+    + `<div class="card"><div class="field"><label>Yeni Duyuru</label><textarea class="duyuru-input" rows="3" placeholder="Duyuru metni…"></textarea></div><div class="actions"><button class="btn" type="button" data-act="duyuruYayinla">📢 Yayınla</button></div></div>`
+    + list;
+}
+function mountDuyurular() {
+  const b = document.querySelector('[data-act="duyuruYayinla"]');
+  if (b) b.addEventListener("click", () => {
+    const ta = document.querySelector(".duyuru-input");
+    const metin = ((ta && ta.value) || "").trim();
+    if (!metin) { alert("Duyuru metni boş olamaz."); return; }
+    store.duyurular.unshift({ id: genId(), tarih: duyuruTarihTR(), metin });
+    saveStore(); duyuruBulutaYaz(); render();
+  });
+  document.querySelectorAll("[data-deldy]").forEach((x) => x.addEventListener("click", () => {
+    if (!confirm("Duyuru silinsin mi?")) return;
+    store.duyurular = store.duyurular.filter((d) => d.id !== x.dataset.deldy);
+    saveStore(); duyuruBulutaYaz(); render();
+  }));
 }
 
 /* ============ E-FATURA ============ */
