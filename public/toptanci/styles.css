@@ -479,3 +479,106 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pager span { min-width: 30px; text-align: center; border-radius: 8px; padding: 6px 8px; }
 .pager span:not(.mut):not(.on):hover { background: #f1f0ec; }
 .pager span.on { box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3); }
+
+/* ==================================================================
+   MOBİL — temiz, akıcı, uygulama gibi arayüz
+   ================================================================== */
+.mobilbar { display: none; }
+
+@media (max-width: 760px) {
+  /* --- boşluklar: alt çubuğa yer bırak --- */
+  .content { padding: 14px 12px 86px; }
+  .card { padding: 14px; border-radius: 14px; margin-bottom: 14px; }
+  .page-head { margin-bottom: 14px; }
+  .page-head h1 { font-size: 19px; }
+  .page-head .actions { margin-left: 0; width: 100%; }
+
+  /* --- üst barı sadeleştir: sadece menü + arama --- */
+  .topbar { gap: 8px; padding: 0 12px; }
+  .topbar-right .t-link, .topbar-right .t-firma, .topbar-right .t-ico { display: none; }
+  .searchbox { width: auto; flex: 1; max-width: none; }
+
+  /* --- her tabloyu KARTA çevir (data-label ile) --- */
+  .table-wrap { overflow-x: visible; }
+  table.grid, table.grid tbody, table.grid tr, table.grid td { display: block; width: 100%; }
+  table.grid thead { display: none; }
+  table.grid tr {
+    border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px;
+    padding: 4px 12px; background: #fff; box-shadow: var(--shadow-soft);
+  }
+  table.grid tbody tr:hover { background: #fff; }
+  table.grid td {
+    border-bottom: 1px dashed var(--line); white-space: normal;
+    padding: 9px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    text-align: right; font-size: 13px;
+  }
+  table.grid tr td:last-child { border-bottom: 0; }
+  table.grid td::before {
+    content: attr(data-label); flex: 0 0 38%;
+    text-align: left; font-weight: 600; color: #6a7480; font-size: 12px;
+  }
+  table.grid td:not([data-label])::before { content: ""; flex: 0; }
+  .empty-row td { display: block; text-align: center; }
+  .empty-row td::before { content: ""; }
+  .act-btns { justify-content: flex-end; flex-wrap: wrap; }
+
+  /* --- dokunma hedefleri büyüsün (>=~40px) --- */
+  .btn { padding: 11px 16px; font-size: 14px; }
+  .act-btns button { padding: 9px 14px; font-size: 13px; }
+  .cart-qty button { width: 38px; height: 38px; font-size: 18px; }
+  .cart-del { padding: 8px 12px; font-size: 15px; }
+  .row-in { padding: 9px; font-size: 15px; }
+  .qty-in { width: 66px; } .price-in { width: 94px; } .isk-in { width: 62px; }
+  .field input, .field select, .field textarea { padding: 11px 12px; font-size: 15px; }
+  .field { min-width: 0; }
+
+  /* --- POS / Satış: tek akış, geniş düğmeler --- */
+  .pos-topbar, .pos-main { grid-template-columns: 1fr; gap: 12px; }
+  .pos-search { padding: 8px; }
+  .pos-search .bar-input { min-width: 0; }
+  .pos-totals { grid-template-columns: repeat(3, 1fr); }
+  .pos-tot .v { font-size: 20px; }
+  .prod-grid { grid-template-columns: repeat(3, 1fr); max-height: none; }
+  .prod-card { padding: 14px 8px; }
+  .pay-grid { grid-template-columns: 1fr 1fr; }
+  .pay-btn { padding: 18px 8px; font-size: 15px; }
+  .quick-amts { grid-template-columns: repeat(3, 1fr); }
+  .quick-amts button { padding: 12px 0; }
+  .cust-tab { padding: 10px 14px; font-size: 13px; }
+  .cat-tab { padding: 8px 4px; font-size: 14px; }
+  .cat-tab.on { padding: 8px 12px; }
+
+  /* --- tablo araç çubuğu --- */
+  .table-tools .len { display: none; }
+  .table-tools .search { flex: 1; }
+  .table-tools .search input { flex: 1; }
+
+  /* --- modal tam ekrana yakın --- */
+  .modal-overlay { padding: 4vh 10px; align-items: flex-start; }
+  .modal-body { max-height: 68vh; }
+
+  /* --- açılır menüler taşmasın --- */
+  .dropdown { min-width: 200px; max-width: 88vw; }
+
+  /* ================= ALT SEKME ÇUBUĞU ================= */
+  .mobilbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+    background: #fff; border-top: 1px solid var(--line);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(31, 41, 55, 0.09);
+  }
+  .mobilbar button {
+    flex: 1; border: 0; background: none; cursor: pointer; color: #8a929c;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0;
+  }
+  .mobilbar .mb-ico { font-size: 20px; line-height: 1; }
+  .mobilbar .mb-lbl { font-size: 11px; font-weight: 600; }
+  .mobilbar button.on { color: var(--brand); }
+  .mobilbar button:active { transform: scale(0.94); }
+}
+
+@media (max-width: 420px) {
+  .prod-grid { grid-template-columns: repeat(2, 1fr); }
+  .pos-totals { grid-template-columns: 1fr; }
+  .quick-amts { grid-template-columns: repeat(2, 1fr); }
+}

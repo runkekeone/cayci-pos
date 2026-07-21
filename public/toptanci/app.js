@@ -1083,14 +1083,20 @@ async function kvSet(key, value, updatedAt) {
 }
 
 /** Çay ocağı bayisiyse tahsilatın %1'ini işletme puanına ekle ve buluta yayınla.
- *  Çay ocağı uygulaması bunu Profil'de "Toptancı Puanım" olarak telefonla (bayi_puan:<tel>) okur. */
-function bayiPuanEkle(c, tutar) {
+ *  Çay ocağı uygulaması bunu Profil'de "Toptancı Puanım" olarak telefonla (bayi_puan:<tel>) okur
+ *  ve ödül alınca aynı anahtardan DÜŞER. Bu yüzden kaynak = bulut (kv-authoritative): önce oku,
+ *  ekle, yaz — yoksa çay ocağının harcaması bir sonraki kazanımla ezilir. */
+async function bayiPuanEkle(c, tutar) {
   if (!c || !c.cayOcagi) return;
   const tel = (c.telefon || "").replace(/\D/g, "");
   if (!tel || !(tutar > 0)) return;
-  c.puan = (Number(c.puan) || 0) + Math.round(tutar * 0.01); // 1 puan = 1 ₺
+  const eklen = Math.round(tutar * 0.01); // 1 puan = 1 ₺
+  const rec = await kvGet("bayi_puan:" + tel);
+  const cur = rec && rec.value && typeof rec.value.puan === "number" ? rec.value.puan : (Number(c.puan) || 0);
+  const yeni = cur + eklen;
+  c.puan = yeni; // yerel cache (gösterim); kaynak buluttur
   const ts = new Date().toISOString();
-  kvSet("bayi_puan:" + tel, { puan: c.puan, updatedAt: ts }, ts);
+  await kvSet("bayi_puan:" + tel, { puan: yeni, updatedAt: ts }, ts);
 }
 
 /** Eksik anahtarları emptyStore varsayılanlarıyla tamamla (buluttan gelen kayıt için). */
@@ -1498,10 +1504,48 @@ function render() {
   if (page.mount) try { page.mount(); } catch (e) { console.error(e); }
   try { enhanceTables(); } catch (e) { console.error(e); }
   try { updateBell(); } catch (e) { console.error(e); }
+  try { mobilTabloEtiketle(); mobilBarAktif(route); } catch (e) { console.error(e); }
   document.body.classList.remove("nav-open");
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", render);
+
+/* ---- Mobil: tablo hücrelerine başlık etiketi ekle (dar ekranda kart görünümü için) ---- */
+function mobilTabloEtiketle() {
+  document.querySelectorAll("table.grid").forEach((tbl) => {
+    const bas = [...tbl.querySelectorAll("thead th")].map((th) => (th.childNodes[0] ? th.childNodes[0].textContent : th.textContent).trim());
+    tbl.querySelectorAll("tbody tr").forEach((tr) => {
+      if (tr.classList.contains("empty-row")) return;
+      [...tr.children].forEach((td, i) => { if (bas[i]) td.setAttribute("data-label", bas[i]); });
+    });
+  });
+}
+
+/* ---- Mobil alt sekme çubuğu ---- */
+const MOBILBAR = [
+  { ico: "🏠", label: "Ana", route: "anasayfa" },
+  { ico: "🛒", label: "Satış", route: "satis" },
+  { ico: "🍵", label: "Çay Ocağı", route: "cay-ocagi" },
+  { ico: "📊", label: "Rapor", route: "rapor-gunluk" },
+  { ico: "☰", label: "Menü", act: "menu" },
+];
+function mobilBarKur() {
+  if (document.querySelector(".mobilbar")) return;
+  const nav = document.createElement("nav");
+  nav.className = "mobilbar";
+  nav.innerHTML = MOBILBAR.map((m) => `<button type="button" data-mroute="${m.route || ""}" data-mact="${m.act || ""}"><span class="mb-ico">${m.ico}</span><span class="mb-lbl">${m.label}</span></button>`).join("");
+  document.body.appendChild(nav);
+  nav.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.mact === "menu") { document.body.classList.toggle("nav-open"); return; }
+    if (b.dataset.mroute) navigate(b.dataset.mroute);
+  }));
+}
+function mobilBarAktif(route) {
+  const nav = document.querySelector(".mobilbar"); if (!nav) return;
+  // Alt sayfaları üst sekmeye eşle (raporlar → Rapor, satış detay → Satış).
+  const r = /^rapor-/.test(route) ? "rapor-gunluk" : route === "satis-detay" ? "satis" : route;
+  nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.mroute === r));
+}
 
 /* Tablo sayfalama (DOM üstü) — .table-tools içeren tablolar */
 function enhanceTables() {
@@ -1595,6 +1639,7 @@ function wireGlobalSearch() {
 /* ============ Başlat ============ */
 buildMenu();
 initTopbar();
+mobilBarKur();
 render();
 // Bulut yedeği: açılışta store'u buluttan çek (başka cihazdan da erişilsin).
 bulutHydrate();
