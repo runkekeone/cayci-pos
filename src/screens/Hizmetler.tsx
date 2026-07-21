@@ -4,50 +4,93 @@ import { HIZMETLER } from '../defaults'
 import { fmtTL } from '../lib/units'
 import type { Hizmet } from '../types'
 
+/**
+ * ÖDÜLLER — işletmenin TOPTANCI (babu.co) puanıyla alınır.
+ * Puan, toptancıya verilen siparişlerin ödemesi tamamlandıkça %1 birikir (1 puan = 1 ₺).
+ * Ödül alınca puan buluttan (authoritative) düşülür.
+ */
 export default function Hizmetler() {
-  const { hizmetAl } = useStore()
-  const [secili, setSecili] = useState<Hizmet | null>(null)
+  const { s, odulAl } = useStore()
   const [onay, setOnay] = useState<string | null>(null)
+  const [uyari, setUyari] = useState<string | null>(null)
+  const puan = s.isletmePuan ?? 0
 
-  // Onay balonu 2,5 sn sonra kapanır.
   useEffect(() => {
-    if (!onay) return
-    const t = setTimeout(() => setOnay(null), 2500)
+    if (!onay && !uyari) return
+    const t = setTimeout(() => {
+      setOnay(null)
+      setUyari(null)
+    }, 2800)
     return () => clearTimeout(t)
-  }, [onay])
+  }, [onay, uyari])
+
+  function al(h: Hizmet) {
+    if (puan < h.fiyat) {
+      setUyari(`Yetersiz puan — ${h.ad} için ${h.fiyat} puan gerekli, ${puan} puanın var.`)
+      return
+    }
+    if (!confirm(`${h.ikon} ${h.ad}\n${h.fiyat} puan harcanacak. Onaylıyor musun?`)) return
+    if (odulAl(h)) setOnay(`${h.ad} alındı — ${h.fiyat} puan düşüldü`)
+  }
 
   return (
     <>
-      <h1>Hizmetler & Ödüller</h1>
+      <h1>Ödüller</h1>
       <p className="sub">
-        Uygulamanın verdiği sadakat ödülleri. Müşteri biriken puanıyla (1 puan = 1 ₺), parayla veya
-        kısmi puanla alır. Liste sabittir, düzenlenemez.
+        Toptancı (babu.co) puanınla ödül al. Puan, siparişlerin ödemesi tamamlandıkça <strong>%1</strong>{' '}
+        birikir (1 puan = 1 ₺). Liste sabittir.
       </p>
 
+      <div
+        className="card"
+        style={{
+          background: 'var(--accent-soft)',
+          borderColor: 'var(--accent)',
+          marginBottom: 16,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <span>
+          <strong style={{ fontSize: 24 }}>{puan}</strong> <span className="hint">puan</span>
+          <span className="hint" style={{ display: 'block' }}>
+            {fmtTL(puan)} değerinde · Toptancı: babu.co
+          </span>
+        </span>
+      </div>
+
       <div className="katalog-grid">
-        {HIZMETLER.map((h) => (
-          <div className="kat-kart" key={h.id}>
-            <div className="kk-ad">
-              <strong>
-                {h.ikon} {h.ad}
-              </strong>
-              <span className="hint">{h.aciklama}</span>
+        {HIZMETLER.map((h) => {
+          const yeter = puan >= h.fiyat
+          return (
+            <div className="kat-kart" key={h.id}>
+              <div className="kk-ad">
+                <strong>
+                  {h.ikon} {h.ad}
+                </strong>
+                <span className="hint">{h.aciklama}</span>
+              </div>
+              <div className="kk-fiyat">
+                <span>
+                  <b>{h.fiyat}</b> puan
+                </span>
+                <span>
+                  = <b>{fmtTL(h.fiyat)}</b>
+                </span>
+              </div>
+              <div className="kk-butonlar">
+                <button
+                  className={`btn sm ${yeter ? 'primary' : 'ghost'}`}
+                  disabled={!yeter}
+                  onClick={() => al(h)}
+                >
+                  {yeter ? '🎁 Al' : 'Yetersiz puan'}
+                </button>
+              </div>
             </div>
-            <div className="kk-fiyat">
-              <span>
-                <b>{h.fiyat}</b> puan
-              </span>
-              <span>
-                veya <b>{fmtTL(h.fiyat)}</b>
-              </span>
-            </div>
-            <div className="kk-butonlar">
-              <button className="btn sm primary" onClick={() => setSecili(h)}>
-                🎁 Al
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {onay && (
@@ -55,135 +98,11 @@ export default function Hizmetler() {
           ✓ {onay}
         </div>
       )}
-
-      {secili && (
-        <AlModal
-          hizmet={secili}
-          onClose={() => setSecili(null)}
-          onOk={(customerId, puan, para) => {
-            hizmetAl(customerId, secili, puan, para)
-            setSecili(null)
-            setOnay(`${secili.ad} verildi`)
-          }}
-        />
+      {uyari && (
+        <div className="onay" role="status" style={{ background: 'var(--bad)' }}>
+          {uyari}
+        </div>
       )}
     </>
-  )
-}
-
-/** Ödül alma: müşteri seç, puan/para dağıt, onayla. */
-function AlModal({
-  hizmet,
-  onClose,
-  onOk,
-}: {
-  hizmet: Hizmet
-  onClose: () => void
-  onOk: (customerId: string, puan: number, para: 'nakit' | 'kart') => void
-}) {
-  const { s } = useStore()
-  const [customerId, setCustomerId] = useState('')
-  const [puanStr, setPuanStr] = useState('')
-  const [para, setPara] = useState<'nakit' | 'kart'>('nakit')
-
-  const musteri = s.customers.find((c) => c.id === customerId)
-  const mevcutPuan = musteri?.puan ?? 0
-  // Kullanılabilecek en fazla puan: müşteri bakiyesi ile hizmet fiyatı arasında küçük olan.
-  const maxPuan = Math.min(mevcutPuan, hizmet.fiyat)
-
-  // Müşteri seçilince varsayılan olarak en fazla puanı kullan.
-  useEffect(() => {
-    setPuanStr(customerId ? String(maxPuan) : '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId])
-
-  const puan = Math.max(0, Math.min(Number(puanStr) || 0, maxPuan))
-  const paraTutar = Math.round((hizmet.fiyat - puan) * 100) / 100
-
-  return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
-        <h2>
-          {hizmet.ikon} {hizmet.ad}
-        </h2>
-        <p className="hint" style={{ marginBottom: 14 }}>
-          Fiyat: <strong>{hizmet.fiyat} puan</strong> ({fmtTL(hizmet.fiyat)}). Puan ve kalan para ile
-          ödenir.
-        </p>
-
-        <div className="field">
-          <label>Müşteri</label>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">— müşteri seç —</option>
-            {s.customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.puan ?? 0} puan)
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {customerId && (
-          <>
-            <div className="field" style={{ marginTop: 10 }}>
-              <label>
-                Kullanılacak puan (en fazla {maxPuan} — müşteride {mevcutPuan} puan var)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={maxPuan}
-                value={puanStr}
-                onFocus={(e) => e.currentTarget.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-                onChange={(e) => setPuanStr(e.target.value)}
-              />
-            </div>
-
-            {paraTutar > 0 && (
-              <div className="field" style={{ marginTop: 10 }}>
-                <label>Kalan {fmtTL(paraTutar)} nasıl ödensin</label>
-                <div className="row">
-                  <button
-                    type="button"
-                    className={`btn sm ${para === 'nakit' ? 'primary' : 'ghost'}`}
-                    onClick={() => setPara('nakit')}
-                  >
-                    💵 Nakit
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn sm ${para === 'kart' ? 'primary' : 'ghost'}`}
-                    onClick={() => setPara('kart')}
-                  >
-                    💳 Kart
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="total" style={{ marginTop: 14 }}>
-              <span>
-                {puan} puan
-                {paraTutar > 0 ? ` + ${fmtTL(paraTutar)} ${para}` : ''}
-              </span>
-              <span className="v">{fmtTL(hizmet.fiyat)}</span>
-            </div>
-          </>
-        )}
-
-        <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onClose}>
-            Vazgeç
-          </button>
-          <button
-            className="btn primary"
-            disabled={!customerId}
-            onClick={() => onOk(customerId, puan, para)}
-          >
-            Ödülü ver
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }

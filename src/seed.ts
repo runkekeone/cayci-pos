@@ -21,4 +21,6 @@ export const bosState: State = {
   business: { name: '', address: '', phone: '', owner: '', openTime: '07:00', closeTime: '23:00' },
   setupDone: false,
   settings: { showImages: false },
+  isletmePuan: 0,
+  oduller: [],
 }

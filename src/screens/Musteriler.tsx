@@ -5,7 +5,7 @@ import { totalVeresiye } from '../lib/report'
 import type { Customer } from '../types'
 
 export default function Musteriler() {
-  const { s, saveCustomer, collect, collectBakiye } = useStore()
+  const { s, saveCustomer, collect } = useStore()
   const [yeni, setYeni] = useState('')
   const [kart, setKart] = useState<string | null>(null)
 
@@ -46,7 +46,7 @@ export default function Musteriler() {
           className="btn primary"
           disabled={!yeni.trim()}
           onClick={() => {
-            saveCustomer({ id: uid(), name: yeni.trim(), balance: 0, puan: 0, bakiye: 0 })
+            saveCustomer({ id: uid(), name: yeni.trim(), balance: 0 })
             setYeni('')
           }}
         >
@@ -62,8 +62,6 @@ export default function Musteriler() {
               <th className="num">Toplam yazılan</th>
               <th className="num">Toplam ödenen</th>
               <th className="num">Kalan borç</th>
-              <th className="num">Puan</th>
-              <th className="num">Bakiye</th>
               <th></th>
             </tr>
           </thead>
@@ -82,14 +80,6 @@ export default function Musteriler() {
                   </span>
                 </td>
                 <td className="num">
-                  <b>{c.puan ?? 0}</b>
-                </td>
-                <td className="num">
-                  <span className={(c.bakiye ?? 0) > 0 ? 'v bad' : ''} style={{ fontSize: 14 }}>
-                    {fmtTL(c.bakiye ?? 0)}
-                  </span>
-                </td>
-                <td className="num">
                   <button className="btn sm" onClick={() => setKart(c.id)}>
                     Kartı aç
                   </button>
@@ -98,7 +88,7 @@ export default function Musteriler() {
             ))}
             {s.customers.length === 0 && (
               <tr>
-                <td colSpan={7} className="hint">
+                <td colSpan={5} className="hint">
                   Henüz müşteri yok. Veresiye satışta da yeni müşteri açabilirsin.
                 </td>
               </tr>
@@ -112,7 +102,6 @@ export default function Musteriler() {
           customerId={kart}
           onClose={() => setKart(null)}
           onCollect={(amount, method) => collect(kart, amount, method)}
-          onCollectBakiye={(amount, method) => collectBakiye(kart, amount, method)}
           onSave={saveCustomer}
         />
       )}
@@ -125,13 +114,11 @@ function MusteriKarti({
   customerId,
   onClose,
   onCollect,
-  onCollectBakiye,
   onSave,
 }: {
   customerId: string
   onClose: () => void
   onCollect: (amount: number, method: 'nakit' | 'kart') => void
-  onCollectBakiye: (amount: number, method: 'nakit' | 'kart') => void
   onSave: (c: Customer) => void
 }) {
   const { s } = useStore()
@@ -139,9 +126,6 @@ function MusteriKarti({
   const [tutar, setTutar] = useState(c.balance)
   const [yontem, setYontem] = useState<'nakit' | 'kart'>('nakit')
   const [telefon, setTelefon] = useState(c.phone ?? '')
-  // Bakiye tahsilatı (puanla ödenemez).
-  const [bakTutar, setBakTutar] = useState(c.bakiye ?? 0)
-  const [bakYontem, setBakYontem] = useState<'nakit' | 'kart'>('nakit')
 
   // Bu müşterinin hesabına yazılan satışlar — parçalı ödemede sadece ona düşen parça.
   const hareketler = [
@@ -179,14 +163,6 @@ function MusteriKarti({
           <div className="stat">
             <div className="k">Kalan borç</div>
             <div className={`v ${c.balance > 0 ? 'bad' : 'good'}`}>{fmtTL(c.balance)}</div>
-          </div>
-          <div className="stat">
-            <div className="k">Puan</div>
-            <div className="v good">{c.puan ?? 0}</div>
-          </div>
-          <div className="stat">
-            <div className="k">Bakiye</div>
-            <div className={`v ${(c.bakiye ?? 0) > 0 ? 'bad' : 'good'}`}>{fmtTL(c.bakiye ?? 0)}</div>
           </div>
           <div className="stat">
             <div className="k">Hareket sayısı</div>
@@ -230,35 +206,6 @@ function MusteriKarti({
             Tahsil et
           </button>
         </div>
-
-        {(c.bakiye ?? 0) > 0 && (
-          <>
-            <div className="section-title">Bakiye tahsil et (puanla ödenemez)</div>
-            <div className="row">
-              <input
-                type="number"
-                style={{ width: 120 }}
-                value={bakTutar}
-                onChange={(e) => setBakTutar(Number(e.target.value))}
-              />
-              <span className="hint">₺</span>
-              <select value={bakYontem} onChange={(e) => setBakYontem(e.target.value as 'nakit' | 'kart')}>
-                <option value="nakit">Nakit</option>
-                <option value="kart">Kart</option>
-              </select>
-              <button
-                className="btn primary"
-                disabled={bakTutar <= 0 || bakTutar > (c.bakiye ?? 0)}
-                onClick={() => {
-                  onCollectBakiye(bakTutar, bakYontem)
-                  onClose()
-                }}
-              >
-                Bakiye tahsil et
-              </button>
-            </div>
-          </>
-        )}
 
         <div className="section-title">Hesap hareketleri</div>
         <table className="gtablo">

@@ -82,11 +82,6 @@ export default function Satis() {
   const [undo, setUndo] = useState<Sale | null>(null)
   // Fiş görüntüle/paylaş.
   const [fisSale, setFisSale] = useState<Sale | null>(null)
-  // Sadakat: bu satışta harcanacak puan + bakiye bırakılacak tutar.
-  const [puanKullan, setPuanKullan] = useState(0)
-  const [bakiyeBirak, setBakiyeBirak] = useState(0)
-  // Müşteri seçici / puan panelini elle aç (nakit satışta puan biriktirmek için).
-  const [musteriAc, setMusteriAc] = useState(false)
 
   // İptali uygula ama satışı sakla: undo balonu geri getirebilsin.
   function iptalEt(sale: Sale) {
@@ -125,14 +120,6 @@ export default function Satis() {
 
   // Masaya müşteri atandıysa veresiyede o seçili gelir.
   const aktifMusteri = table?.customerId ?? customerId
-
-  // --- Sadakat: seçili müşterinin puanı, kullanılabilir sınırlar, net ödenecek ---
-  const musteri = s.customers.find((c) => c.id === aktifMusteri)
-  const maxPuan = Math.min(musteri?.puan ?? 0, total)
-  const maxBakiye = Math.floor(total * 0.1)
-  const puanKul = Math.max(0, Math.min(puanKullan, maxPuan))
-  const bakiyeBir = Math.max(0, Math.min(bakiyeBirak, maxBakiye))
-  const netOdenecek = Math.max(0, total - puanKul - bakiyeBir)
 
   function ekle(item: Item, variant?: Variant, waste?: 'ikram' | 'fire') {
     if (target.kind === 'masa') {
@@ -209,9 +196,6 @@ export default function Satis() {
   function temizle() {
     if (target.kind === 'hizli') setQuick([])
     setCustomerId('')
-    setPuanKullan(0)
-    setBakiyeBirak(0)
-    setMusteriAc(false)
   }
 
   function ode(payment: Payment) {
@@ -220,21 +204,14 @@ export default function Satis() {
       setMusteriSor(true)
       return
     }
-    // Müşteri seçiliyse sadakat bilgisi geçir (puan hep kazanılsın; harcama/bakiye varsa uygula).
-    const loyalty = aktifMusteri
-      ? { customerId: aktifMusteri, puanKullan: puanKul, bakiyeBirak: bakiyeBir }
-      : undefined
-    const tutar = netOdenecek
+    const tutar = total
     if (target.kind === 'masa') {
-      closeTable(target.id, payment, payment === 'veresiye' ? aktifMusteri : undefined, loyalty)
+      closeTable(target.id, payment, payment === 'veresiye' ? aktifMusteri : undefined)
     } else {
-      quickSale(quick, payment, payment === 'veresiye' ? aktifMusteri : undefined, loyalty)
+      quickSale(quick, payment, payment === 'veresiye' ? aktifMusteri : undefined)
       setQuick([])
     }
     setCustomerId('')
-    setPuanKullan(0)
-    setBakiyeBirak(0)
-    setMusteriAc(false)
     setSepetAcik(false)
     setMusteriSor(false)
     // Satış olduğunu göster: eskiden ekran sessizce temizleniyordu.
@@ -284,8 +261,6 @@ export default function Satis() {
     paySplit(lines, parts, target.kind === 'masa' ? target.id : undefined)
     if (target.kind === 'hizli') setQuick([])
     setCustomerId('')
-    setPuanKullan(0)
-    setBakiyeBirak(0)
     setParcali(false)
     setSepetAcik(false)
   }
@@ -556,18 +531,9 @@ export default function Satis() {
             <span className="v">{fmtTL(total)}</span>
           </div>
 
-          {/* Nakit/kart satışta müşteri gerekmiyor; ama puan biriktirmek/kullanmak için
-              müşteri bağlanabilsin diye bir aç düğmesi. */}
-          {(!table?.customerId || target.kind === 'hizli') &&
-            !(musteriSor || customerId || musteriAc) &&
-            lines.length > 0 && (
-              <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setMusteriAc(true)}>
-                🎁 Müşteri / Puan
-              </button>
-            )}
-
-          {/* Müşteri seçici: veresiyeye basılınca, müşteri seçiliyken ya da puan için elle açılınca. */}
-          {(!table?.customerId || target.kind === 'hizli') && (musteriSor || customerId || musteriAc) && (
+          {/* Müşteri seçici: nakit/kart satışta gereksiz. Sadece veresiyeye basılınca
+              ya da zaten bir müşteri seçiliyken görünür. */}
+          {(!table?.customerId || target.kind === 'hizli') && (musteriSor || customerId) && (
             <div className={`field ${musteriSor && !customerId ? 'sor' : ''}`}>
               <label>{musteriSor && !customerId ? 'Veresiye kime yazılsın?' : 'Müşteri'}</label>
               <div className="row">
@@ -589,7 +555,7 @@ export default function Satis() {
                   onClick={() =>
                     setYeniAd(() => (ad: string) => {
                       const id = uid()
-                      saveCustomer({ id, name: ad, balance: 0, puan: 0, bakiye: 0 })
+                      saveCustomer({ id, name: ad, balance: 0 })
                       if (target.kind === 'masa') setTableCustomer(target.id, id)
                       else setCustomerId(id)
                     })
@@ -598,51 +564,6 @@ export default function Satis() {
                   + Yeni müş
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Puan & bakiye paneli: seçili müşteri varsa. */}
-          {musteri && total > 0 && (
-            <div className="field" style={{ background: 'var(--accent-soft)', borderRadius: 10, padding: 10 }}>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="hint">
-                  Puan: <b>{musteri.puan ?? 0}</b> · Kazanılacak <b>+{Math.round(total * 0.01)}</b>
-                </span>
-              </div>
-              {maxPuan > 0 && (
-                <div className="row" style={{ marginTop: 6, alignItems: 'center', gap: 8 }}>
-                  <label style={{ flex: 1 }}>Puan kullan</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={maxPuan}
-                    style={{ width: 90 }}
-                    value={puanKullan || ''}
-                    onChange={(e) => setPuanKullan(Math.max(0, Math.min(Number(e.target.value), maxPuan)))}
-                  />
-                  <button className="btn ghost sm" onClick={() => setPuanKullan(maxPuan)}>
-                    Hepsi
-                  </button>
-                </div>
-              )}
-              <div className="row" style={{ marginTop: 6, alignItems: 'center', gap: 8 }}>
-                <label style={{ flex: 1 }}>Bakiye bırak (en fazla %10)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={maxBakiye}
-                  style={{ width: 90 }}
-                  value={bakiyeBirak || ''}
-                  onChange={(e) => setBakiyeBirak(Math.max(0, Math.min(Number(e.target.value), maxBakiye)))}
-                />
-                <span className="hint">₺</span>
-              </div>
-              {(puanKul > 0 || bakiyeBir > 0) && (
-                <div className="row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-                  <span>Ödenecek</span>
-                  <b>{fmtTL(netOdenecek)}</b>
-                </div>
-              )}
             </div>
           )}
 

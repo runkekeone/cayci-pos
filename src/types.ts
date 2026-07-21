@@ -101,14 +101,6 @@ export interface Sale {
   /** Hesap bölündüyse parçalar burada. Raporlar önce buraya bakar. */
   payments?: PaymentPart[]
   customerId?: string
-  /** Bu satışta kazandırılan sadakat puanı (1 puan = 1 TL). */
-  puanKazanilan?: number
-  /** Bu satışta harcanan puan (TL). */
-  puanKullanilan?: number
-  /** Bu satışta müşterinin bakiyesine eklenen tutar. */
-  bakiyeBirakilan?: number
-  /** Puan/bakiye hangi müşteriye işlendi (nakit satışta bile olabilir; customerId sadece veresiye). */
-  puanMusteriId?: string
   tableId?: string
   /** Kapanış anındaki masa adı (Masa 1, "Bahçe" vb.). Hızlı satışta boş. */
   tableName?: string
@@ -129,12 +121,8 @@ export interface Customer {
   id: string
   name: string
   phone?: string
-  /** Pozitif = bize borçlu (veresiye). */
+  /** Pozitif = bize borçlu. */
   balance: number
-  /** Sadakat puanı. 1 puan = 1 TL. Gerçek alışverişte harcanabilir. */
-  puan?: number
-  /** Ayrı bırakılan bakiye borcu (veresiyeden bağımsız). Pozitif = müşteri borçlu. Puanla ödenemez. */
-  bakiye?: number
 }
 
 export interface CustomerPayment {
@@ -253,6 +241,15 @@ export interface Hizmet {
   fiyat: number
 }
 
+/** İşletmenin toptancı puanıyla aldığı bir ödül kaydı. */
+export interface OdulKaydi {
+  id: string
+  date: string
+  hizmetId: string
+  ad: string
+  puan: number
+}
+
 export interface State {
   items: Item[]
   purchases: Purchase[]
@@ -266,6 +263,10 @@ export interface State {
   business: Business
   /** Kıraathanenin toptancıya geçtiği siparişler (giden). */
   orders?: Order[]
+  /** İşletmenin toptancı (babu.co) sadakat puanı. Kaynak buluttaki bayi_puan:<tel>; bu yerel ayna. 1 puan = 1 ₺. */
+  isletmePuan?: number
+  /** Alınan ödüller (Hizmet) geçmişi — toptancı puanıyla. */
+  oduller?: OdulKaydi[]
   /** Kurulum sihirbazı tamamlandı mı. Tamamlanmadan uygulamaya girilemez. */
   setupDone: boolean
   /** otoGun: açılış/kapanış saatine göre günü otomatik başlat/bitir. Şimdilik kapalı, ileride açılacak. */

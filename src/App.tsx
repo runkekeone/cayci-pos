@@ -50,7 +50,9 @@ type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
  */
 const MENU: MenuItem[] = [
   { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: '🏠', ana: true },
-  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: true },
+  // Mobilde alt çubukta gösterilmez (nav-gizli): (+) Hızlı Satış zaten satış ekranına gidiyor.
+  // Masaüstü sidebar'da görünmeye devam eder.
+  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: false },
   { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: '🚚', ana: true },
   // Masaüstü sidebar'da görünür; mobilde nav-gizli — alt çubukta ayrı only-mobile düğmesi var.
   { id: 'hizmetler', ad: 'Hizmetler', kisa: 'Hizmet', ic: '🎁', ana: false },

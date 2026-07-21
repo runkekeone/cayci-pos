@@ -24,6 +24,10 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
     set((st) => ({ ...st, settings: { ...st.settings, ...patch } }))
   }
 
+  // ---- Toptancı (babu.co) puanı: store buluttan telefonla çekip s.isletmePuan'a yazar. ----
+  const tel = (s.business.phone ?? '').replace(/\D/g, '')
+  const toptanciPuan = s.isletmePuan ?? 0
+
   function yedekAl() {
     const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -56,6 +60,28 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
       <p className="sub">
         {user.username} · {s.business.name || user.businessName}
       </p>
+
+      {/* ---- Toptancı puanı ---- */}
+      <div className="section-title">Toptancı Puanım (babu.co)</div>
+      <div className="card" style={{ background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}>
+        {!tel ? (
+          <p className="hint" style={{ margin: 0 }}>
+            Puanını görmek için aşağıya <strong>işletme telefonunu</strong> gir ve kaydet. Toptancıya
+            verdiğin siparişlerin ödemesi tamamlandıkça bedelin <strong>%1'i puan</strong> olarak buraya
+            işlenir (1 puan = 1 ₺).
+          </p>
+        ) : (
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>
+              <strong style={{ fontSize: 22 }}>{toptanciPuan}</strong>{' '}
+              <span className="hint">puan ({toptanciPuan} ₺ değerinde)</span>
+              <span className="hint" style={{ display: 'block' }}>
+                Sipariş ödemesi tamamlandıkça %1 birikir. Toptancı: babu.co
+              </span>
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* ---- İşletme bilgileri ---- */}
       <div className="section-title">İşletme bilgileri</div>
