@@ -519,82 +519,92 @@ function renderSatis() {
   const quick = [["20", "20"], ["50", "50"], ["100", "100"], ["200", "200"], ["+20", "+20"], ["-20", "-20"]].map((q) => `<button type="button" data-quick="${q[1]}">${q[0]}</button>`).join("");
   const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c}</span>`).join("");
   const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
-  return `<div class="pos-topbar">
+  return `<div class="pos2">
+      <!-- 1. Özet çubuğu: Miktar | Brüt | İskonto | Tutar -->
+      <div class="pos-totals" id="posTotals">
+        <div class="pos-tot"><div class="l">Miktar</div><div class="v" id="posMiktar">0</div></div>
+        <div class="pos-tot"><div class="l">Brüt</div><div class="v" id="posBrut">0</div></div>
+        <div class="pos-tot"><div class="l">İskonto</div><div class="v" id="posIsk">0</div></div>
+        <div class="pos-tot brand"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
+      </div>
+
+      <!-- 2. Arama satırı: barkod + fiyat seçici -->
       <div class="pos-search">
         <div class="pos-price-sel">Fiyat 1 ▾</div>
-        <input class="bar-input" id="barInput" placeholder="Ürün barkodunu okutup Enter'a basın..." />
+        <input class="bar-input" id="barInput" placeholder="Barkod okut / ürün ara..." />
         <button class="pos-btn blue" id="barAra" type="button">🔍<small>Ara</small></button>
-        <button class="pos-btn green" type="button" data-soon>▥<small>Fiyat Gör</small></button>
         <button class="pos-btn orange" id="posYazdir" type="button">🖨<small>Yazdır</small></button>
+        <button class="pos-btn green" type="button" data-soon>▥<small>Fiyat Gör</small></button>
         <button class="pos-btn teal" type="button" data-soon>➕<small>Ödeme Ekle</small></button>
       </div>
-      <div class="pos-totals">
-        <div class="pos-tot"><div class="l">Ödenen</div><div class="v" id="posOdenen">0</div></div>
-        <div class="pos-tot red"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
-        <div class="pos-tot green"><div class="l">Para Üstü</div><div class="v" id="posUstu">0</div></div>
-      </div>
-    </div>
-    <div class="pos-main">
-      <div class="pos-sheet" id="posSheet">
-        <div class="sheet-handle" id="sheetHandle">
-          <span class="sheet-grip"></span>
-          <span class="sheet-title">Fiş / Sepet</span>
-          <button class="sheet-close" id="sheetClose" type="button">Kapat ✕</button>
-        </div>
-        <div class="sheet-body">
-          <div class="card pos-cart">
-            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><h2 style="margin:0;font-size:16px">Fiş / Sepet ⓘ</h2><span id="cartCount" class="sub">${cartCount()}</span></div>
+
+      <div class="pos2-cols">
+        <!-- SOL sütun (mobilde akışta üst blok) -->
+        <div class="pos2-left">
+          <!-- 3. Müşteri pill sekmeleri -->
+          <div class="cust-tabs" id="custTabs">${custTabs}</div>
+
+          <!-- 4. Adisyon / sepet listesi -->
+          <div class="card ades-wrap">
+            <div class="ades-head"><span>Adisyon</span><span id="cartCount" class="sub">${cartCount()}</span></div>
+            <div class="ades-list" id="cartBody">${cartRowsHTML()}</div>
             <div class="muh-row">
               <div class="field" style="flex:1"><label>Muhtelif Tutar</label><input id="muhInput" type="number" step="0.01" placeholder="Serbest tutar" /></div>
               <button class="btn soft" id="muhEkle" type="button">Ekle</button>
-              <div class="field"><label>İsk. Değeri (₺)</label><input id="iskGenel" type="number" step="0.01" value="${activeCart().iskonto || ""}" placeholder="0" /></div>
-              <div class="field" style="flex:1"><label>Seçili Müşteri</label><input id="custLabel" readonly value="${cartCustName()}" placeholder="Müşteri seçilmedi" /></div>
-              ${persSel}
+              <div class="field"><label>Genel İsk. (₺)</label><input id="iskGenel" type="number" step="0.01" value="${activeCart().iskonto || ""}" placeholder="0" /></div>
             </div>
-            <div class="cust-tabs" id="custTabs">${custTabs}</div>
-            <div class="table-wrap"><table class="grid"><thead><tr><th>Sil</th><th>Ürün</th><th>İsk./Not</th><th>Miktar</th><th>Fiyat</th><th>Tutar</th><th>G.</th></tr></thead><tbody id="cartBody">${cartRowsHTML()}</tbody></table></div>
           </div>
-          <div class="card pos-pay" style="padding:12px;display:flex;flex-direction:column;gap:10px">
-            <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşteri Seç" /><button class="btn" id="custPick" type="button">Seç</button></div>
-            <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
-            <div class="quick-amts">${quick}</div>
-            <div class="pay-grid">
-              <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
-              <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
-              <button class="pay-btn acik" data-pay="acik" type="button">📖 (F10)<small>AÇIK HESAP</small></button>
-              <button class="pay-btn parcali" data-pay="parcali" type="button">⇄<small>PARÇALI</small></button>
-            </div>
-            ${store.odemeTipleri.length ? `<div class="pay-custom" style="display:flex;flex-wrap:wrap;gap:6px">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
+
+          <!-- 5. Müşterisiz satış (Borç/Limit) + müşteri ekle -->
+          <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşterisiz satış (Borç/Limit)" /><button class="btn" id="custPick" type="button">＋</button></div>
+          <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
+
+          <!-- 6. Satış notu -->
+          <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
+
+          <!-- 7. Ödeme -->
+          <div class="quick-amts">${quick}</div>
+          <div class="pay-grid">
+            <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
+            <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
+            <button class="pay-btn acik" data-pay="acik" type="button">📖 (F10)<small>AÇIK HESAP</small></button>
+            <button class="pay-btn parcali" data-pay="parcali" type="button">⇄<small>PARÇALI</small></button>
           </div>
+          ${store.odemeTipleri.length ? `<div class="pay-custom">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
+          ${persSel}
+        </div>
+
+        <!-- SAĞ sütun (mobilde akışta alt blok): kategoriler + ürünler -->
+        <div class="pos2-right">
+          <!-- 8. Kategori pill'leri -->
+          <div class="cat-tabs" id="catTabs">${catTabs}</div>
+          <!-- 9. Ürün ızgarası -->
+          <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
         </div>
       </div>
-      <div class="card pos-products">
-        <div class="cat-tabs" id="catTabs">${catTabs}</div>
-        <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
-      </div>
-    </div>
-    <div class="sepet-bar" id="sepetBar">
-      <button class="sb-open" id="sepetBarOpen" type="button">
-        <span class="sb-count" id="sepetBarCount">${cartCount()}</span>
-        <span class="sb-total" id="sepetBarTotal">${money.format(cartTotals().toplam)}</span>
-        <span class="sb-cta">Fişi Aç ▲</span>
-      </button>
-    </div>
-    <div class="pos-backdrop" id="posBackdrop"></div>`;
+    </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
 function cartRowsHTML() {
   const items = activeCart().items;
-  if (!items.length) return `<tr class="empty-row"><td colspan="7">Sepet boş — üründen tıklayın.</td></tr>`;
-  return items.map((it, idx) => `<tr>
-    <td><button class="cart-del" data-rem="${idx}" title="Sil">✕</button></td>
-    <td><div class="p-bar">${esc(it.barkod || "")}</div>${esc(it.ad)} <span class="badge">%${Number(it.kdv) || 0}</span></td>
-    <td><input class="row-in isk-in" data-isk="${idx}" type="number" step="0.01" value="${it.iskyuzde || ""}" placeholder="%" /></td>
-    <td><div class="cart-qty"><button class="minus" data-dec="${idx}" type="button">−</button><input class="row-in qty-in" data-qty="${idx}" type="number" step="0.01" value="${it.adet}" /><button data-inc="${idx}" type="button">+</button></div></td>
-    <td><input class="row-in price-in" data-price="${idx}" type="number" step="0.01" value="${it.fiyat}" /></td>
-    <td data-tut="${idx}">${money.format(netLine(it))}</td>
-    <td class="g-cell"><input type="checkbox" title="Gramaj/hediye" /></td>
-  </tr>`).join("");
+  if (!items.length) return `<div class="ades-empty">Sepet boş — üründen ekleyin.</div>`;
+  return items.map((it, idx) => `<div class="ades-row">
+    <div class="cart-qty">
+      <button class="minus" data-dec="${idx}" type="button">−</button>
+      <input class="row-in qty-in" data-qty="${idx}" type="number" step="0.01" value="${it.adet}" />
+      <button data-inc="${idx}" type="button">+</button>
+    </div>
+    <div class="ades-mid">
+      <div class="ades-name">${esc(it.ad)} <span class="badge">%${Number(it.kdv) || 0}</span></div>
+      <div class="ades-sub">
+        <span class="ades-bar">${esc(it.barkod || "")}</span>
+        <label class="ades-f">Fiyat<input class="row-in price-in" data-price="${idx}" type="number" step="0.01" value="${it.fiyat}" /></label>
+        <label class="ades-f">İsk%<input class="row-in isk-in" data-isk="${idx}" type="number" step="0.01" value="${it.iskyuzde || ""}" placeholder="0" /></label>
+      </div>
+    </div>
+    <div class="ades-tot" data-tut="${idx}">${money.format(netLine(it))}</div>
+    <button class="cart-del" data-rem="${idx}" type="button" title="Sil">✕</button>
+  </div>`).join("");
 }
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
@@ -609,6 +619,7 @@ function rebuildCart() { const cb = document.getElementById("cartBody"); if (cb)
 function syncTotals() {
   const t = cartTotals(); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
   set("posTutar", num2.format(t.toplam)); set("posOdenen", num2.format(t.odenen)); set("posUstu", num2.format(t.ustu));
+  const cc0 = activeCart(); set("posMiktar", num2.format(cc0.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))); set("posBrut", num2.format(t.brut)); set("posIsk", num2.format(Number(cc0.iskonto) || 0));
   const cc = document.getElementById("cartCount"); if (cc) cc.textContent = cartCount();
   const sbc = document.getElementById("sepetBarCount"); if (sbc) sbc.textContent = cartCount();
   const sbt = document.getElementById("sepetBarTotal"); if (sbt) sbt.textContent = money.format(t.toplam);
@@ -648,7 +659,7 @@ function finalizeSale(type, odemeAdi) {
   const maliyet = c.items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? (Number(pr.alis) || 0) : 0) * i.adet; }, 0);
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
-  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: "", odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString() });
+  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString() });
   c.items.forEach((i) => { const pr = findProduct(i.urunId); if (pr) pr.stok = (Number(pr.stok) || 0) - i.adet; });
   saveStore();
   pos.carts[pos.active] = newCart();
@@ -672,15 +683,9 @@ function mountSatis() {
   wireProdCards(); wireCartRow();
   document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
   document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x === el)); const g = document.getElementById("prodGrid"); g.innerHTML = prodGridHTML(); wireProdCards(); }));
-  /* --- Mobil alt-panel (bottom sheet) aç/kapa --- */
-  const closeSheet = () => document.body.classList.remove("sheet-open");
-  const openSheet = () => document.body.classList.add("sheet-open");
-  const sbOpen = document.getElementById("sepetBarOpen"); if (sbOpen) sbOpen.addEventListener("click", openSheet);
-  const shClose = document.getElementById("sheetClose"); if (shClose) shClose.addEventListener("click", closeSheet);
-  const shHandle = document.getElementById("sheetHandle"); if (shHandle) shHandle.addEventListener("click", (e) => { if (e.target === shHandle || e.target.classList.contains("sheet-grip") || e.target.classList.contains("sheet-title")) closeSheet(); });
-  const bd = document.getElementById("posBackdrop"); if (bd) bd.addEventListener("click", closeSheet);
-  document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => { finalizeSale(el.dataset.pay); if (!activeCart().items.length) closeSheet(); }));
-  document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => { finalizeCustom(el.dataset.paycustom); if (!activeCart().items.length) closeSheet(); }));
+  /* Tek-akışlı düzen: mobil bottom-sheet kaldırıldı (fiş akış içinde) */
+  document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
+  document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
   document.querySelectorAll("[data-quick]").forEach((el) => el.addEventListener("click", () => { const v = el.dataset.quick, c = activeCart(); if (v[0] === "+" || v[0] === "-") c.odenen = Math.max(0, (Number(c.odenen) || 0) + Number(v)); else c.odenen = (Number(c.odenen) || 0) + Number(v); syncTotals(); }));
   const isk = document.getElementById("iskGenel"); if (isk) isk.addEventListener("input", () => { activeCart().iskonto = Number(isk.value) || 0; syncTotals(); });
   const muhBtn = document.getElementById("muhEkle"), muhIn = document.getElementById("muhInput");

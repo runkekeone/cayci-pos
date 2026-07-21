@@ -345,13 +345,33 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pos-btn.blue { background: var(--brand); } .pos-btn.green { background: var(--green); }
 .pos-btn.orange { background: var(--orange); } .pos-btn.teal { background: var(--teal); }
 
-.pos-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.pos-tot { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow-soft); }
-.pos-tot .l { font-size: 12px; color: var(--muted); font-weight: 600; }
-.pos-tot .v { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); }
-.pos-tot.red .v { color: var(--red); } .pos-tot.green .v { color: var(--green-d); }
+.pos-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.pos-tot { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; box-shadow: var(--shadow-soft); text-align: center; }
+.pos-tot .l { font-size: 11px; color: var(--muted); font-weight: 600; }
+.pos-tot .v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-tot.red .v { color: var(--red); } .pos-tot.green .v { color: var(--green-d); } .pos-tot.brand .v { color: var(--brand); }
 
-.pos-main { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; min-width: 0; }
+/* ---- Tek-akışlı POS (BenimPOS) düzeni ---- */
+.pos2 { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pos2-cols { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 14px; align-items: start; min-width: 0; }
+.pos2-left, .pos2-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* Adisyon / sepet listesi */
+.ades-wrap { padding: 12px; }
+.ades-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; font-size: 15px; }
+.ades-list { display: flex; flex-direction: column; }
+.ades-empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
+.ades-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); min-width: 0; }
+.ades-row:last-child { border-bottom: 0; }
+.ades-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ades-name { font-weight: 700; font-size: 13.5px; color: var(--text); line-height: 1.25; }
+.ades-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ades-bar { font-size: 11px; color: #9aa2ad; }
+.ades-f { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.ades-tot { font-weight: 800; font-size: 14px; color: var(--value); white-space: nowrap; text-align: right; min-width: 64px; }
+.pos-note label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.pos-note input { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+.pay-custom { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .pos-cart .cust-tabs { display: flex; gap: 2px; margin-bottom: 10px; flex-wrap: wrap; }
 .cust-tab { padding: 8px 14px; border: 1px solid #d6e6f7; background: var(--brand-soft); cursor: pointer; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; color: var(--brand-dark); }
@@ -482,7 +502,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 
 @media (max-width: 1024px) {
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pos-topbar, .pos-main { grid-template-columns: minmax(0, 1fr); }
+  .pos2-cols { grid-template-columns: 340px minmax(0, 1fr); }
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .form-grid, .profile-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -659,14 +679,23 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .pos-btn { min-width: auto; padding: 8px 12px; min-height: 44px; flex: 0 0 auto; }
   /* Yer tutan / az kullanılan aksiyonları mobilde gizle (Fiyat Gör, Ödeme Ekle, Yazdır) */
   .pos-search .pos-btn.green, .pos-search .pos-btn.teal, .pos-search #posYazdir { display: none; }
-  /* 3 büyük toplam kartını mobilde gizle — bilgi alt sepet-bar + açılan fiş panelinde zaten var */
-  .pos-totals { display: none; }
+  /* Özet çubuğu (Miktar|Brüt|İskonto|Tutar) mobilde de görünür — kompakt 4 sütun */
+  .pos-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .pos-tot { padding: 7px 6px; }
+  .pos-tot .l { font-size: 10px; }
+  .pos-tot .v { font-size: 16px; }
 
-  /* pos-main: tek kolon akış; ÜRÜNLER en üstte, erişilebilir */
-  .pos-main { display: flex; flex-direction: column; gap: 12px; }
-  .pos-products { order: -1; margin-bottom: 0; align-self: stretch; width: 100%; }
+  /* Tek dikey akış: SOL blok (adisyon+ödeme) üstte, SAĞ blok (kategoriler+ürünler) altta */
+  .pos2 { gap: 10px; }
+  .pos2-cols { display: flex; flex-direction: column; gap: 12px; }
+  .pos2-cols > * { min-width: 0; width: 100%; }
+  /* Adisyon satırı 390px'de taşmasın: kompakt stepper, fiyat/isk alt satıra sarabilir */
+  .ades-row .cart-qty button { width: 36px; height: 36px; font-size: 16px; }
+  .ades-row .qty-in { width: 46px; }
+  .ades-sub .price-in { width: 80px; } .ades-sub .isk-in { width: 54px; }
+  .ades-tot { min-width: 56px; font-size: 13.5px; }
   /* Ürün kartları mobilde 2 sütun: metin okunur, havadar, hizalı */
-  .prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: none; }
+  .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: none; }
   .prod-card { min-height: 78px; padding: 13px 12px; }
   .prod-card .p-name { font-size: 13px; }
   .prod-card .p-price { font-size: 16px; }
@@ -740,8 +769,6 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   /* panel açıkken alt özet çubuğunu gizle */
   body.sheet-open .sepet-bar { opacity: 0; pointer-events: none; }
 
-  /* POS sayfasında içeriğin altına özet çubuğu + mobilbar kadar boşluk bırak */
-  body.pos-active .content { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 
   /* --- tablo araç çubuğu --- */
   .table-tools .len { display: none; }
@@ -803,8 +830,8 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 
 @media (max-width: 420px) {
   .prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pos-totals { grid-template-columns: minmax(0, 1fr); }
-  .quick-amts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pos-tot .v { font-size: 15px; }
+  .quick-amts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* Duyurular */
