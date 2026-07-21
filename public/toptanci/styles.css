@@ -356,19 +356,40 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pos2-cols { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 14px; align-items: start; min-width: 0; }
 .pos2-left, .pos2-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-/* Adisyon / sepet listesi */
+/* Adisyon / sepet listesi — kompakt, referans BenimPOS düzeni */
 .ades-wrap { padding: 12px; }
 .ades-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; font-size: 15px; }
-.ades-list { display: flex; flex-direction: column; }
+.ades-list { display: flex; flex-direction: column; gap: 6px; }
 .ades-empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
-.ades-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); min-width: 0; }
-.ades-row:last-child { border-bottom: 0; }
-.ades-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.ades-name { font-weight: 700; font-size: 13.5px; color: var(--text); line-height: 1.25; }
-.ades-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ades-bar { font-size: 11px; color: #9aa2ad; }
-.ades-f { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
-.ades-tot { font-weight: 800; font-size: 14px; color: var(--value); white-space: nowrap; text-align: right; min-width: 64px; }
+.ades-row {
+  position: relative; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 7px 26px 7px 8px;
+  background: var(--brand-soft, #f4f8fd); border: 1px solid var(--line); border-radius: 10px;
+}
+/* Sol: kompakt adet stepper (N ile küçük −/+) */
+.ades-row .cart-qty { flex: 0 0 auto; gap: 3px; }
+.ades-row .cart-qty button { width: 26px; height: 28px; font-size: 15px; border-radius: 6px; }
+.ades-row .cart-qty button.minus { background: #e7eef7; color: var(--brand-dark, #1565c0); }
+.ades-row .qty-in { width: 40px; height: 28px; padding: 0 2px; font-weight: 700; font-size: 13px; }
+/* Orta: ürün adı kalın + altında barkod (sol) / fiyat-isk (sağ) */
+.ades-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ades-name { font-weight: 700; font-size: 13.5px; color: var(--text); line-height: 1.2; }
+.ades-name .badge { font-weight: 600; }
+.ades-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.ades-bar { font-size: 11px; color: #9aa2ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ades-edit { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.ades-f { display: inline-flex; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); font-weight: 600; }
+/* Fiyat / İsk inputları: metin gibi soluk, odaklanınca kutu */
+.ades-f .row-in { border: 1px solid transparent; background: transparent; border-radius: 5px; padding: 1px 2px; text-align: right; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.ades-f .price-in { width: 56px; }
+.ades-f .isk-in { width: 32px; }
+.ades-f .row-in:hover { border-color: var(--line); }
+.ades-f .row-in:focus { border-color: var(--brand); background: #fff; color: var(--text); }
+/* Sağ: satır toplamı kalın */
+.ades-tot { flex: 0 0 auto; font-weight: 800; font-size: 14px; color: var(--value); white-space: nowrap; text-align: right; min-width: 58px; }
+/* Sil: küçük, sağ üst köşe */
+.ades-row .cart-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 12px; background: transparent; color: #b9c0ca; border-radius: 5px; }
+.ades-row .cart-del:hover { background: #fdeceb; color: var(--red); }
 .pos-note label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .pos-note input { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
 .pay-custom { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -689,11 +710,12 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .pos2 { gap: 10px; }
   .pos2-cols { display: flex; flex-direction: column; gap: 12px; }
   .pos2-cols > * { min-width: 0; width: 100%; }
-  /* Adisyon satırı 390px'de taşmasın: kompakt stepper, fiyat/isk alt satıra sarabilir */
-  .ades-row .cart-qty button { width: 36px; height: 36px; font-size: 16px; }
-  .ades-row .qty-in { width: 46px; }
-  .ades-sub .price-in { width: 80px; } .ades-sub .isk-in { width: 54px; }
-  .ades-tot { min-width: 56px; font-size: 13.5px; }
+  /* Adisyon satırı 390px'de taşmasın: kompakt stepper + inline fiyat/isk */
+  .ades-row { padding: 8px 28px 8px 8px; }
+  .ades-row .cart-qty button { width: 34px; height: 34px; font-size: 17px; }
+  .ades-row .qty-in { width: 48px; height: 34px; }
+  .ades-f .price-in { width: 72px; } .ades-f .isk-in { width: 46px; }
+  .ades-tot { min-width: 54px; font-size: 13.5px; }
   /* Ürün kartları mobilde 2 sütun: metin okunur, havadar, hizalı */
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: none; }
   .prod-card { min-height: 78px; padding: 13px 12px; }

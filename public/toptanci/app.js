@@ -592,14 +592,16 @@ function cartRowsHTML() {
     <div class="cart-qty">
       <button class="minus" data-dec="${idx}" type="button">−</button>
       <input class="row-in qty-in" data-qty="${idx}" type="number" step="0.01" value="${it.adet}" />
-      <button data-inc="${idx}" type="button">+</button>
+      <button class="plus" data-inc="${idx}" type="button">+</button>
     </div>
     <div class="ades-mid">
       <div class="ades-name">${esc(it.ad)} <span class="badge">%${Number(it.kdv) || 0}</span></div>
       <div class="ades-sub">
         <span class="ades-bar">${esc(it.barkod || "")}</span>
-        <label class="ades-f">Fiyat<input class="row-in price-in" data-price="${idx}" type="number" step="0.01" value="${it.fiyat}" /></label>
-        <label class="ades-f">İsk%<input class="row-in isk-in" data-isk="${idx}" type="number" step="0.01" value="${it.iskyuzde || ""}" placeholder="0" /></label>
+        <span class="ades-edit">
+          <label class="ades-f">₺<input class="row-in price-in" data-price="${idx}" type="number" step="0.01" value="${it.fiyat}" title="Birim fiyat" /></label>
+          <label class="ades-f isk">%<input class="row-in isk-in" data-isk="${idx}" type="number" step="0.01" value="${it.iskyuzde || ""}" placeholder="0" title="İskonto %" /></label>
+        </span>
       </div>
     </div>
     <div class="ades-tot" data-tut="${idx}">${money.format(netLine(it))}</div>
