@@ -10,6 +10,7 @@
  * koruma gerektiğinde ileride Supabase Auth + RLS eklenmeli.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Order } from '../types'
 
 // Ortam değişkeni varsa onu kullan; yoksa gömülü değer (CI/GitHub Pages için).
 const URL =
@@ -31,6 +32,18 @@ function client(): SupabaseClient | null {
 export interface CloudRecord {
   value: unknown
   updatedAt: string
+}
+
+/** Buluta gerçekten ulaşılıyor mu — internet kapısı için. Ağ hatası/çevrimdışı → false. */
+export async function cloudPing(): Promise<boolean> {
+  const c = client()
+  if (!c) return false
+  try {
+    const { error } = await c.from('kv').select('key').limit(1)
+    return !error
+  } catch {
+    return false
+  }
 }
 
 /** Bir anahtarın bulut kaydını getir. Yoksa ya da çevrimdışıysa null döner (sessiz). */
@@ -59,5 +72,44 @@ export async function cloudSet(key: string, value: unknown, updatedAt: string): 
     return !error
   } catch {
     return false
+  }
+}
+
+// ---- Sipariş kanalı (çay ocağı → toptancı, internet üzerinden) ----
+// Siparişler ayrı `siparisler` tablosunda satır-bazlı durur (kv değil — çoklu
+// sipariş "son yazan kazanır"da çakışır). Toptancı (babuco-app) bu tabloyu okur.
+
+/** Siparişi buluta gönder (toptancı otomatik alır). Çevrimdışıysa false. */
+export async function siparisGonderBulut(order: Order): Promise<boolean> {
+  const c = client()
+  if (!c) return false
+  try {
+    const { error } = await c.from('siparisler').upsert({
+      id: order.id,
+      toptanci: 'babuco',
+      cay_ocagi: order.from?.name ?? null,
+      cay_tel: order.from?.phone ?? null,
+      payload: order,
+      durum: 'yeni',
+      updated_at: new Date().toISOString(),
+    })
+    return !error
+  } catch {
+    return false
+  }
+}
+
+/** Verilen sipariş id'lerinin toptancı-tarafı durumlarını getir. id → durum. */
+export async function siparisDurumGetir(ids: string[]): Promise<Record<string, string>> {
+  const c = client()
+  if (!c || ids.length === 0) return {}
+  try {
+    const { data, error } = await c.from('siparisler').select('id, durum').in('id', ids)
+    if (error || !data) return {}
+    const out: Record<string, string> = {}
+    for (const r of data as { id: string; durum: string }[]) out[r.id] = r.durum
+    return out
+  } catch {
+    return {}
   }
 }

@@ -101,6 +101,14 @@ export interface Sale {
   /** Hesap bölündüyse parçalar burada. Raporlar önce buraya bakar. */
   payments?: PaymentPart[]
   customerId?: string
+  /** Bu satışta kazandırılan sadakat puanı (1 puan = 1 TL). */
+  puanKazanilan?: number
+  /** Bu satışta harcanan puan (TL). */
+  puanKullanilan?: number
+  /** Bu satışta müşterinin bakiyesine eklenen tutar. */
+  bakiyeBirakilan?: number
+  /** Puan/bakiye hangi müşteriye işlendi (nakit satışta bile olabilir; customerId sadece veresiye). */
+  puanMusteriId?: string
   tableId?: string
   /** Kapanış anındaki masa adı (Masa 1, "Bahçe" vb.). Hızlı satışta boş. */
   tableName?: string
@@ -121,8 +129,12 @@ export interface Customer {
   id: string
   name: string
   phone?: string
-  /** Pozitif = bize borçlu. */
+  /** Pozitif = bize borçlu (veresiye). */
   balance: number
+  /** Sadakat puanı. 1 puan = 1 TL. Gerçek alışverişte harcanabilir. */
+  puan?: number
+  /** Ayrı bırakılan bakiye borcu (veresiyeden bağımsız). Pozitif = müşteri borçlu. Puanla ödenemez. */
+  bakiye?: number
 }
 
 export interface CustomerPayment {
@@ -225,9 +237,20 @@ export interface Order {
   status: 'taslak' | 'gonderildi'
   lines: OrderLine[]
   note?: string
-  gonderim?: 'qr' | 'whatsapp' | 'dosya'
+  gonderim?: 'qr' | 'whatsapp' | 'dosya' | 'bulut'
+  /** Toptancı tarafındaki işlem durumu (buluttan çekilir): yeni|onay|dagitim|teslim. */
+  durum?: string
   /** Gönderen kıraathane bilgisi — karşı tarafta bayi eşleşmesi için. */
   from?: { name: string; phone?: string }
+}
+
+/** Uygulamanın/toptancının verdiği sadakat ödülü. Kullanıcı düzenleyemez. fiyat = TL = puan (1 puan = 1 TL). */
+export interface Hizmet {
+  id: string
+  ad: string
+  ikon: string
+  aciklama: string
+  fiyat: number
 }
 
 export interface State {

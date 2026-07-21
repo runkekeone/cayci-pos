@@ -1,5 +1,20 @@
-import type { CatalogItem, Item, Unit, Variant } from './types'
+import type { CatalogItem, Hizmet, Item, Unit, Variant } from './types'
 import { alisToBase, uid } from './lib/units'
+
+/**
+ * HİZMETLER — uygulamanın/toptancının verdiği müşteri sadakat ödülleri.
+ * Kullanıcı DÜZENLEYEMEZ. Müşteri biriken puanıyla (1 puan = 1 TL), parayla
+ * veya kısmi puanla alır. fiyat hem TL hem puan karşılığıdır.
+ */
+export const HIZMETLER: Hizmet[] = [
+  { id: 'h-bedava-cay', ad: 'Bedava Çay', ikon: '🍵', aciklama: 'Bir bardak çay ikramı', fiyat: 50 },
+  { id: 'h-turk-kahvesi', ad: 'Türk Kahvesi İkramı', ikon: '☕', aciklama: 'Bir fincan Türk kahvesi', fiyat: 60 },
+  { id: 'h-ikram-tabagi', ad: 'İkram Tabağı', ikon: '🥜', aciklama: 'Kuruyemiş / çerez tabağı', fiyat: 75 },
+  { id: 'h-bedava-tost', ad: 'Bedava Tost', ikon: '🥪', aciklama: 'Bir adet kaşarlı tost', fiyat: 120 },
+  { id: 'h-pasta-dilimi', ad: 'Doğum Günü Pasta Dilimi', ikon: '🎂', aciklama: 'Bir dilim pasta ikramı', fiyat: 90 },
+  { id: 'h-indirim-kupon', ad: 'Sonraki Hesaba %10 İndirim', ikon: '🎫', aciklama: 'Bir sonraki hesapta %10 indirim kuponu', fiyat: 100 },
+  { id: 'h-vip-rezervasyon', ad: 'VIP Masa / Bahçe Rezervasyonu', ikon: '⭐', aciklama: 'Öncelikli masa/bahçe rezervasyonu', fiyat: 150 },
+]
 
 /**
  * TOPTANCI KATALOGU.

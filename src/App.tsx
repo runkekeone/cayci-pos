@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import { StoreProvider, useStore, aktifOturum } from './store'
 import { currentUser, logout, syncUsers, type User } from './auth'
+import { cloudPing } from './lib/cloud'
 import { dayReport } from './lib/report'
 import { fmtTL } from './lib/units'
 import Giris from './screens/Giris'
@@ -17,6 +18,7 @@ import Rapor from './screens/Rapor'
 import Takvim from './screens/Takvim'
 import Profil from './screens/Profil'
 import Siparis from './screens/Siparis'
+import Hizmetler from './screens/Hizmetler'
 import Anasayfa from './screens/Anasayfa'
 
 /** id → ekran bileşeni. */
@@ -31,6 +33,7 @@ const EKRANLAR: Record<string, ComponentType> = {
   kasa: Kasa,
   takvim: Takvim,
   siparis: Siparis,
+  hizmetler: Hizmetler,
 }
 
 type MenuLeaf = { id: string; ad: string; kisa: string; ic: string }
@@ -49,6 +52,8 @@ const MENU: MenuItem[] = [
   { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: '🏠', ana: true },
   { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: true },
   { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: '🚚', ana: true },
+  // Masaüstü sidebar'da görünür; mobilde nav-gizli — alt çubukta ayrı only-mobile düğmesi var.
+  { id: 'hizmetler', ad: 'Hizmetler', kisa: 'Hizmet', ic: '🎁', ana: false },
   {
     id: 'rapor',
     ad: 'Raporlar',
@@ -178,6 +183,13 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <span className="nav-kisa">Hızlı Satış</span>
         </button>
         <button
+          className={`nav only-mobile ${sayfa === 'hizmetler' ? 'on' : ''}`}
+          onClick={() => git('hizmetler')}
+        >
+          <span>🎁</span>
+          <span className="nav-kisa">Hizmetler</span>
+        </button>
+        <button
           className={`nav only-mobile ${sayfa === 'profil' ? 'on' : ''}`}
           onClick={() => git('profil')}
         >
@@ -217,7 +229,51 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   )
 }
 
+/** İnternet var mı — navigator + gerçek Supabase ping. Kapı bunu kullanır. */
+function useInternet(): boolean {
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine)
+  useEffect(() => {
+    let alive = true
+    const kontrol = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (alive) setOnline(false)
+        return
+      }
+      const ok = await cloudPing()
+      if (alive) setOnline(ok)
+    }
+    void kontrol()
+    const iv = setInterval(() => void kontrol(), 8000)
+    const on = () => void kontrol()
+    window.addEventListener('online', on)
+    window.addEventListener('offline', on)
+    return () => {
+      alive = false
+      clearInterval(iv)
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', on)
+    }
+  }, [])
+  return online
+}
+
+/** İnternet yokken tüm uygulamayı kapatan ekran. */
+function InternetKapisi() {
+  return (
+    <div className="acilis">
+      <div className="acilis-ic">
+        <div className="acilis-logo">📡</div>
+        <div style={{ fontWeight: 700, fontSize: 18 }}>İnternet bağlantısı gerekli</div>
+        <div style={{ opacity: 0.75, textAlign: 'center', maxWidth: 300 }}>
+          Bu uygulama verileri buluttan çalışır. Bağlantı gelince otomatik açılır.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const online = useInternet()
   const [user, setUser] = useState<User | null>(() => currentUser())
   // Açılışta bulut kullanıcı listesini senkronla; bitene kadar girişi beklet
   // (başka cihazda açılmış hesapla giriş çalışsın diye).
@@ -231,6 +287,9 @@ export default function App() {
       alive = false
     }
   }, [])
+
+  // İnternet yoksa hiçbir şey açılmaz (tümü-buluttan mimarisi).
+  if (!online) return <InternetKapisi />
 
   if (!booted) {
     return (

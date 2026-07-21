@@ -1,10 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { lowStock } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
 import { TOPTANCI_KATALOG } from '../defaults'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
+import { siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
 import type { CatalogItem, Item, Order, OrderLine } from '../types'
+
+/** Toptancı-tarafı durum kodu → çay ocağının göreceği etiket. */
+const DURUM_ETIKET: Record<string, string> = {
+  yeni: '🕓 Gönderildi',
+  onay: '✅ Onaylandı',
+  dagitim: '🚚 Hazırlanıyor',
+  teslim: '📦 Teslim edildi',
+}
 
 type Sepet = Record<string, OrderLine> // key: catalogItemId|birim
 
@@ -27,6 +36,7 @@ export default function Siparis() {
   const [qr, setQr] = useState<string | null>(null)
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
   const [sepetAcik, setSepetAcik] = useState(false) // mobil: alttan açılan sepet paneli
+  const [durumlar, setDurumlar] = useState<Record<string, string>>({}) // sipariş id → toptancı durumu
 
   const katalog = TOPTANCI_KATALOG.filter((k) => k.active)
   const kategoriler = ['Hepsi', ...new Set(katalog.map((k) => k.category))]
@@ -53,6 +63,24 @@ export default function Siparis() {
 
   const lines = Object.values(sepet)
   const toplam = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+
+  // Buluttan gönderilmiş siparişlerin toptancı-tarafı durumunu periyodik çek.
+  const gonderilenler = [...(s.orders ?? [])].reverse()
+  useEffect(() => {
+    const bulutIds = (s.orders ?? []).filter((o) => o.gonderim === 'bulut').map((o) => o.id)
+    if (bulutIds.length === 0) return
+    let alive = true
+    const cek = async () => {
+      const d = await siparisDurumGetir(bulutIds)
+      if (alive) setDurumlar((prev) => ({ ...prev, ...d }))
+    }
+    void cek()
+    const t = setInterval(() => void cek(), 15000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [s.orders])
 
   function ekle(k: CatalogItem, birim: 'koli' | 'adet') {
     const key = `${k.id}|${birim}`
@@ -98,6 +126,19 @@ export default function Siparis() {
     saveOrder(order)
     setGonderildi(order)
     window.open(whatsappLink(order), '_blank')
+  }
+
+  /** İnternetten gönder: toptancı (babuco) siparişi Supabase'den otomatik alır. */
+  async function internetGonder() {
+    const order = { ...siparisOlustur(), gonderim: 'bulut' as const }
+    saveOrder(order)
+    setGonderildi(order)
+    const ok = await siparisGonderBulut(order)
+    if (!ok) {
+      alert('İnternete gönderilemedi (bağlantı yok). WhatsApp / QR / Dosya ile de gönderebilirsin.')
+      return
+    }
+    setDurumlar((d) => ({ ...d, [order.id]: 'yeni' }))
   }
 
   async function qrGoster() {
@@ -263,20 +304,33 @@ export default function Siparis() {
             <input value={not} onChange={(e) => setNot(e.target.value)} placeholder="Sabah teslim..." />
           </div>
 
-          <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <button className="btn primary" disabled={!lines.length} onClick={whatsappGonder} style={{ flex: 1 }}>
+          <button
+            className="btn primary"
+            disabled={!lines.length}
+            onClick={internetGonder}
+            style={{ width: '100%', marginTop: 8 }}
+          >
+            🚀 İnternetten Gönder
+          </button>
+          <div className="hint" style={{ marginTop: 6, textAlign: 'center' }}>
+            internet yoksa yedek:
+          </div>
+          <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <button className="btn ghost" disabled={!lines.length} onClick={whatsappGonder} style={{ flex: 1 }}>
               WhatsApp
             </button>
-            <button className="btn" disabled={!lines.length} onClick={qrGoster} style={{ flex: 1 }}>
-              QR göster
+            <button className="btn ghost" disabled={!lines.length} onClick={qrGoster} style={{ flex: 1 }}>
+              QR
             </button>
-            <button className="btn" disabled={!lines.length} onClick={dosyaIndir} style={{ flex: 1 }}>
+            <button className="btn ghost" disabled={!lines.length} onClick={dosyaIndir} style={{ flex: 1 }}>
               Dosya
             </button>
           </div>
           {gonderildi && (
             <p className="hint v good" style={{ marginTop: 8 }}>
-              ✓ Sipariş oluşturuldu ve gönderildi.{' '}
+              {gonderildi.gonderim === 'bulut'
+                ? '✓ İnternetten gönderildi — toptancıya düştü.'
+                : '✓ Sipariş oluşturuldu ve gönderildi.'}{' '}
               <button className="btn ghost sm" onClick={temizle}>
                 Yeni sipariş
               </button>
@@ -284,6 +338,45 @@ export default function Siparis() {
           )}
         </div>
       </div>
+
+      {gonderilenler.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div className="section-title">Gönderilen siparişler</div>
+          <div className="card">
+            {gonderilenler.slice(0, 8).map((o) => {
+              const tut = o.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+              const durum = durumlar[o.id] ?? o.durum
+              const bulut = o.gonderim === 'bulut'
+              const etiket = bulut
+                ? (DURUM_ETIKET[durum ?? 'yeni'] ?? '🕓 Gönderildi')
+                : o.gonderim === 'whatsapp'
+                  ? 'WhatsApp'
+                  : o.gonderim === 'qr'
+                    ? 'QR'
+                    : 'Dosya'
+              return (
+                <div key={o.id} className="ana-satir">
+                  <span>
+                    <b>
+                      {new Date(o.date).toLocaleString('tr-TR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </b>
+                    <span className="hint">
+                      {' '}
+                      · {o.lines.length} kalem · {fmtTL(tut)}
+                    </span>
+                  </span>
+                  <span className={`tag ${bulut ? '' : 'warn'}`}>{etiket}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* mobil: alttan sepet çubuğu + panel örtüsü (satış ekranıyla aynı desen) */}
       {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}

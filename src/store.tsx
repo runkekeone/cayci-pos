@@ -11,6 +11,7 @@ import type {
   CashDay,
   Customer,
   Expense,
+  Hizmet,
   Item,
   Order,
   Payment,
@@ -64,7 +65,9 @@ function sarfGideriTemizle(st: State): State {
 /** Ham State'i (yerel ya da buluttan) güncel şemaya normalize et. */
 function normalize(raw: State): State {
   const st = { ...bosState, ...raw }
-  return sarfGideriTemizle({ ...st, items: cesitleriTamamla(st.items) })
+  // Eski müşteri kayıtlarında puan/bakiye olmayabilir — varsayılan 0.
+  const customers = st.customers.map((c) => ({ puan: 0, bakiye: 0, ...c }))
+  return sarfGideriTemizle({ ...st, customers, items: cesitleriTamamla(st.items) })
 }
 
 function load(userId: string): State {
@@ -76,6 +79,9 @@ function load(userId: string): State {
   }
   return bosState
 }
+
+/** Satışa bağlı sadakat bilgisi: puan harcama + bakiye bırakma. */
+export type Loyalty = { customerId: string; puanKullan: number; bakiyeBirak: number }
 
 interface Store {
   s: State
@@ -108,8 +114,8 @@ interface Store {
   setTableQty: (tableId: string, index: number, qty: number) => void
   renameTable: (tableId: string, name: string) => void
   setTableCustomer: (tableId: string, customerId?: string) => void
-  closeTable: (tableId: string, payment: Payment, customerId?: string) => void
-  quickSale: (lines: SaleLine[], payment: Payment, customerId?: string) => void
+  closeTable: (tableId: string, payment: Payment, customerId?: string, loyalty?: Loyalty) => void
+  quickSale: (lines: SaleLine[], payment: Payment, customerId?: string, loyalty?: Loyalty) => void
   /** Parçalı ödeme: hesap bölünür, her parça ayrı ödenir. Veresiye parçası müşteriye yazılır. */
   paySplit: (lines: SaleLine[], parts: PaymentPart[], tableId?: string) => void
   cancelSale: (saleId: string) => void
@@ -117,6 +123,9 @@ interface Store {
   editSale: (saleId: string, newLines: SaleLine[]) => void
   /** İptal edilen satışı geri getir (undo): stok yeniden düşer, veresiye borcu geri yazılır. */
   restoreSale: (sale: Sale) => void
+
+  /** Müşteri sadakat ödülü/hizmeti al: puan (1 puan = 1 TL) + para karışık ödenir. */
+  hizmetAl: (customerId: string, hizmet: Hizmet, puanKullan: number, paraPayment: 'nakit' | 'kart') => void
 
   // iş günü oturumu
   /** Günü başlat: açık oturum aç, açılış nakdini yaz. */
@@ -127,6 +136,8 @@ interface Store {
   // müşteri
   saveCustomer: (c: Customer) => void
   collect: (customerId: string, amount: number, method: 'nakit' | 'kart') => void
+  /** Bakiye tahsilatı (puanla ödenemez, yalnız nakit/kart). */
+  collectBakiye: (customerId: string, amount: number, method: 'nakit' | 'kart') => void
 
   // gider / kasa
   saveExpense: (e: Expense) => void
@@ -201,6 +212,23 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     }
   }, [userId])
 
+  // Ekrana geri dönünce buluttan tazele — veri hep güncel kalsın (başka cihaz yazmışsa al).
+  useEffect(() => {
+    const k = dataKey(userId)
+    const yenile = async () => {
+      if (document.visibilityState !== 'visible' || !hydrated.current) return
+      const localTs = localStorage.getItem(k + ':ts') ?? ''
+      const cloud = await cloudGet(k)
+      if (cloud && cloud.value && (!localTs || cloud.updatedAt > localTs)) {
+        localStorage.setItem(k, JSON.stringify(cloud.value))
+        localStorage.setItem(k + ':ts', cloud.updatedAt)
+        setS(normalize(cloud.value as State))
+      }
+    }
+    document.addEventListener('visibilitychange', yenile)
+    return () => document.removeEventListener('visibilitychange', yenile)
+  }, [userId])
+
   const store = useMemo<Store>(() => {
     const set = (fn: (s: State) => State) => setS(fn)
 
@@ -238,6 +266,19 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
         ? items.find((i) => i.id === l.itemId)?.variants?.find((v) => v.id === l.variantId)
         : undefined
 
+    /** Loyalty sonrası fiilen tahsil edilecek net tutar (commitSale ile aynı clamp). */
+    const netTutar = (
+      st: State,
+      total: number,
+      loyalty?: { customerId: string; puanKullan: number; bakiyeBirak: number },
+    ): number => {
+      if (!loyalty) return total
+      const c = st.customers.find((x) => x.id === loyalty.customerId)
+      const puanKullan = Math.max(0, Math.min(loyalty.puanKullan, c?.puan ?? 0, total))
+      const bakiyeBirak = Math.max(0, Math.min(loyalty.bakiyeBirak, Math.floor(total * 0.1)))
+      return Math.max(0, total - puanKullan - bakiyeBirak)
+    }
+
     /** Ortak satış kaydı. parts verilirse hesap parçalı ödenmiştir. */
     const commitSale = (
       st: State,
@@ -245,6 +286,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       parts: PaymentPart[],
       tableId?: string,
       tableName?: string,
+      loyalty?: { customerId: string; puanKullan: number; bakiyeBirak: number },
     ): State => {
       if (lines.length === 0 || parts.length === 0) return st
 
@@ -265,6 +307,29 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
 
       const veresiyeParca = parts.find((p) => p.payment === 'veresiye')
 
+      // --- Sadakat puanı + bakiye ---
+      // Puan/bakiye müşterisi: açık loyalty > veresiye müşterisi.
+      const puanCid = loyalty?.customerId ?? veresiyeParca?.customerId
+      const puanKazan = Math.round(total * 0.01) // %1, 1 puan = 1 TL
+      let puanKullanilan = 0
+      let bakiyeBirakilan = 0
+      if (puanCid) {
+        const c = customers.find((x) => x.id === puanCid)
+        const mevcutPuan = c?.puan ?? 0
+        // Savunmacı clamp: UI zaten sınırlar ama yine de doğrula.
+        puanKullanilan = Math.max(0, Math.min(loyalty?.puanKullan ?? 0, mevcutPuan, total))
+        bakiyeBirakilan = Math.max(0, Math.min(loyalty?.bakiyeBirak ?? 0, Math.floor(total * 0.1)))
+        customers = customers.map((x) =>
+          x.id === puanCid
+            ? {
+                ...x,
+                puan: Math.max(0, (x.puan ?? 0) + puanKazan - puanKullanilan),
+                bakiye: (x.bakiye ?? 0) + bakiyeBirakilan,
+              }
+            : x,
+        )
+      }
+
       return {
         ...st,
         items,
@@ -278,8 +343,13 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             total,
             cost,
             payment: parts[0].payment,
-            payments: parts.length > 1 ? parts : undefined,
+            // Loyalty kullanıldıysa payments'ı her zaman yaz: hareket sentezi net'i şişirmesin.
+            payments: parts.length > 1 || puanCid ? parts : undefined,
             customerId: veresiyeParca?.customerId,
+            puanKazanilan: puanCid ? puanKazan : undefined,
+            puanKullanilan: puanKullanilan || undefined,
+            bakiyeBirakilan: bakiyeBirakilan || undefined,
+            puanMusteriId: puanCid,
             tableId,
             tableName,
             bizDay: aktifOturum(st)?.date ?? today(),
@@ -416,25 +486,28 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           tables: st.tables.map((t) => (t.id === tableId ? { ...t, customerId } : t)),
         })),
 
-      closeTable: (tableId, payment, customerId) =>
+      closeTable: (tableId, payment, customerId, loyalty) =>
         set((st) => {
           const table = st.tables.find((t) => t.id === tableId)
           if (!table || table.lines.length === 0) return st
           const total = table.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+          const net = netTutar(st, total, loyalty)
           const next = commitSale(
             st,
             table.lines,
-            [{ payment, amount: total, customerId }],
+            [{ payment, amount: net, customerId }],
             tableId,
             table.name,
+            loyalty,
           )
           return { ...next, tables: next.tables.map((t, i) => bosalt(t, tableId, i)) }
         }),
 
-      quickSale: (lines, payment, customerId) =>
+      quickSale: (lines, payment, customerId, loyalty) =>
         set((st) => {
           const total = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-          return commitSale(st, lines, [{ payment, amount: total, customerId }])
+          const net = netTutar(st, total, loyalty)
+          return commitSale(st, lines, [{ payment, amount: net, customerId }], undefined, undefined, loyalty)
         }),
 
       paySplit: (lines, parts, tableId) =>
@@ -468,6 +541,19 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             if (p.payment !== 'veresiye' || !p.customerId) continue
             customers = customers.map((c) =>
               c.id === p.customerId ? { ...c, balance: c.balance - p.amount } : c,
+            )
+          }
+
+          // Puan/bakiye geri al: kazandırılan puan silinir, harcanan puan iade, bakiye düşer.
+          if (sale.puanMusteriId) {
+            customers = customers.map((c) =>
+              c.id === sale.puanMusteriId
+                ? {
+                    ...c,
+                    puan: Math.max(0, (c.puan ?? 0) - (sale.puanKazanilan ?? 0) + (sale.puanKullanilan ?? 0)),
+                    bakiye: Math.max(0, (c.bakiye ?? 0) - (sale.bakiyeBirakilan ?? 0)),
+                  }
+                : c,
             )
           }
 
@@ -540,6 +626,16 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             )
           }
 
+          // 6) Kazanılan puanı yeni toplama göre güncelle (harcanan puan/bakiye kullanıcı seçimi, aynı kalır).
+          const yeniPuanKazan = Math.round(newTotal * 0.01)
+          if (sale.puanMusteriId) {
+            customers = customers.map((c) =>
+              c.id === sale.puanMusteriId
+                ? { ...c, puan: Math.max(0, (c.puan ?? 0) - (sale.puanKazanilan ?? 0) + yeniPuanKazan) }
+                : c,
+            )
+          }
+
           const veresiyeParca = newParts.find((p) => p.payment === 'veresiye')
           const updated = {
             ...sale,
@@ -547,8 +643,9 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             total: newTotal,
             cost: newCost,
             payment: newParts[0].payment,
-            payments: newParts.length > 1 ? newParts : undefined,
+            payments: newParts.length > 1 || sale.puanMusteriId ? newParts : undefined,
             customerId: veresiyeParca?.customerId,
+            puanKazanilan: sale.puanMusteriId ? yeniPuanKazan : undefined,
           }
 
           return { ...st, items, customers, sales: st.sales.map((x) => (x.id === saleId ? updated : x)) }
@@ -573,7 +670,56 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             )
           }
 
+          // Puan/bakiye yeniden uygula (iptalin tersi).
+          if (sale.puanMusteriId) {
+            customers = customers.map((c) =>
+              c.id === sale.puanMusteriId
+                ? {
+                    ...c,
+                    puan: Math.max(0, (c.puan ?? 0) + (sale.puanKazanilan ?? 0) - (sale.puanKullanilan ?? 0)),
+                    bakiye: (c.bakiye ?? 0) + (sale.bakiyeBirakilan ?? 0),
+                  }
+                : c,
+            )
+          }
+
           return { ...st, items, customers, sales: [...st.sales, sale] }
+        }),
+
+      /** Müşteri ödülü/hizmeti al: puan (1p=1TL) + kalan para. Puan indirim, para ciroya girer. */
+      hizmetAl: (customerId, hizmet, puanKullan, paraPayment) =>
+        set((st) => {
+          const c = st.customers.find((x) => x.id === customerId)
+          if (!c) return st
+          // Kullanılabilecek puan: istenen, müşterinin bakiyesi ve hizmet fiyatıyla sınırlı.
+          const puan = Math.max(0, Math.min(puanKullan, c.puan ?? 0, hizmet.fiyat))
+          const paraTutar = Math.round((hizmet.fiyat - puan) * 100) / 100
+
+          const customers = st.customers.map((x) =>
+            x.id === customerId ? { ...x, puan: Math.max(0, (x.puan ?? 0) - puan) } : x,
+          )
+
+          return {
+            ...st,
+            customers,
+            sales: [
+              ...st.sales,
+              {
+                id: uid(),
+                date: new Date().toISOString(),
+                lines: [
+                  { itemId: 'hizmet', name: hizmet.ad, qty: 1, unitPrice: paraTutar, unitCost: 0 },
+                ],
+                total: paraTutar,
+                cost: 0,
+                payment: paraPayment,
+                // Puan kısmı bu satışta harcandı — çift kazanım olmasın diye commitSale'den geçmez.
+                puanKullanilan: puan || undefined,
+                puanMusteriId: customerId,
+                bizDay: aktifOturum(st)?.date ?? today(),
+              },
+            ],
+          }
         }),
 
       saveCustomer: (c) =>
@@ -589,6 +735,26 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           ...st,
           customers: st.customers.map((c) =>
             c.id === customerId ? { ...c, balance: c.balance - amount } : c,
+          ),
+          payments: [
+            ...st.payments,
+            {
+              id: uid(),
+              date: new Date().toISOString(),
+              customerId,
+              amount,
+              method,
+              bizDay: aktifOturum(st)?.date ?? today(),
+            },
+          ],
+        })),
+
+      // Bakiye tahsilatı: puanla ödenemez, yalnız nakit/kart. Ayrı bakiye alanını düşürür.
+      collectBakiye: (customerId, amount, method) =>
+        set((st) => ({
+          ...st,
+          customers: st.customers.map((c) =>
+            c.id === customerId ? { ...c, bakiye: Math.max(0, (c.bakiye ?? 0) - amount) } : c,
           ),
           payments: [
             ...st.payments,
