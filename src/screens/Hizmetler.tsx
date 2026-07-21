@@ -60,7 +60,7 @@ export default function Hizmetler() {
         </span>
       </div>
 
-      <div className="katalog-grid">
+      <div className="katalog-grid hizmetler-grid">
         {HIZMETLER.map((h) => {
           const yeter = puan >= h.fiyat
           return (

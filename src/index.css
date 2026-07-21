@@ -201,22 +201,50 @@ h1 {
   min-width: 0;
 }
 
+/* --- Önceki siparişler: yatay kaydırılabilir hızlı-tekrar şeridi --- */
+.onceki-serit {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+  max-width: 100%;
+}
+.onceki-serit::-webkit-scrollbar {
+  display: none;
+}
+.onceki-cip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Toptancı katalog: satır yerine kart ızgarası, sırada 4 kart --- */
 .katalog-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
-/* Geniş ekran 4 kutu. Telefonda 2-3'e iner ama asla tek sütun (alt-alta) olmaz. */
+/* Geniş ekran 4 kutu. Telefonda 3 sütun (daha geniş, okunur kartlar). */
 @media (max-width: 560px) {
   .katalog-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
 }
 @media (max-width: 400px) {
   .katalog-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* --- Ödüller (Hizmetler): telefonda satırda 3 kart. Masaüstünde katalog-grid'in
+   4'lü düzenini paylaşır; sadece telefonda 3'e iner. Siparis'in katalog-grid'ine dokunmaz. --- */
+@media (max-width: 560px) {
+  .hizmetler-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 .kat-kart {
@@ -276,16 +304,16 @@ h1 {
     line-height: 1.15;
   }
   .kat-kart .kk-ad strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .kat-kart .kk-ad .hint {
-    font-size: 9px;
+    font-size: 10px;
   }
   .kat-kart .kk-fiyat {
     flex-direction: column;
     align-items: flex-start;
     gap: 1px;
-    font-size: 10px;
+    font-size: 11px;
   }
   .kat-kart .kk-fiyat b {
     overflow-wrap: anywhere;
@@ -297,8 +325,8 @@ h1 {
   }
   .kat-kart .kk-butonlar .btn.sm {
     width: 100%;
-    padding: 5px 4px;
-    font-size: 11px;
+    padding: 6px 4px;
+    font-size: 12px;
   }
 }
 
@@ -1513,7 +1541,7 @@ tr:last-child td {
     grid-template-columns: repeat(3, 1fr);
   }
   .katalog-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   /* 5 hızlı işlem butonu dar ekrana sığsın diye küçült. */
   .ana-grid {

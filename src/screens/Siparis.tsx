@@ -220,6 +220,28 @@ export default function Siparis() {
         </div>
       )}
 
+      {gonderilenler.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div className="section-title">Önceki siparişler</div>
+          <div className="onceki-serit">
+            {gonderilenler.slice(0, 6).map((o) => {
+              const tut = o.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+              const tarih = new Date(o.date).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })
+              return (
+                <button
+                  key={o.id}
+                  className="btn sm onceki-cip"
+                  onClick={() => setSepet(Object.fromEntries(o.lines.map((l) => [`${l.catalogItemId}|${l.birim}`, { ...l }])))}
+                  title="Bu siparişi sepete yükle"
+                >
+                  {tarih} · {o.lines.length} kalem · {fmtTL(tut)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid2" style={{ marginTop: 8 }}>
         {/* ---- katalog ---- */}
         <div>
