@@ -2,13 +2,15 @@
 <html lang="tr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <title>babu.co — İşletme Paneli</title>
-    <link rel="stylesheet" href="styles.css?v=mobil1" />
+    <link rel="stylesheet" href="styles.css?v=mobil2" />
   </head>
   <body>
     <div class="layout">
+      <!-- Mobil çekmece örtüsü (karartma) -->
+      <div class="nav-scrim" id="navScrim" aria-hidden="true"></div>
       <!-- Sidebar (JS doldurur) -->
       <aside class="sidebar">
         <div class="brand">
@@ -55,6 +57,6 @@
 
     <script src="vendor/supabase.js"></script>
     <script src="seed.js"></script>
-    <script src="app.js?v=mobil1"></script>
+    <script src="app.js?v=mobil2"></script>
   </body>
 </html>

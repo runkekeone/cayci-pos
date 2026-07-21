@@ -1601,7 +1601,20 @@ function wireBell() {
 
 /* ============ Üst bar ============ */
 function initTopbar() {
-  document.getElementById("hamburger").addEventListener("click", () => { if (window.innerWidth <= 680) document.body.classList.toggle("nav-open"); else document.body.classList.toggle("rail"); });
+  document.getElementById("hamburger").addEventListener("click", () => {
+    if (window.innerWidth <= 768) { document.body.classList.remove("rail"); document.body.classList.toggle("nav-open"); }
+    else { document.body.classList.remove("nav-open"); document.body.classList.toggle("rail"); }
+  });
+  // Mobil çekmece örtüsüne tıklayınca kapat
+  const scrim = document.getElementById("navScrim");
+  if (scrim) scrim.addEventListener("click", () => document.body.classList.remove("nav-open"));
+  // Mobilde rail (daraltma) geçersiz; masaüstüne büyürse çekmeceyi sıfırla
+  const syncNav = () => {
+    if (window.innerWidth <= 768) document.body.classList.remove("rail");
+    else document.body.classList.remove("nav-open");
+  };
+  window.addEventListener("resize", syncNav);
+  syncNav();
   const userBtn = document.getElementById("userBtn"), dd = document.getElementById("userDropdown");
   userBtn.addEventListener("click", (e) => { e.stopPropagation(); dd.classList.toggle("open"); });
   document.addEventListener("click", () => dd.classList.remove("open"));

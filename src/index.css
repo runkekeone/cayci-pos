@@ -204,19 +204,19 @@ h1 {
 /* --- Toptancı katalog: satır yerine kart ızgarası, sırada 4 kart --- */
 .katalog-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 /* Geniş ekran 4 kutu. Telefonda 2-3'e iner ama asla tek sütun (alt-alta) olmaz. */
 @media (max-width: 560px) {
   .katalog-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
   }
 }
 @media (max-width: 400px) {
   .katalog-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 .kat-kart {
@@ -227,12 +227,18 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px;
+  min-width: 0;
 }
 .kat-kart .kk-ad {
   display: flex;
   flex-direction: column;
   gap: 2px;
   line-height: 1.25;
+  min-width: 0;
+}
+.kat-kart .kk-ad strong {
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .kat-kart .kk-fiyat {
   display: flex;
@@ -240,6 +246,8 @@ h1 {
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .kat-kart .kk-fiyat b {
   color: var(--ink);
@@ -254,6 +262,44 @@ h1 {
 .kat-kart .kk-butonlar .btn.sm {
   flex: 1;
   white-space: nowrap;
+}
+
+/* Telefonda 4 sütun sığsın diye ürün kartlarını kompaktla (~85-90px genişlik). */
+@media (max-width: 560px) {
+  .kat-kart {
+    gap: 5px;
+    padding: 6px;
+    border-radius: 9px;
+  }
+  .kat-kart .kk-ad {
+    gap: 1px;
+    line-height: 1.15;
+  }
+  .kat-kart .kk-ad strong {
+    font-size: 11px;
+  }
+  .kat-kart .kk-ad .hint {
+    font-size: 9px;
+  }
+  .kat-kart .kk-fiyat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    font-size: 10px;
+  }
+  .kat-kart .kk-fiyat b {
+    overflow-wrap: anywhere;
+  }
+  /* Butonlar alt alta (dikey) dizilir ki dar kartta yatay taşma olmasın. */
+  .kat-kart .kk-butonlar {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kat-kart .kk-butonlar .btn.sm {
+    width: 100%;
+    padding: 5px 4px;
+    font-size: 11px;
+  }
 }
 
 .stats {
@@ -293,7 +339,7 @@ h1 {
 /* ---- rapor kutucukları ---- */
 .rgrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1467,7 +1513,7 @@ tr:last-child td {
     grid-template-columns: repeat(3, 1fr);
   }
   .katalog-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   /* 5 hızlı işlem butonu dar ekrana sığsın diye küçült. */
   .ana-grid {
