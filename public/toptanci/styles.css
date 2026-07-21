@@ -577,11 +577,16 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .dropdown a { padding: 13px 18px; min-height: 46px; }
 
   /* --- POS / Satış: çay ocağı deseni — ürünler üstte, fiş alttan açılır panel --- */
-  .pos-topbar { grid-template-columns: 1fr; gap: 10px; }
-  .pos-search { padding: 8px; }
-  .pos-search .bar-input { min-width: 0; }
-  .pos-totals { grid-template-columns: repeat(3, 1fr); }
-  .pos-tot .v { font-size: 20px; }
+  .pos-topbar { grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; }
+  /* Aksiyon şeridi: tek satır, kompakt, gerekirse yatay kaydırma (dikey yer kazan) */
+  .pos-search { padding: 6px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; align-items: center; }
+  .pos-search .bar-input { min-width: 0; padding: 10px 12px; }
+  .pos-price-sel { flex: 0 0 auto; white-space: nowrap; font-size: 13px; padding: 0 8px; min-height: 44px; }
+  .pos-btn { min-width: auto; padding: 8px 12px; min-height: 44px; flex: 0 0 auto; }
+  /* Yer tutan / az kullanılan aksiyonları mobilde gizle (Fiyat Gör, Ödeme Ekle, Yazdır) */
+  .pos-search .pos-btn.green, .pos-search .pos-btn.teal, .pos-search #posYazdir { display: none; }
+  /* 3 büyük toplam kartını mobilde gizle — bilgi alt sepet-bar + açılan fiş panelinde zaten var */
+  .pos-totals { display: none; }
 
   /* pos-main: tek kolon akış; ÜRÜNLER en üstte, erişilebilir */
   .pos-main { display: flex; flex-direction: column; gap: 12px; }
