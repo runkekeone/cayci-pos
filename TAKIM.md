@@ -8,11 +8,12 @@ Projeler: **cayci-pos** (çay ocağı POS, React) + **babuco-app** (toptancı pa
 
 ## Roller
 
-### 🧠 CODER (Claude — bu oturum)
+### 🧠 CODER (puan-sistemi oturumu)
 Tüm mantık, veri, entegrasyon. Sahip olduğu dosyalar:
 - cayci-pos: `src/store.tsx`, `src/types.ts`, `src/auth.ts`, `src/lib/**`, `src/App.tsx`, `src/screens/*.tsx` (mantık/JSX), `src/seed.ts`, `src/defaults.ts`
 - babuco: `www/app.js` (mantık), Supabase entegrasyonu
 - Özellik, bug, fonksiyon, bulut/senkron, sipariş kanalı, puan sistemi mantığı
+- **babuco dağıtımı da coder'da:** babuco değişince `babuco-app/www` + `cayci-pos/public/toptanci`'yi güncelle + cayci-pos push et.
 
 ### 🎨 DESIGNER (babuco-mobil/APK oturumu)
 Sadece görsel + mobil + paketleme. Sahip olduğu:
@@ -21,12 +22,12 @@ Sadece görsel + mobil + paketleme. Sahip olduğu:
 - babuco APK paketleme: `babuco-app/android/**`, `capacitor.config.json` (görsel/viewport)
 - **JSX mantığı değiştirme.** Ekran yapısı değişmeli ise → "İSTEKLER"e yaz, coder yapar. Sadece className/stil dokun.
 
-### 🔍 MODERATÖR (puan-sistemi oturumu → artık moderatör)
+### 🔍 MODERATÖR (Claude — bu oturum)
 Kod YAZMAZ. İnceler + doğrular:
 - Diğer ikisinin commit/diff'ini oku, `npm run build` + `npx tsc -b` koş, deploy'u doğrula
 - Kırık/çakışma bulursa "DURUM"a yaz + insana söyle
 - TAKIM.md durumunu güncel tutar
-- Not: puan sistemi MANTIĞI artık coder'ın (Satis/types/store). Moderatör onu review eder, yazmaz.
+- Sadece TAKIM.md'yi düzenler; kod/CSS dosyalarına dokunmaz.
 
 ---
 
