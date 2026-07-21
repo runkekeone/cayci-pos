@@ -535,37 +535,52 @@ function renderSatis() {
       </div>
     </div>
     <div class="pos-main">
-      <div class="card pos-cart">
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><h2 style="margin:0;font-size:16px">Ürünler ⓘ</h2><span id="cartCount" class="sub">${cartCount()}</span></div>
-        <div class="muh-row">
-          <div class="field" style="flex:1"><label>Muhtelif Tutar</label><input id="muhInput" type="number" step="0.01" placeholder="Serbest tutar" /></div>
-          <button class="btn soft" id="muhEkle" type="button">Ekle</button>
-          <div class="field"><label>İsk. Değeri (₺)</label><input id="iskGenel" type="number" step="0.01" value="${activeCart().iskonto || ""}" placeholder="0" /></div>
-          <div class="field" style="flex:1"><label>Seçili Müşteri</label><input id="custLabel" readonly value="${cartCustName()}" placeholder="Müşteri seçilmedi" /></div>
-          ${persSel}
+      <div class="pos-sheet" id="posSheet">
+        <div class="sheet-handle" id="sheetHandle">
+          <span class="sheet-grip"></span>
+          <span class="sheet-title">Fiş / Sepet</span>
+          <button class="sheet-close" id="sheetClose" type="button">Kapat ✕</button>
         </div>
-        <div class="cust-tabs" id="custTabs">${custTabs}</div>
-        <div class="table-wrap"><table class="grid"><thead><tr><th>Sil</th><th>Ürün</th><th>İsk./Not</th><th>Miktar</th><th>Fiyat</th><th>Tutar</th><th>G.</th></tr></thead><tbody id="cartBody">${cartRowsHTML()}</tbody></table></div>
-      </div>
-      <div class="pos-side">
-        <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşteri Seç" /><button class="btn" id="custPick" type="button">Seç</button></div>
-          <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
-          <div class="quick-amts">${quick}</div>
-          <div class="pay-grid">
-            <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
-            <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
-            <button class="pay-btn acik" data-pay="acik" type="button">📖 (F10)<small>AÇIK HESAP</small></button>
-            <button class="pay-btn parcali" data-pay="parcali" type="button">⇄<small>PARÇALI</small></button>
+        <div class="sheet-body">
+          <div class="card pos-cart">
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><h2 style="margin:0;font-size:16px">Fiş / Sepet ⓘ</h2><span id="cartCount" class="sub">${cartCount()}</span></div>
+            <div class="muh-row">
+              <div class="field" style="flex:1"><label>Muhtelif Tutar</label><input id="muhInput" type="number" step="0.01" placeholder="Serbest tutar" /></div>
+              <button class="btn soft" id="muhEkle" type="button">Ekle</button>
+              <div class="field"><label>İsk. Değeri (₺)</label><input id="iskGenel" type="number" step="0.01" value="${activeCart().iskonto || ""}" placeholder="0" /></div>
+              <div class="field" style="flex:1"><label>Seçili Müşteri</label><input id="custLabel" readonly value="${cartCustName()}" placeholder="Müşteri seçilmedi" /></div>
+              ${persSel}
+            </div>
+            <div class="cust-tabs" id="custTabs">${custTabs}</div>
+            <div class="table-wrap"><table class="grid"><thead><tr><th>Sil</th><th>Ürün</th><th>İsk./Not</th><th>Miktar</th><th>Fiyat</th><th>Tutar</th><th>G.</th></tr></thead><tbody id="cartBody">${cartRowsHTML()}</tbody></table></div>
           </div>
-          ${store.odemeTipleri.length ? `<div class="pay-custom" style="display:flex;flex-wrap:wrap;gap:6px">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
-        </div>
-        <div class="card" style="padding:12px">
-          <div class="cat-tabs" id="catTabs">${catTabs}</div>
-          <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
+          <div class="card pos-pay" style="padding:12px;display:flex;flex-direction:column;gap:10px">
+            <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşteri Seç" /><button class="btn" id="custPick" type="button">Seç</button></div>
+            <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
+            <div class="quick-amts">${quick}</div>
+            <div class="pay-grid">
+              <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
+              <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
+              <button class="pay-btn acik" data-pay="acik" type="button">📖 (F10)<small>AÇIK HESAP</small></button>
+              <button class="pay-btn parcali" data-pay="parcali" type="button">⇄<small>PARÇALI</small></button>
+            </div>
+            ${store.odemeTipleri.length ? `<div class="pay-custom" style="display:flex;flex-wrap:wrap;gap:6px">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
+          </div>
         </div>
       </div>
-    </div>`;
+      <div class="card pos-products">
+        <div class="cat-tabs" id="catTabs">${catTabs}</div>
+        <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
+      </div>
+    </div>
+    <div class="sepet-bar" id="sepetBar">
+      <button class="sb-open" id="sepetBarOpen" type="button">
+        <span class="sb-count" id="sepetBarCount">${cartCount()}</span>
+        <span class="sb-total" id="sepetBarTotal">${money.format(cartTotals().toplam)}</span>
+        <span class="sb-cta">Fişi Aç ▲</span>
+      </button>
+    </div>
+    <div class="pos-backdrop" id="posBackdrop"></div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
 function cartRowsHTML() {
@@ -595,6 +610,8 @@ function syncTotals() {
   const t = cartTotals(); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
   set("posTutar", num2.format(t.toplam)); set("posOdenen", num2.format(t.odenen)); set("posUstu", num2.format(t.ustu));
   const cc = document.getElementById("cartCount"); if (cc) cc.textContent = cartCount();
+  const sbc = document.getElementById("sepetBarCount"); if (sbc) sbc.textContent = cartCount();
+  const sbt = document.getElementById("sepetBarTotal"); if (sbt) sbt.textContent = money.format(t.toplam);
   document.querySelectorAll("[data-tab]").forEach((el) => { const n = Number(el.dataset.tab); el.textContent = `Müşteri ${n + 1} (${num2.format(pos.carts[n].items.reduce((s, i) => s + netLine(i), 0))})`; el.classList.toggle("on", n === pos.active); });
   const cl = document.getElementById("custLabel"); if (cl) cl.value = cartCustName();
   const cs = document.getElementById("custSearch"); if (cs) cs.value = cartCustName();
@@ -655,8 +672,15 @@ function mountSatis() {
   wireProdCards(); wireCartRow();
   document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
   document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x === el)); const g = document.getElementById("prodGrid"); g.innerHTML = prodGridHTML(); wireProdCards(); }));
-  document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
-  document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
+  /* --- Mobil alt-panel (bottom sheet) aç/kapa --- */
+  const closeSheet = () => document.body.classList.remove("sheet-open");
+  const openSheet = () => document.body.classList.add("sheet-open");
+  const sbOpen = document.getElementById("sepetBarOpen"); if (sbOpen) sbOpen.addEventListener("click", openSheet);
+  const shClose = document.getElementById("sheetClose"); if (shClose) shClose.addEventListener("click", closeSheet);
+  const shHandle = document.getElementById("sheetHandle"); if (shHandle) shHandle.addEventListener("click", (e) => { if (e.target === shHandle || e.target.classList.contains("sheet-grip") || e.target.classList.contains("sheet-title")) closeSheet(); });
+  const bd = document.getElementById("posBackdrop"); if (bd) bd.addEventListener("click", closeSheet);
+  document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => { finalizeSale(el.dataset.pay); if (!activeCart().items.length) closeSheet(); }));
+  document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => { finalizeCustom(el.dataset.paycustom); if (!activeCart().items.length) closeSheet(); }));
   document.querySelectorAll("[data-quick]").forEach((el) => el.addEventListener("click", () => { const v = el.dataset.quick, c = activeCart(); if (v[0] === "+" || v[0] === "-") c.odenen = Math.max(0, (Number(c.odenen) || 0) + Number(v)); else c.odenen = (Number(c.odenen) || 0) + Number(v); syncTotals(); }));
   const isk = document.getElementById("iskGenel"); if (isk) isk.addEventListener("input", () => { activeCart().iskonto = Number(isk.value) || 0; syncTotals(); });
   const muhBtn = document.getElementById("muhEkle"), muhIn = document.getElementById("muhInput");
@@ -1539,6 +1563,8 @@ function render() {
   try { updateBell(); } catch (e) { console.error(e); }
   try { mobilTabloEtiketle(); mobilBarAktif(route); } catch (e) { console.error(e); }
   document.body.classList.remove("nav-open");
+  document.body.classList.remove("sheet-open");
+  document.body.classList.toggle("pos-active", route === "satis");
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", render);

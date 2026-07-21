@@ -343,6 +343,14 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .prod-card .p-name { font-size: 12px; font-weight: 600; color: #444c56; display: block; min-height: 30px; overflow: hidden; }
 .prod-card .p-price { color: var(--green-d); font-weight: 700; margin-top: 6px; display: block; }
 
+/* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
+.pos-sheet { display: flex; flex-direction: column; }
+.sheet-body { display: flex; flex-direction: column; }
+.sheet-body .card:last-child { margin-bottom: 0; }
+.pos-products { align-self: start; }
+/* Alt özet çubuğu, örtü ve panel başlığı — sadece mobilde görünür */
+.sheet-handle, .sepet-bar, .pos-backdrop { display: none; }
+
 /* Profil ekranı iki kolon */
 .profile-grid { display: grid; grid-template-columns: 250px 1fr; gap: 16px; }
 .profile-tabs { list-style: none; margin: 0; padding: 0; }
@@ -568,21 +576,90 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   /* Üst bar dropdown öğeleri */
   .dropdown a { padding: 13px 18px; min-height: 46px; }
 
-  /* --- POS / Satış: tek akış, geniş düğmeler --- */
-  .pos-topbar, .pos-main { grid-template-columns: 1fr; gap: 12px; }
+  /* --- POS / Satış: çay ocağı deseni — ürünler üstte, fiş alttan açılır panel --- */
+  .pos-topbar { grid-template-columns: 1fr; gap: 10px; }
   .pos-search { padding: 8px; }
   .pos-search .bar-input { min-width: 0; }
   .pos-totals { grid-template-columns: repeat(3, 1fr); }
   .pos-tot .v { font-size: 20px; }
+
+  /* pos-main: tek kolon akış; ÜRÜNLER en üstte, erişilebilir */
+  .pos-main { display: flex; flex-direction: column; gap: 12px; }
+  .pos-products { order: -1; margin-bottom: 0; }
   .prod-grid { grid-template-columns: repeat(3, 1fr); max-height: none; }
-  .prod-card { padding: 14px 8px; }
-  .pay-grid { grid-template-columns: 1fr 1fr; }
-  .pay-btn { padding: 18px 8px; font-size: 15px; }
-  .quick-amts { grid-template-columns: repeat(3, 1fr); }
-  .quick-amts button { padding: 12px 0; }
-  .cust-tab { padding: 10px 14px; font-size: 13px; }
-  .cat-tab { padding: 8px 4px; font-size: 14px; }
+  .prod-card { padding: 14px 8px; min-height: 44px; }
+  .cat-tab { padding: 8px 4px; font-size: 14px; min-height: 40px; display: inline-flex; align-items: center; }
   .cat-tab.on { padding: 8px 12px; }
+
+  /* FİŞ + ÖDEME = alttan yukarı açılan sabit panel (bottom sheet) */
+  .pos-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 75;
+    background: var(--bg, #f4f6fa);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(15, 20, 30, 0.28);
+    max-height: 85vh;
+    transform: translateY(105%);
+    transition: transform 0.28s ease;
+    overflow: hidden;
+  }
+  body.sheet-open .pos-sheet { transform: translateY(0); }
+  .sheet-handle {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    background: #fff; flex: 0 0 auto; cursor: pointer;
+  }
+  .sheet-grip { width: 40px; height: 5px; border-radius: 3px; background: #cdd4de; }
+  .sheet-title { font-weight: 700; font-size: 15px; }
+  .sheet-close {
+    margin-left: auto; border: 0; background: #eef1f6; color: #5a6470;
+    border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 14px;
+    min-height: 44px; cursor: pointer;
+  }
+  /* panel içi kendi içinde kaydırılır — sayfayı uzatmaz */
+  .sheet-body {
+    flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+    max-height: calc(85vh - 58px);
+  }
+  .pos-sheet .card { margin: 0 0 12px; border-radius: 14px; }
+  .pos-sheet .card:last-child { margin-bottom: 0; }
+  .pay-grid { grid-template-columns: 1fr 1fr; }
+  .pay-btn { padding: 18px 8px; font-size: 15px; min-height: 44px; }
+  .quick-amts { grid-template-columns: repeat(3, 1fr); }
+  .quick-amts button { padding: 12px 0; min-height: 44px; }
+  .cust-tab { padding: 10px 14px; font-size: 13px; min-height: 40px; }
+
+  /* Örtü — panel açıkken arka planı karart, tıklayınca kapat */
+  .pos-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 74;
+    background: rgba(15, 20, 30, 0.45);
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.28s ease, visibility 0.28s ease;
+  }
+  body.sheet-open .pos-backdrop { opacity: 1; visibility: visible; }
+  body.sheet-open { overflow: hidden; }
+
+  /* Alt özet çubuğu — her zaman görünür: adet + toplam + Fişi Aç (mobilbar üstünde) */
+  .sepet-bar {
+    display: block; position: fixed; left: 0; right: 0; z-index: 72;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    padding: 0 12px;
+  }
+  .sb-open {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    background: var(--brand); color: #fff; border: 0; border-radius: 14px;
+    padding: 12px 16px; min-height: 56px; cursor: pointer; font-weight: 700;
+    box-shadow: 0 10px 26px rgba(249, 115, 22, 0.42);
+  }
+  .sb-open:active { transform: scale(0.99); }
+  .sb-count { font-size: 13px; opacity: 0.95; font-weight: 600; }
+  .sb-total { font-size: 20px; margin-left: auto; }
+  .sb-cta { font-size: 13px; background: rgba(255, 255, 255, 0.22); padding: 7px 11px; border-radius: 10px; white-space: nowrap; }
+  /* panel açıkken alt özet çubuğunu gizle */
+  body.sheet-open .sepet-bar { opacity: 0; pointer-events: none; }
+
+  /* POS sayfasında içeriğin altına özet çubuğu + mobilbar kadar boşluk bırak */
+  body.pos-active .content { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 
   /* --- tablo araç çubuğu --- */
   .table-tools .len { display: none; }
