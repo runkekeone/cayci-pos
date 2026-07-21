@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>babu.co — İşletme Paneli</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <!-- Sidebar (JS doldurur) -->
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="b-badge">b</span>
+          <span class="b-name">babu.co</span>
+        </div>
+        <ul class="menu" id="menu"></ul>
+      </aside>
+
+      <!-- Ana alan -->
+      <div class="mainarea">
+        <header class="topbar">
+          <button class="hamburger" id="hamburger" type="button" aria-label="Menü">&#9776;</button>
+          <div class="searchbox">
+            <input type="text" placeholder="Merak ettiklerini ara..." />
+            <button type="button" aria-label="Ara">&#128269;</button>
+          </div>
+          <div class="topbar-right">
+            <a class="t-link" title="Davet Et">&#10148; Davet Et,Kazan!</a>
+            <span class="t-firma">ÖZGÜR TİCARET @ U225211984</span>
+            <div class="user-menu">
+              <button class="t-ico bell" id="bellBtn" type="button" title="Bildirimler">&#128276;<span class="bell-badge" id="bellBadge"></span></button>
+              <div class="dropdown" id="bellDropdown"></div>
+            </div>
+            <span class="t-ico" title="Mobil">&#128241;</span>
+            <div class="user-menu">
+              <button class="user-btn" id="userBtn" type="button">ANA HESAP &#9662;</button>
+              <div class="dropdown" id="userDropdown">
+                <a data-route="profilim">&#9881; Profilim</a>
+                <a>&#128421; Masaüstü Cihazlarım</a>
+                <a>&#128196; Fiş Şablonu Tasarım Aracı</a>
+                <a>&#8646; Hareketler</a>
+                <a>&#128179; Lisans Satın Al</a>
+                <a>&#128274; E-posta / Parola Değiştir</a>
+                <a>&#9211; Çıkış Yap</a>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main class="content" id="content"><!-- JS render eder --></main>
+      </div>
+    </div>
+
+    <script src="vendor/supabase.js"></script>
+    <script src="seed.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
