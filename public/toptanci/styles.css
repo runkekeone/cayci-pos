@@ -826,6 +826,11 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .filters { gap: 12px; }
   .field { min-width: 0; }
   .filters > .field { flex: 1 1 100%; }
+  /* rapor tarih çubuğu: iki tarih yanyana, Listele altta tam genişlik */
+  .filters.rapor-filtre { gap: 10px; }
+  .filters.rapor-filtre > .field { flex: 1 1 calc(50% - 5px); min-width: 0; }
+  .filters.rapor-filtre > .field-listele { flex: 1 1 100%; }
+  .filters.rapor-filtre .btn { width: 100%; min-height: 46px; }
   .form-grid { gap: 12px; }
   /* Menü öğeleri — dokunma için ferah */
   .menu-item > a { padding: 14px 16px; min-height: 48px; }
@@ -1043,6 +1048,8 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 }
 
 /* ===== Anasayfa — Son Satışlar kompakt liste ===== */
+.rapor-satis-bas { font-size: 16px; margin: 18px 0 10px; }
+.field-listele { justify-content: flex-end; }
 .sl-list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); overflow: hidden; }
 .sl-empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
 .sl-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); min-width: 0; }

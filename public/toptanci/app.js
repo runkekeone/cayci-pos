@@ -848,10 +848,10 @@ function mountAnasayfa() {
 const reportFilters = {};
 function reportDateBar(route, def) {
   const f = reportFilters[route] || def;
-  return `<div class="card"><div class="filters">
+  return `<div class="card"><div class="filters rapor-filtre">
     <div class="field"><label>Başlangıç Tarihi</label><input type="date" id="rFrom" value="${f.from}" /></div>
     <div class="field"><label>Bitiş Tarihi</label><input type="date" id="rTo" value="${f.to}" /></div>
-    <div class="field"><label>&nbsp;</label><button class="btn" id="rListe" type="button">☰ Listele</button></div>
+    <div class="field field-listele"><button class="btn" id="rListe" type="button">☰ Listele</button></div>
   </div></div>`;
 }
 function mountReport(route) {
@@ -859,6 +859,7 @@ function mountReport(route) {
   if (b) b.addEventListener("click", () => { reportFilters[route] = { from: document.getElementById("rFrom").value, to: document.getElementById("rTo").value }; render(); });
   wireTableSearch();
   wireSaleLinks();
+  document.querySelectorAll("[data-saleview]").forEach((b) => b.addEventListener("click", () => openSaleView(b.dataset.saleview)));
   const pr = document.querySelector('[data-act="rprint"]'); if (pr) pr.addEventListener("click", () => window.print());
 }
 function salesInRange(route, def) { const f = reportFilters[route] || def; return store.sales.filter((s) => inRange(s.tarih, f.from, f.to)); }
@@ -873,9 +874,8 @@ function renderRaporGunluk() {
   const tahsilat = store.payments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const firmaOde = store.firmaPayments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
-  const rows = sales.map((s) => { const c = s.musteriId && findCustomer(s.musteriId); const per = s.personelId && store.personeller.find((p) => p.id === s.personelId); return `<tr><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${c ? esc(c.ad) : "-"}</td><td>${s.items.reduce((a, i) => a + i.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.iskonto || 0)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td><td>${per ? esc(per.ad) : "-"}</td><td>${esc(s.not || "")}</td><td><button class="btn soft" data-sale="${s.id}">👁</button></td></tr>`; }).join("");
   return pageHead("Günlük Rapor", null, [{ label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
-    tableCard(["Satış Kodu", "Müşteri", "Toplam Ürün", "Toplam Tutar", "İskonto", "Ödeme Tipi", "Tarih", "Personel", "Satış Notu", "Detay"], rows, infoLine(sales.length)) +
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + sonSatisListesi(sales) +
     grid([["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"]]) +
     `<div style="height:14px"></div>` +
     grid([["Alınan Ödemeler", money.format(tahsilat)], ["Firma Ödemeleri", money.format(firmaOde)], ["Giderler", money.format(gider)], ["Gelirler", money.format(gelir)]]) +
@@ -885,9 +885,8 @@ function renderRaporGunluk() {
 function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
   const sales = salesInRange(route, def);
-  const rows = sales.map((s) => { const c = s.musteriId && findCustomer(s.musteriId); const per = s.personelId && store.personeller.find((p) => p.id === s.personelId); return `<tr><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${c ? esc(c.ad) : "-"}</td><td>${s.items.reduce((a, i) => a + i.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.iskonto || 0)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td><td>${per ? esc(per.ad) : "-"}</td></tr>`; }).join("");
   return pageHead("Tarihsel Rapor") + reportDateBar(route, def) +
-    tableCard(["Satış Kodu", "Müşteri", "Toplam Ürün", "Toplam Tutar", "İskonto", "Ödeme Tipi", "Tarih", "Personel"], rows, infoLine(sales.length));
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + sonSatisListesi(sales);
 }
 function renderRaporUrunsel() {
   const route = "rapor-urunsel", def = { from: monthStartStr(), to: todayStr() };
