@@ -1,15 +1,32 @@
 :root {
-  --bg: #f6f5f3;
+  --bg: #f4f1ec;
   --panel: #ffffff;
-  --line: #e6e3de;
-  --ink: #1c1a17;
-  --muted: #736c62;
+  --line: #e9e5df;
+  --line-soft: #f0ece5;
+  --ink: #191712;
+  --muted: #78716a;
   --accent: #f97316;
+  --accent-strong: #ea580c;
+  --accent-deep: #c2410c;
   --accent-soft: #ffedd5;
-  --good: #16a34a;
-  --bad: #b03030;
-  --radius: 12px;
-  --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 6px 20px rgba(28, 26, 23, 0.05);
+  --accent-tint: #fff7ed;
+  --accent-grad: linear-gradient(135deg, #fb923c 0%, #f97316 45%, #ea580c 100%);
+  --good: #15803d;
+  --good-soft: #e7f4ec;
+  --bad: #b91c1c;
+  --bad-soft: #fbeaea;
+
+  /* köşe skalası */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+
+  /* katmanlı yumuşak gölge skalası — derinlik border yerine gölgeyle */
+  --shadow-sm: 0 1px 2px rgba(25, 23, 18, 0.05), 0 1px 3px rgba(25, 23, 18, 0.04);
+  --shadow: 0 1px 2px rgba(25, 23, 18, 0.04), 0 10px 26px -8px rgba(25, 23, 18, 0.12);
+  --shadow-lg: 0 2px 6px rgba(25, 23, 18, 0.06), 0 22px 48px -14px rgba(25, 23, 18, 0.2);
+  --shadow-accent: 0 6px 18px -4px rgba(249, 115, 22, 0.45);
+
   --font-govde: 'Inter', ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-baslik: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
   font-family: var(--font-govde);
@@ -24,7 +41,10 @@
 
 body {
   margin: 0;
+  /* hafif sıcak, çok yumuşak dikey degrade — düz renkten daha canlı zemin */
   background: var(--bg);
+  background-image: linear-gradient(180deg, #f7f4ef 0%, var(--bg) 42%);
+  background-attachment: fixed;
   -webkit-tap-highlight-color: transparent;
   /* Sayfa asla yana kaymaz. Geniş içerik (tablolar) kendi kutusunda kayar. */
   overflow-x: hidden;
@@ -32,6 +52,7 @@ body {
   /* gövde metni ince: okunurluğu artırmak için başlıklarla kontrast */
   font-weight: 400;
   letter-spacing: -0.005em;
+  line-height: 1.5;
 }
 
 /* Tüm başlıklar Sora + kalın; gövdeyle net kontrast */
@@ -45,9 +66,15 @@ h3,
 
 h1 {
   font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
-h2,
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
 .section-title {
   font-weight: 700;
 }
@@ -69,18 +96,20 @@ a:focus-visible,
 input,
 select {
   font: inherit;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: #fff;
   color: var(--ink);
   min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 input:focus,
 select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 /* ---- iskelet ---- */
@@ -90,24 +119,25 @@ select:focus {
 }
 
 .side {
-  width: 220px;
+  width: 222px;
   flex: none;
   background: var(--panel);
-  border-right: 1px solid var(--line);
-  padding: 16px 12px;
+  border-right: 1px solid var(--line-soft);
+  padding: 18px 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   position: sticky;
   top: 0;
   height: 100vh;
+  box-shadow: 1px 0 0 var(--line-soft);
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 18px;
-  padding: 8px 10px 16px;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  font-size: 19px;
+  padding: 8px 10px 18px;
+  letter-spacing: -0.03em;
 }
 
 .brand small {
@@ -133,13 +163,14 @@ select:focus {
 }
 
 .nav:hover {
-  background: var(--bg);
+  background: var(--accent-tint);
 }
 
 .nav.on {
   background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--accent-deep);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* grup: wrapper düzenden çıkar, çocuklar doğrudan .side'ın flex öğesi olur */
@@ -165,29 +196,35 @@ select:focus {
 
 .main {
   flex: 1;
-  padding: 24px 28px 60px;
+  padding: 28px 32px 64px;
   min-width: 0;
 }
 
 h1 {
-  font-size: 22px;
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
+  font-size: 25px;
+  line-height: 1.15;
+  margin: 0 0 5px;
+  letter-spacing: -0.03em;
 }
 
 .sub {
   color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 20px;
+  font-size: 13.5px;
+  font-weight: 450;
+  margin-bottom: 22px;
 }
 
 /* ---- kart / panel ---- */
 .card {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 20px;
   box-shadow: var(--shadow);
+}
+
+.card + .card {
+  margin-top: 16px;
 }
 
 .row {
@@ -200,7 +237,7 @@ h1 {
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 360px;
-  gap: 16px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -343,27 +380,30 @@ h1 {
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .stat {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .stat .k {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
-  margin-bottom: 6px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  margin-bottom: 7px;
 }
 
 .stat .v {
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -387,10 +427,10 @@ h1 {
   align-items: center;
   gap: 12px;
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  padding: 14px 16px;
-  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .rbox-ic {
@@ -464,15 +504,21 @@ h1 {
 
 .tile {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  padding: 14px 10px;
+  padding: 16px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.tile:hover {
+  border-color: var(--accent-soft);
   box-shadow: var(--shadow);
-  transition: transform 0.06s ease;
+  transform: translateY(-1px);
 }
 
 .tile:active {
@@ -480,7 +526,7 @@ h1 {
 }
 
 .tile .ic {
-  font-size: 26px;
+  font-size: 27px;
   line-height: 1;
 }
 
@@ -492,8 +538,9 @@ h1 {
 
 .tile .pr {
   font-size: 13px;
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .tile .st {
@@ -518,8 +565,8 @@ h1 {
 
 .table-btn {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
   padding: 9px 6px 8px;
   min-height: 62px;
   display: flex;
@@ -528,14 +575,16 @@ h1 {
   justify-content: center;
   gap: 1px;
   text-align: center;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
   transition:
-    transform 0.06s ease,
-    border-color 0.12s ease;
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .table-btn:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow);
 }
 
 .table-btn:active {
@@ -550,7 +599,7 @@ h1 {
 
 .table-btn.busy {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  background: linear-gradient(160deg, #fff3e6 0%, var(--accent-soft) 100%);
 }
 
 .table-btn.busy .t-ic {
@@ -673,15 +722,15 @@ h1 {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 2px solid var(--ink);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .total .v {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -702,8 +751,14 @@ h1 {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 9px 16px;
-  margin-bottom: 10px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ara-kutu:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .ara-kutu input {
   flex: 1;
@@ -744,10 +799,11 @@ h1 {
   min-height: 64px;
   padding: 10px 6px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius);
   color: #fff;
   cursor: pointer;
-  transition: filter 0.12s, transform 0.1s;
+  box-shadow: 0 6px 16px -6px rgba(25, 23, 18, 0.45);
+  transition: filter 0.12s, transform 0.1s, box-shadow 0.15s;
 }
 .pay b {
   font-size: 15px;
@@ -770,13 +826,13 @@ h1 {
   cursor: default;
 }
 .pay.nakit {
-  background: var(--good);
+  background: linear-gradient(135deg, #22a34e 0%, var(--good) 55%, #126a33 100%);
 }
 .pay.kart {
-  background: var(--accent);
+  background: var(--accent-grad);
 }
 .pay.veresiye {
-  background: #55504a;
+  background: linear-gradient(135deg, #6b655e 0%, #55504a 100%);
 }
 
 /* Adet kutusu — .cline dışında da (satış düzenleme modalı) düzgün görünsün */
@@ -830,7 +886,9 @@ input.qty {
 .kat.on {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-deep);
+  font-weight: 700;
+  box-shadow: 0 2px 8px -2px rgba(249, 115, 22, 0.35);
 }
 
 /* Veresiye için müşteri soruluyorsa alanı belli et */
@@ -895,26 +953,28 @@ input.qty {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 78px;
-  border: 1px solid var(--line);
+  gap: 7px;
+  min-height: 82px;
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   background: var(--panel);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink);
-  transition: border-color 0.15s ease, transform 0.1s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 .ana-islem:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 .ana-islem:active {
   transform: scale(0.96);
 }
 .ana-islem .ic {
-  font-size: 24px;
+  font-size: 25px;
 }
 
 .ana-satir {
@@ -948,15 +1008,15 @@ button.ana-satir:hover b {
   bottom: 92px;
   transform: translateX(-50%);
   z-index: 90; /* satış onayı her şeyin üstünde */
-  background: var(--good);
+  background: linear-gradient(135deg, #22a34e 0%, var(--good) 60%, #126a33 100%);
   color: #fff;
-  padding: 13px 22px;
+  padding: 14px 24px;
   border-radius: 999px;
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
   max-width: 92vw;
-  box-shadow: 0 10px 28px rgba(28, 26, 23, 0.28);
+  box-shadow: 0 14px 34px -8px rgba(21, 128, 61, 0.5);
   animation: onay-gir 0.2s ease-out;
 }
 .onay b {
@@ -976,30 +1036,45 @@ button.ana-satir:hover b {
 .btn {
   border: 1px solid var(--line);
   background: var(--panel);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
   font-weight: 600;
   color: var(--ink);
-  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .btn:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.btn:active {
+  transform: scale(0.98);
 }
 
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-grad);
+  border-color: transparent;
   color: #fff;
+  box-shadow: var(--shadow-accent);
+}
+
+.btn.primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 22px -4px rgba(249, 115, 22, 0.55);
 }
 
 .btn.ghost {
   background: transparent;
+  box-shadow: none;
 }
 
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn.sm {
@@ -1057,15 +1132,17 @@ tr:last-child td {
 }
 
 .tag.bad {
-  background: #fbeaea;
+  background: var(--bad-soft);
   color: var(--bad);
   border-color: #f0cccc;
+  font-weight: 600;
 }
 
 .tag.good {
-  background: #e9f5ee;
+  background: var(--good-soft);
   color: var(--good);
   border-color: #cfe7da;
+  font-weight: 600;
 }
 
 /* ---- modal ---- */
@@ -1084,18 +1161,18 @@ tr:last-child td {
 
 .modal {
   background: var(--panel);
-  border-radius: 14px;
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: 22px;
   width: 100%;
   max-width: 560px;
   max-height: 88vh;
   overflow: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 24px 70px -12px rgba(0, 0, 0, 0.32);
 }
 
 .modal h2 {
   margin: 0 0 16px;
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .field {
@@ -1159,10 +1236,10 @@ tr:last-child td {
     justify-content: space-between;
     gap: 2px;
     overflow: visible;
-    padding: 5px 4px calc(5px + env(safe-area-inset-bottom));
+    padding: 7px 6px calc(7px + env(safe-area-inset-bottom));
     border-right: 0;
-    border-top: 1px solid var(--line);
-    box-shadow: 0 -4px 20px rgba(28, 26, 23, 0.07);
+    border-top: 1px solid var(--line-soft);
+    box-shadow: 0 -6px 24px rgba(25, 23, 18, 0.1);
   }
 
   .brand {
@@ -1176,24 +1253,46 @@ tr:last-child td {
   }
 
   .side .nav {
+    position: relative;
     width: auto;
     flex: 1 1 0;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    padding: 6px 2px;
+    gap: 3px;
+    padding: 7px 2px;
     min-width: 0;
-    min-height: 48px;
+    min-height: 52px;
     white-space: nowrap;
     font-size: 10px;
     font-weight: 600;
-    border-radius: 10px;
+    color: var(--muted);
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease, background-color 0.15s ease;
   }
 
   .side .nav span:first-child {
-    font-size: 19px;
+    font-size: 20px;
     line-height: 1.1;
+  }
+
+  /* aktif sekme: turuncu pill + üstte kısa indikatör çubuğu */
+  .side .nav.on {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight: 700;
+    box-shadow: none;
+  }
+  .side .nav.on::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent-grad);
   }
 
   /* çubukta kısa ad kullanılır */
@@ -1495,12 +1594,12 @@ tr:last-child td {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
-    background: var(--ink);
+    padding: 11px 14px;
+    background: linear-gradient(135deg, #2a2621 0%, var(--ink) 100%);
     color: #fff;
-    border-radius: 14px;
+    border-radius: var(--radius);
     margin: 0 10px;
-    box-shadow: 0 6px 24px rgba(28, 26, 23, 0.3);
+    box-shadow: 0 10px 30px -6px rgba(25, 23, 18, 0.4);
   }
 
   .sepet-bar .sb-adet {
@@ -1519,12 +1618,13 @@ tr:last-child td {
   }
 
   .sepet-bar .sb-btn {
-    background: var(--accent);
+    background: var(--accent-grad);
     color: #fff;
     border: 0;
-    border-radius: 10px;
-    padding: 9px 16px;
+    border-radius: var(--radius-sm);
+    padding: 10px 18px;
     font-weight: 700;
+    box-shadow: var(--shadow-accent);
   }
 
   .backdrop {
