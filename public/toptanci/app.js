@@ -520,6 +520,18 @@ function renderSatis() {
   const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c}</span>`).join("");
   const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
   return `<div class="pos2">
+      <!-- 0. Satış app-bar (mavi gradyan) — BenimPOS başlığı -->
+      <div class="satis-appbar">
+        <button class="sab-back" id="sabBack" type="button" aria-label="Geri">&#9664;</button>
+        <div class="sab-title">Satış Yap</div>
+        <div class="sab-actions">
+          <button class="sab-ico" id="sabIsk" type="button" title="İskonto uygula">&#10549;</button>
+          <button class="sab-ico" id="sabAra" type="button" title="Ürün / barkod ara">&#8853;</button>
+          <button class="sab-ico" id="sabMuh" type="button" title="Muhtelif tutar ekle"><span class="sab-num">100</span></button>
+          <button class="sab-ico" id="posYazdir" type="button" title="Yazdır">&#128424;</button>
+        </div>
+      </div>
+
       <!-- 1. Özet çubuğu: Miktar | Brüt | İskonto | Tutar -->
       <div class="pos-totals" id="posTotals">
         <div class="pos-tot"><div class="l">Miktar</div><div class="v" id="posMiktar">0</div></div>
@@ -528,14 +540,11 @@ function renderSatis() {
         <div class="pos-tot brand"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
       </div>
 
-      <!-- 2. Arama satırı: barkod + fiyat seçici -->
+      <!-- 2. Arama satırı: 🔍 + barkod + fiyat seçici -->
       <div class="pos-search">
-        <div class="pos-price-sel">Fiyat 1 ▾</div>
-        <input class="bar-input" id="barInput" placeholder="Barkod okut / ürün ara..." />
-        <button class="pos-btn blue" id="barAra" type="button">🔍<small>Ara</small></button>
-        <button class="pos-btn orange" id="posYazdir" type="button">🖨<small>Yazdır</small></button>
-        <button class="pos-btn green" type="button" data-soon>▥<small>Fiyat Gör</small></button>
-        <button class="pos-btn teal" type="button" data-soon>➕<small>Ödeme Ekle</small></button>
+        <button class="bar-go" id="barAra" type="button" aria-label="Ara">&#128269;</button>
+        <input class="bar-input" id="barInput" placeholder="Ürün barkodunu okut..." />
+        <div class="pos-price-sel">Fiyat 1 &#9662;</div>
       </div>
 
       <div class="pos2-cols">
@@ -559,10 +568,20 @@ function renderSatis() {
           <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşterisiz satış (Borç/Limit)" /><button class="btn" id="custPick" type="button">＋</button></div>
           <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
 
-          <!-- 6. Satış notu -->
-          <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
+          <!-- 6. Satış notu + sürüm etiketi -->
+          <div class="pos-note-row">
+            <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
+            <span class="pos-ver">babu.co · v1</span>
+          </div>
 
-          <!-- 7. Ödeme -->
+          <!-- 7. Onay kutuları (görsel) -->
+          <div class="pos-onay">
+            <label><input type="checkbox" /> Fiyat gör</label>
+            <label><input type="checkbox" /> İade mod</label>
+            <label><input type="checkbox" /> POS komisyon</label>
+          </div>
+
+          <!-- 8. Ödeme -->
           <div class="quick-amts">${quick}</div>
           <div class="pay-grid">
             <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
@@ -582,6 +601,9 @@ function renderSatis() {
           <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
         </div>
       </div>
+
+      <!-- 10. Yüzen "Tara" butonu (barkod inputunu odaklar) -->
+      <button class="pos-tara" id="posTara" type="button" aria-label="Barkod tara" title="Tara">&#128247;<span>Tara</span></button>
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
@@ -702,6 +724,13 @@ function mountSatis() {
   if (ara) ara.addEventListener("click", doBar);
   const yz = document.getElementById("posYazdir"); if (yz) yz.addEventListener("click", () => alert("Satış tamamlanınca irsaliye yazdırılır."));
   document.querySelectorAll("[data-soon]").forEach((el) => el.addEventListener("click", () => alert("Bu özellik yakında.")));
+  /* Satış app-bar ikonları — mevcut fonksiyon/inputlara bağla */
+  const focusEl = (id) => { const el = document.getElementById(id); if (el) { el.focus(); if (el.select) try { el.select(); } catch (e) {} el.scrollIntoView({ block: "center", behavior: "smooth" }); } };
+  const sBack = document.getElementById("sabBack"); if (sBack) sBack.addEventListener("click", () => navigate("anasayfa"));
+  const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", () => focusEl("iskGenel"));
+  const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
+  const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", () => focusEl("muhInput"));
+  const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", () => focusEl("barInput"));
   syncTotals();
 }
 
