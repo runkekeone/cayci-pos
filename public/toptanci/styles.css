@@ -555,6 +555,57 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pick-list li:hover { background: #f2f7fd; }
 .pick-list li small { color: var(--muted); }
 
+/* ===== Çay Ocağı — kompakt sipariş kartları ===== */
+.cay-wrap { min-width: 0; }
+.cay-search { margin-bottom: 12px; }
+.cay-search .cay-q {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: #fff; font-size: 14px;
+}
+.cay-search .cay-q:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3px var(--brand-ring); }
+.cay-list { display: grid; gap: 10px; }
+.cay-empty { color: var(--muted); text-align: center; padding: 28px 8px; font-size: 13px; }
+.cay-card {
+  min-width: 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-soft);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.cay-top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.cay-bayi { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.cay-ad {
+  font-weight: 700; font-size: 15px; color: var(--text); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cay-tel { font-size: 12px; color: var(--muted); font-family: var(--font-num); }
+.cay-badge { flex: 0 0 auto; white-space: nowrap; align-self: flex-start; }
+.cay-mid { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.cay-tutar { font-family: var(--font-num); font-weight: 700; font-size: 18px; color: var(--value-2); }
+.cay-kalem {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--brand-soft);
+  color: var(--brand-dark); font-weight: 600; font-size: 12px; cursor: pointer;
+  padding: 3px 9px; border-radius: var(--radius-pill);
+}
+.cay-kalem:hover { filter: brightness(0.97); }
+.cay-date { margin-left: auto; font-size: 12px; color: var(--muted); font-family: var(--font-num); white-space: nowrap; }
+.cay-sub { font-size: 12px; color: var(--muted); min-width: 0; }
+.cay-act { flex-wrap: wrap; }
+
+/* ürün detay modalı */
+.cay-ulist { display: grid; gap: 2px; }
+.cay-urow {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 6px 12px;
+  align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line-soft);
+}
+.cay-uad { min-width: 0; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.cay-uqty { font-family: var(--font-num); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.cay-utut { font-family: var(--font-num); font-weight: 600; color: var(--value-2); white-space: nowrap; }
+.cay-utoplam {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--line);
+  font-weight: 700; font-family: var(--font-num); font-size: 16px; color: var(--value-2);
+}
+.cay-unot { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
 .cart-qty { display: inline-flex; align-items: center; gap: 4px; }
 .cart-qty button { width: 26px; height: 30px; border: 0; background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; font-weight: 700; padding: 0; font-size: 15px; }
 .cart-qty button.minus { background: var(--red); }

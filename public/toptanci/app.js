@@ -797,7 +797,7 @@ function renderAnasayfa() {
   const dun = localDateStr(new Date(Date.now() - 86400000));
   const dunCiro = store.sales.filter((s) => localDateStr(new Date(s.tarih)) === dun).reduce((a, s) => a + s.toplam, 0);
   const cayBekleyen = store.gelenSiparisler.filter((o) => o.durum !== "teslim").length;
-  const cayRows = store.gelenSiparisler.slice().reverse().slice(0, 8).map(caySiparisRow).join("");
+  const cayRows = store.gelenSiparisler.slice().reverse().slice(0, 8).map(caySiparisTableRow).join("");
   return pageHead("Anasayfa", "Bugünün özeti") +
     grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
     `<div style="height:14px"></div>` +
@@ -1330,7 +1330,20 @@ function cayIslemBtns(o) {
   b.push(`<button class="del" data-caydel="${o.id}">Sil</button>`);
   return b.join(" ");
 }
-function caySiparisRow(o) {
+/* Ürün detay penceresi — kartta liste yok, tıklanınca modalde açılır */
+function cayUrunModal(o) {
+  const rows = o.items.map((l) => `<div class="cay-urow">
+    <span class="cay-uad">${esc(l.ad)}</span>
+    <span class="cay-uqty">${num2.format(l.adet)} ${esc(l.birim || "")}</span>
+    <span class="cay-utut">${money.format(l.fiyat * l.adet)}</span>
+  </div>`).join("");
+  const body = `<div class="cay-ulist">${rows}</div>
+    <div class="cay-utoplam"><span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
+    ${o.not ? `<div class="cay-unot">Not: ${esc(o.not)}</div>` : ""}`;
+  openModal(`${esc(o.dealer)} — Ürünler`, body, { noFoot: true });
+}
+/* Anasayfa özet tablosu için satır (klasik <tr> — dashboard düzeni korunur) */
+function caySiparisTableRow(o) {
   const urunler = o.items.map((l) => `${num2.format(l.adet)} ${esc(l.birim)} ${esc(l.ad)}`).join(", ");
   const a = cayAsama(o.durum);
   const tesl = o.teslimTarih ? `<br><span class="sub">Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</span>` : "";
@@ -1343,13 +1356,38 @@ function caySiparisRow(o) {
     <td><div class="act-btns">${cayIslemBtns(o)}</div></td>
   </tr>`;
 }
+function caySiparisRow(o) {
+  const a = cayAsama(o.durum);
+  const kalem = o.items.length;
+  const search = esc([o.dealer, o.dealerTel, o.items.map((l) => l.ad).join(" ")].join(" ").toLowerCase());
+  const tesl = o.teslimTarih ? `<div class="cay-sub">🚚 Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</div>` : "";
+  return `<div class="cay-card" data-search="${search}">
+    <div class="cay-top">
+      <div class="cay-bayi">
+        <span class="cay-ad">${esc(o.dealer)}</span>
+        ${o.dealerTel ? `<span class="cay-tel">${esc(o.dealerTel)}</span>` : ""}
+      </div>
+      <span class="cay-badge ${a.badge}">${esc(a.ad)}</span>
+    </div>
+    <div class="cay-mid">
+      <span class="cay-tutar">${money.format(o.toplam)}</span>
+      <button class="cay-kalem" type="button" data-caydetay="${o.id}">${kalem} kalem ›</button>
+      <span class="cay-date">${fmtDate(o.alindi)}</span>
+    </div>
+    ${tesl}
+    <div class="cay-act act-btns">${cayIslemBtns(o)}</div>
+  </div>`;
+}
 function renderCayOcagi() {
-  const rows = store.gelenSiparisler.slice().reverse().map(caySiparisRow).join("");
+  const cards = store.gelenSiparisler.slice().reverse().map(caySiparisRow).join("");
   const yeni = store.gelenSiparisler.filter((o) => o.durum === "yeni").length;
   return pageHead("Çay Ocağı Siparişleri", (store.gelenSiparisler.length + " sipariş") + (yeni ? ` · ${yeni} yeni` : ""), [
     { label: "📥 Kod Yapıştır", act: "cayKod" },
     { label: "📂 Dosyadan Al", cls: "soft", act: "cayDosya" },
-  ]) + tableCard(["Bayi", "Ürünler", "Tutar", "Aşama", "Alındı", "İşlem"], rows, infoLine(store.gelenSiparisler.length));
+  ]) + `<div class="cay-wrap">
+    <div class="cay-search"><input type="text" class="cay-q" placeholder="Bayi, telefon veya ürün ara…" /></div>
+    <div class="cay-list">${cards || '<div class="cay-empty">Henüz sipariş yok.</div>'}</div>
+  </div>`;
 }
 function wireCayOcagi() {
   document.querySelectorAll("[data-onayla]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.onayla); if (o) cayOnayla(o); }));
@@ -1359,6 +1397,16 @@ function wireCayOcagi() {
   document.querySelectorAll("[data-teklif]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.teklif); if (o) cayDoc(o, "Teklif"); }));
   document.querySelectorAll("[data-fis]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.fis); if (o) cayDoc(o, "Fiş"); }));
   document.querySelectorAll("[data-caydel]").forEach((b) => b.addEventListener("click", () => { if (confirm("Sipariş silinsin mi?")) { store.gelenSiparisler = store.gelenSiparisler.filter((x) => x.id !== b.dataset.caydel); saveStore(); render(); } }));
+  document.querySelectorAll("[data-caydetay]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.caydetay); if (o) cayUrunModal(o); }));
+}
+/* çay ocağı kart arama — data-search üzerinden filtre */
+function wireCaySearch() {
+  const inp = document.querySelector(".cay-q");
+  if (!inp) return;
+  inp.addEventListener("input", () => {
+    const q = inp.value.trim().toLowerCase();
+    document.querySelectorAll(".cay-card").forEach((c) => { c.style.display = (c.dataset.search || "").includes(q) ? "" : "none"; });
+  });
 }
 function mountCayOcagi() {
   const k = document.querySelector('[data-act="cayKod"]');
@@ -1366,7 +1414,7 @@ function mountCayOcagi() {
   const d = document.querySelector('[data-act="cayDosya"]');
   if (d) d.addEventListener("click", () => openFileImport(".txt,.caysip,text/plain", caySiparisAl));
   wireCayOcagi();
-  wireTableSearch();
+  wireCaySearch();
 }
 
 /* ============ Sayfa tablosu ============ */
