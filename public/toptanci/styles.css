@@ -426,41 +426,41 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .ades-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-weight: 700; font-size: 15px; }
 .ades-list { display: flex; flex-direction: column; gap: 6px; }
 .ades-empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
+/* Adisyon satırı: SOL adet · ORTA ad+birim · SAĞ toplam — tıkla → düzenleme penceresi */
 .ades-row {
   position: relative; display: flex; align-items: center; gap: 10px; min-width: 0;
-  padding: 7px 26px 7px 8px;
+  padding: 9px 10px; cursor: pointer;
   background: var(--brand-soft, #f4f8fd); border: 1px solid var(--line); border-radius: 10px;
+  transition: border-color .12s ease, transform .08s ease;
 }
-/* Sol: kompakt adet stepper (N ile küçük −/+) */
-.ades-row .cart-qty { flex: 0 0 auto; gap: 3px; }
-.ades-row .cart-qty button { width: 26px; height: 28px; font-size: 15px; border-radius: 6px; }
-.ades-row .cart-qty button.minus { background: #e7eef7; color: var(--brand-dark, #1565c0); }
-.ades-row .qty-in { width: 40px; height: 28px; padding: 0 2px; font-weight: 700; font-size: 13px; }
-/* Orta: ürün adı kalın + altında barkod (sol) / fiyat-isk (sağ) */
+.ades-row:hover { border-color: var(--brand); }
+.ades-row:active { transform: scale(0.995); }
+/* Sol: adet (soluk) */
+.ades-qty { flex: 0 0 auto; font-weight: 700; font-size: 12.5px; color: var(--muted); white-space: nowrap; min-width: 30px; }
+/* Orta: ürün adı kalın + altında birim fiyat (soluk) */
 .ades-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ades-name { font-weight: 700; font-size: 13.5px; color: var(--text); line-height: 1.2; }
-.ades-name .badge { font-weight: 600; }
-.ades-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.ades-bar { font-size: 11px; color: #9aa2ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ades-edit { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-.ades-f { display: inline-flex; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); font-weight: 600; }
-/* Fiyat / İsk inputları: metin gibi soluk, odaklanınca kutu */
-.ades-f .row-in { border: 1px solid transparent; background: transparent; border-radius: 5px; padding: 1px 2px; text-align: right; font-size: 11.5px; color: var(--muted); font-weight: 600; }
-.ades-f .price-in { width: 56px; }
-.ades-f .isk-in { width: 32px; }
-.ades-f .row-in:hover { border-color: var(--line); }
-.ades-f .row-in:focus { border-color: var(--brand); background: #fff; color: var(--text); }
+.ades-name { font-weight: 700; font-size: 13.5px; color: var(--text); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ades-unit { font-size: 11px; color: #9aa2ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* Sağ: satır toplamı kalın */
 .ades-tot { flex: 0 0 auto; font-weight: 800; font-size: 14px; color: var(--value); white-space: nowrap; text-align: right; min-width: 58px; }
-/* Sil: küçük, sağ üst köşe */
-.ades-row .cart-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 12px; background: transparent; color: #b9c0ca; border-radius: 5px; }
-.ades-row .cart-del:hover { background: #fdeceb; color: var(--red); }
+/* Satır düzenleme penceresi */
+.line-modal { display: flex; flex-direction: column; gap: 14px; }
+.lm-qtyrow { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.lm-step { width: 54px; height: 54px; border-radius: 12px; font-size: 26px; font-weight: 700; border: 1px solid #d6e6f7; background: var(--brand-soft); color: var(--brand-dark); cursor: pointer; }
+.lm-step:active { transform: scale(0.95); }
+.lm-qty { width: 96px; height: 54px; text-align: center; font-size: 20px; font-weight: 800; border: 1px solid var(--line); border-radius: 12px; }
+.lm-in { width: 100%; height: 46px; font-size: 16px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; }
+.lm-tot { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; color: var(--muted); font-weight: 600; }
+.lm-tot b { color: var(--value); font-size: 18px; font-weight: 800; }
+.btn.lm-del { width: 100%; justify-content: center; background: #fdeceb; color: var(--red); border: 1px solid #f6cfcc; min-height: 46px; }
 .pos-note label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .pos-note input { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
 .pay-custom { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.pos-cart .cust-tabs { display: flex; gap: 2px; margin-bottom: 10px; flex-wrap: wrap; }
-.cust-tab { padding: 8px 14px; border: 1px solid #d6e6f7; background: var(--brand-soft); cursor: pointer; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; color: var(--brand-dark); }
+/* Müşteri sekmeleri: tek satır, sağa kaydırılabilir şerit (scrollbar gizli) */
+.cust-tabs { display: flex; flex-wrap: nowrap; gap: 6px; margin-bottom: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.cust-tabs::-webkit-scrollbar { display: none; }
+.cust-tab { flex: 0 0 auto; white-space: nowrap; padding: 8px 14px; border: 1px solid #d6e6f7; background: var(--brand-soft); cursor: pointer; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; color: var(--brand-dark); }
 .cust-tab.on { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 2px 6px rgba(30, 64, 175, 0.28); }
 .cart-row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .cart-row2 .field { min-width: 130px; }
@@ -470,18 +470,20 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .cust-select { display: flex; gap: 6px; }
 .cust-select input { flex: 1; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
 .pos-daterow { display: flex; justify-content: space-between; font-size: 12px; color: #6a7480; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
-.quick-amts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.quick-amts button { background: var(--brand-soft); color: var(--brand-dark); border: 1px solid #d6e6f7; border-radius: 8px; padding: 8px 0; cursor: pointer; font-weight: 600; }
-.pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Müşteri + not + onay tek kart */
+.pos-meta { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.pos-meta .pos-daterow { background: var(--brand-soft, #f4f8fd); }
+/* Ödeme: 4 buton tek satırda */
+.pay-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .pay-btn {
-  border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius);
-  background: #fff; color: var(--text); padding: 16px 8px; font-weight: 700;
-  cursor: pointer; text-align: center; line-height: 1.3; box-shadow: var(--shadow-soft);
+  min-width: 0; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius);
+  background: #fff; color: var(--text); padding: 14px 4px; font-weight: 700; font-size: 14px;
+  cursor: pointer; text-align: center; line-height: 1.25; box-shadow: var(--shadow-soft);
   transition: box-shadow .12s, transform .08s;
 }
 .pay-btn:hover { box-shadow: var(--shadow); }
 .pay-btn:active { transform: scale(0.98); }
-.pay-btn small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+.pay-btn small { display: block; font-size: 10px; color: var(--muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 .pay-btn.nakit { border-left-color: var(--green); color: var(--green-d); background: #f2fbf5; }
 .pay-btn.pos { border-left-color: var(--brand); color: var(--brand-dark); background: #eef6fe; }
 .pay-btn.acik { border-left-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
@@ -812,17 +814,14 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .pos2 { gap: 10px; }
   .pos2-cols { display: flex; flex-direction: column; gap: 12px; }
   .pos2-cols > * { min-width: 0; width: 100%; }
-  /* Adisyon satırı 390px'de taşmasın: kompakt stepper + inline fiyat/isk */
-  .ades-row { padding: 8px 28px 8px 8px; }
-  .ades-row .cart-qty button { width: 34px; height: 34px; font-size: 17px; }
-  .ades-row .qty-in { width: 48px; height: 34px; }
-  .ades-f .price-in { width: 72px; } .ades-f .isk-in { width: 46px; }
+  /* Adisyon satırı 390px'de taşmasın (dokunma hedefi büyük, tıkla→pencere) */
+  .ades-row { padding: 11px 10px; }
   .ades-tot { min-width: 54px; font-size: 13.5px; }
-  /* Ürün kartları mobilde 2 sütun: metin okunur, havadar, hizalı */
-  .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: none; }
-  .prod-card { min-height: 78px; padding: 13px 12px; }
-  .prod-card .p-name { font-size: 13px; }
-  .prod-card .p-price { font-size: 16px; }
+  /* Ürün kartları mobilde 4 sütun: uzun isim 2 satır clamp + ellipsis */
+  .prod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; max-height: none; }
+  .prod-card { min-height: 74px; padding: 9px 7px; gap: 6px; }
+  .prod-card .p-name { font-size: 11.5px; min-height: 28px; }
+  .prod-card .p-price { font-size: 13.5px; }
   /* Kategori pill'leri: tek satır kaydırılabilir şerit, dokunma hedefi 44px */
   .cat-tab, .cat-tab.on { padding: 10px 16px; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; }
 
@@ -858,10 +857,10 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   }
   .pos-sheet .card { margin: 0 0 12px; border-radius: 14px; }
   .pos-sheet .card:last-child { margin-bottom: 0; }
-  .pay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pay-btn { padding: 18px 8px; font-size: 15px; min-height: 44px; }
-  .quick-amts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .quick-amts button { padding: 12px 0; min-height: 44px; }
+  /* Ödeme: 4 buton 390px'de tek satırda sığsın — kompakt */
+  .pay-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .pay-btn { padding: 12px 3px; font-size: 13px; min-height: 56px; }
+  .pay-btn small { font-size: 9.5px; }
   .cust-tab { padding: 10px 14px; font-size: 13px; min-height: 40px; }
 
   /* Örtü — panel açıkken arka planı karart, tıklayınca kapat */
@@ -953,9 +952,12 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 }
 
 @media (max-width: 420px) {
-  .prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .prod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .pos-tot .v { font-size: 15px; }
-  .quick-amts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 360px) {
+  /* Çok dar ekranda ürün kartları 3 sütun */
+  .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* Duyurular */

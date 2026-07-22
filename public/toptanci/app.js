@@ -516,7 +516,6 @@ function activeCart() { return pos.carts[pos.active]; }
 function renderSatis() {
   const cats = ["ANA"].concat(allGroupNames());
   const custTabs = pos.carts.map((c, n) => `<div class="cust-tab ${n === pos.active ? "on" : ""}" data-tab="${n}">Müşteri ${n + 1} (${num2.format(c.items.reduce((s, i) => s + i.fiyat * i.adet, 0))})</div>`).join("");
-  const quick = [["20", "20"], ["50", "50"], ["100", "100"], ["200", "200"], ["+20", "+20"], ["-20", "-20"]].map((q) => `<button type="button" data-quick="${q[1]}">${q[0]}</button>`).join("");
   const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c}</span>`).join("");
   const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
   return `<div class="pos2">
@@ -553,36 +552,28 @@ function renderSatis() {
           <!-- 3. Müşteri pill sekmeleri -->
           <div class="cust-tabs" id="custTabs">${custTabs}</div>
 
-          <!-- 4. Adisyon / sepet listesi -->
+          <!-- 4. Adisyon / sepet listesi (satıra tıkla → düzenleme penceresi) -->
           <div class="card ades-wrap">
             <div class="ades-head"><span>Adisyon</span><span id="cartCount" class="sub">${cartCount()}</span></div>
             <div class="ades-list" id="cartBody">${cartRowsHTML()}</div>
-            <div class="muh-row">
-              <div class="field" style="flex:1"><label>Muhtelif Tutar</label><input id="muhInput" type="number" step="0.01" placeholder="Serbest tutar" /></div>
-              <button class="btn soft" id="muhEkle" type="button">Ekle</button>
-              <div class="field"><label>Genel İsk. (₺)</label><input id="iskGenel" type="number" step="0.01" value="${activeCart().iskonto || ""}" placeholder="0" /></div>
+          </div>
+
+          <!-- 5. Müşteri + tarih + satış notu + onay kutuları — TEK kart -->
+          <div class="card pos-meta">
+            <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşterisiz satış (Borç/Limit)" /><button class="btn" id="custPick" type="button">＋</button></div>
+            <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
+            <div class="pos-note-row">
+              <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
+              <span class="pos-ver">babu.co · v1</span>
+            </div>
+            <div class="pos-onay">
+              <label><input type="checkbox" /> Fiyat gör</label>
+              <label><input type="checkbox" /> İade mod</label>
+              <label><input type="checkbox" /> POS komisyon</label>
             </div>
           </div>
 
-          <!-- 5. Müşterisiz satış (Borç/Limit) + müşteri ekle -->
-          <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşterisiz satış (Borç/Limit)" /><button class="btn" id="custPick" type="button">＋</button></div>
-          <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
-
-          <!-- 6. Satış notu + sürüm etiketi -->
-          <div class="pos-note-row">
-            <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
-            <span class="pos-ver">babu.co · v1</span>
-          </div>
-
-          <!-- 7. Onay kutuları (görsel) -->
-          <div class="pos-onay">
-            <label><input type="checkbox" /> Fiyat gör</label>
-            <label><input type="checkbox" /> İade mod</label>
-            <label><input type="checkbox" /> POS komisyon</label>
-          </div>
-
-          <!-- 8. Ödeme -->
-          <div class="quick-amts">${quick}</div>
+          <!-- 6. Ödeme (tek satır 4 buton) -->
           <div class="pay-grid">
             <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
             <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
@@ -610,25 +601,17 @@ function cartCustName() { const id = activeCart().musteriId; const c = id && fin
 function cartRowsHTML() {
   const items = activeCart().items;
   if (!items.length) return `<div class="ades-empty">Sepet boş — üründen ekleyin.</div>`;
-  return items.map((it, idx) => `<div class="ades-row">
-    <div class="cart-qty">
-      <button class="minus" data-dec="${idx}" type="button">−</button>
-      <input class="row-in qty-in" data-qty="${idx}" type="number" step="0.01" value="${it.adet}" />
-      <button class="plus" data-inc="${idx}" type="button">+</button>
-    </div>
+  return items.map((it, idx) => {
+    const isk = Number(it.iskyuzde) || 0;
+    return `<div class="ades-row" data-line="${idx}" role="button" tabindex="0">
+    <div class="ades-qty">${num2.format(Number(it.adet) || 0)} ×</div>
     <div class="ades-mid">
-      <div class="ades-name">${esc(it.ad)} <span class="badge">%${Number(it.kdv) || 0}</span></div>
-      <div class="ades-sub">
-        <span class="ades-bar">${esc(it.barkod || "")}</span>
-        <span class="ades-edit">
-          <label class="ades-f">₺<input class="row-in price-in" data-price="${idx}" type="number" step="0.01" value="${it.fiyat}" title="Birim fiyat" /></label>
-          <label class="ades-f isk">%<input class="row-in isk-in" data-isk="${idx}" type="number" step="0.01" value="${it.iskyuzde || ""}" placeholder="0" title="İskonto %" /></label>
-        </span>
-      </div>
+      <div class="ades-name">${esc(it.ad)}</div>
+      <div class="ades-unit">${money.format(Number(it.fiyat) || 0)}${isk ? ` · %${num2.format(isk)} isk` : ""}</div>
     </div>
     <div class="ades-tot" data-tut="${idx}">${money.format(netLine(it))}</div>
-    <button class="cart-del" data-rem="${idx}" type="button" title="Sil">✕</button>
-  </div>`).join("");
+  </div>`;
+  }).join("");
 }
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
@@ -655,13 +638,41 @@ function syncTotals() {
 function syncRow(idx) { const it = activeCart().items[idx]; if (!it) return; const cell = document.querySelector(`[data-tut="${idx}"]`); if (cell) cell.textContent = money.format(netLine(it)); syncTotals(); }
 function refreshPOS() { rebuildCart(); syncTotals(); }
 function wireCartRow() {
+  document.querySelectorAll(".ades-row[data-line]").forEach((row) => {
+    const open = () => openLineModal(Number(row.dataset.line));
+    row.onclick = open;
+    row.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+  });
+}
+/* Adisyon satırına tıklanınca açılan düzenleme penceresi — mevcut data-inc/dec/qty/price/isk/rem hook'larını modal içinde çalıştırır */
+function openLineModal(idx) {
+  const it = activeCart().items[idx];
+  if (!it) return;
+  const body = `<div class="line-modal">
+      <div class="lm-qtyrow">
+        <button class="lm-step" data-dec="${idx}" type="button" aria-label="Azalt">−</button>
+        <input class="lm-qty" data-qty="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.adet}" />
+        <button class="lm-step" data-inc="${idx}" type="button" aria-label="Arttır">+</button>
+      </div>
+      <div class="field"><label>Birim Fiyat (₺)</label><input class="lm-in" data-price="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.fiyat}" /></div>
+      <div class="field"><label>İskonto (%)</label><input class="lm-in" data-isk="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.iskyuzde || ""}" placeholder="0" /></div>
+      <div class="lm-tot">Satır Toplamı <b data-tut="${idx}">${money.format(netLine(it))}</b></div>
+      <button class="btn lm-del" data-rem="${idx}" type="button">🗑 Ürünü Sil</button>
+    </div>`;
+  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => wireLineModal(ov, idx, () => m.close()) });
+}
+function wireLineModal(ov, idx, close) {
   const c = activeCart();
-  document.querySelectorAll("[data-rem]").forEach((b) => b.onclick = () => { c.items.splice(Number(b.dataset.rem), 1); refreshPOS(); });
-  document.querySelectorAll("[data-inc]").forEach((b) => b.onclick = () => { const it = c.items[Number(b.dataset.inc)]; it.adet = (Number(it.adet) || 0) + 1; refreshPOS(); });
-  document.querySelectorAll("[data-dec]").forEach((b) => b.onclick = () => { const it = c.items[Number(b.dataset.dec)]; it.adet = (Number(it.adet) || 0) - 1; if (it.adet <= 0) c.items.splice(Number(b.dataset.dec), 1); refreshPOS(); });
-  document.querySelectorAll("[data-qty]").forEach((el) => el.oninput = () => { c.items[Number(el.dataset.qty)].adet = el.value === "" ? 0 : Number(el.value); syncRow(Number(el.dataset.qty)); });
-  document.querySelectorAll("[data-price]").forEach((el) => el.oninput = () => { c.items[Number(el.dataset.price)].fiyat = el.value === "" ? 0 : Number(el.value); syncRow(Number(el.dataset.price)); });
-  document.querySelectorAll("[data-isk]").forEach((el) => el.oninput = () => { c.items[Number(el.dataset.isk)].iskyuzde = el.value === "" ? 0 : Number(el.value); syncRow(Number(el.dataset.isk)); });
+  const qtyEl = ov.querySelector("[data-qty]");
+  const totEl = ov.querySelector("[data-tut]");
+  const apply = () => { rebuildCart(); syncTotals(); const it = c.items[idx]; if (it && totEl) totEl.textContent = money.format(netLine(it)); };
+  const drop = () => { c.items.splice(idx, 1); if (close) close(); rebuildCart(); syncTotals(); };
+  ov.querySelector("[data-rem]").onclick = drop;
+  ov.querySelector("[data-inc]").onclick = () => { const it = c.items[idx]; if (!it) return; it.adet = (Number(it.adet) || 0) + 1; qtyEl.value = it.adet; apply(); };
+  ov.querySelector("[data-dec]").onclick = () => { const it = c.items[idx]; if (!it) return; it.adet = (Number(it.adet) || 0) - 1; if (it.adet <= 0) { drop(); return; } qtyEl.value = it.adet; apply(); };
+  qtyEl.oninput = () => { const it = c.items[idx]; if (!it) return; it.adet = qtyEl.value === "" ? 0 : Number(qtyEl.value); apply(); };
+  ov.querySelector("[data-price]").oninput = (e) => { const it = c.items[idx]; if (!it) return; it.fiyat = e.target.value === "" ? 0 : Number(e.target.value); apply(); };
+  ov.querySelector("[data-isk]").oninput = (e) => { const it = c.items[idx]; if (!it) return; it.iskyuzde = e.target.value === "" ? 0 : Number(e.target.value); apply(); };
 }
 function addToCart(prodId) { const p = findProduct(prodId); if (!p) return; const c = activeCart(); const ex = c.items.find((i) => i.urunId === prodId); if (ex) ex.adet = (Number(ex.adet) || 0) + 1; else c.items.push({ urunId: prodId, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: Number(p.satis) || 0, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); }
 function finalizeCustom(tipId) { const tip = store.odemeTipleri.find((t) => t.id === tipId); if (!tip) return; finalizeSale(tip.kasa === "Nakit Kasa" ? "nakit" : "pos", tip.ad); }
@@ -703,6 +714,27 @@ function openCustPicker() {
     },
   });
 }
+/* Muhtelif tutar penceresi — app-bar ▣100 ikonundan açılır (mevcut #muhInput/#muhEkle mantığı) */
+function openMuhModal() {
+  openModal("Muhtelif Tutar", `<div class="field"><label>Serbest Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn ok" id="muhEkle" type="button" style="width:100%;justify-content:center;min-height:46px">Ekle</button>`, {
+    noFoot: true,
+    onMount: (ov) => {
+      const muhIn = ov.querySelector("#muhInput"), muhBtn = ov.querySelector("#muhEkle");
+      const addMuh = () => { const v = Number(muhIn.value); if (!v) { alert("Tutar girin."); return; } activeCart().items.push({ urunId: null, ad: "Muhtelif Ürün", barkod: "", kdv: 0, fiyat: v, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); ov.remove(); };
+      muhBtn.addEventListener("click", addMuh);
+      muhIn.addEventListener("keydown", (e) => { if (e.key === "Enter") addMuh(); });
+      muhIn.focus();
+    },
+  });
+}
+/* Genel iskonto penceresi — app-bar ⤵ ikonundan açılır (mevcut #iskGenel mantığı) */
+function openIskModal() {
+  openModal("Genel İskonto", `<div class="field"><label>Genel İskonto (₺)</label><input id="iskGenel" type="number" step="0.01" inputmode="decimal" value="${activeCart().iskonto || ""}" placeholder="0" /></div>`, {
+    okLabel: "Uygula",
+    onOk: (ov) => { const isk = ov.querySelector("#iskGenel"); activeCart().iskonto = Number(isk.value) || 0; syncTotals(); },
+    onMount: (ov) => { const i = ov.querySelector("#iskGenel"); if (i) { i.focus(); try { i.select(); } catch (e) {} } },
+  });
+}
 function mountSatis() {
   wireProdCards(); wireCartRow();
   document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
@@ -710,12 +742,6 @@ function mountSatis() {
   /* Tek-akışlı düzen: mobil bottom-sheet kaldırıldı (fiş akış içinde) */
   document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
   document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
-  document.querySelectorAll("[data-quick]").forEach((el) => el.addEventListener("click", () => { const v = el.dataset.quick, c = activeCart(); if (v[0] === "+" || v[0] === "-") c.odenen = Math.max(0, (Number(c.odenen) || 0) + Number(v)); else c.odenen = (Number(c.odenen) || 0) + Number(v); syncTotals(); }));
-  const isk = document.getElementById("iskGenel"); if (isk) isk.addEventListener("input", () => { activeCart().iskonto = Number(isk.value) || 0; syncTotals(); });
-  const muhBtn = document.getElementById("muhEkle"), muhIn = document.getElementById("muhInput");
-  const addMuh = () => { const v = Number(muhIn.value); if (!v) { alert("Tutar girin."); return; } activeCart().items.push({ urunId: null, ad: "Muhtelif Ürün", barkod: "", kdv: 0, fiyat: v, adet: 1, iskyuzde: 0, not: "" }); muhIn.value = ""; refreshPOS(); };
-  if (muhBtn) muhBtn.addEventListener("click", addMuh);
-  if (muhIn) muhIn.addEventListener("keydown", (e) => { if (e.key === "Enter") addMuh(); });
   const pick = document.getElementById("custPick"); if (pick) pick.addEventListener("click", openCustPicker);
   const pers = document.getElementById("posPersonel"); if (pers) pers.addEventListener("change", () => { pos.personelId = pers.value || null; });
   const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
@@ -724,12 +750,12 @@ function mountSatis() {
   if (ara) ara.addEventListener("click", doBar);
   const yz = document.getElementById("posYazdir"); if (yz) yz.addEventListener("click", () => alert("Satış tamamlanınca irsaliye yazdırılır."));
   document.querySelectorAll("[data-soon]").forEach((el) => el.addEventListener("click", () => alert("Bu özellik yakında.")));
-  /* Satış app-bar ikonları — mevcut fonksiyon/inputlara bağla */
+  /* Satış app-bar ikonları — pencere aç / mevcut inputa odaklan */
   const focusEl = (id) => { const el = document.getElementById(id); if (el) { el.focus(); if (el.select) try { el.select(); } catch (e) {} el.scrollIntoView({ block: "center", behavior: "smooth" }); } };
   const sBack = document.getElementById("sabBack"); if (sBack) sBack.addEventListener("click", () => navigate("anasayfa"));
-  const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", () => focusEl("iskGenel"));
+  const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", openIskModal);
   const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
-  const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", () => focusEl("muhInput"));
+  const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
   const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", () => focusEl("barInput"));
   syncTotals();
 }
