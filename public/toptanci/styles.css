@@ -605,6 +605,21 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   font-weight: 700; font-family: var(--font-num); font-size: 16px; color: var(--value-2);
 }
 .cay-unot { margin-top: 10px; font-size: 13px; color: var(--muted); }
+/* Sipariş modalı — üst bilgi + aksiyon butonları */
+.cay-modal-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; }
+.cay-modal-meta > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cay-modal-meta span { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+.cay-modal-meta b { font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+.cay-modal-act { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.cay-modal-act .btn { flex: 1 1 auto; min-width: 120px; }
+.cay-modal-act .del { flex: 1 1 100%; margin-top: 4px; padding: 10px; border-radius: var(--radius); }
+.cay-teslim-btn { flex: 1 1 100% !important; background: var(--green, #16a34a); border-color: var(--green, #16a34a); }
+/* Teslim — ödeme seçimi */
+.cay-ode-tut { text-align: center; font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+.cay-ode-tut b { font-family: var(--font-num); font-size: 20px; color: var(--text); display: block; margin-top: 2px; }
+.cay-ode-sec { display: grid; gap: 10px; }
+.cay-ode { padding: 16px; font-size: 15px; font-weight: 700; min-height: 52px; justify-content: center; }
+.cay-ode-bakiye { background: var(--accent, #D97706); border-color: var(--accent, #D97706); }
 
 .cart-qty { display: inline-flex; align-items: center; gap: 4px; }
 .cart-qty button { width: 26px; height: 30px; border: 0; background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; font-weight: 700; padding: 0; font-size: 15px; }
@@ -1063,6 +1078,8 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .sl-metric b.sl-neg { color: var(--red); }
 .sl-eye { flex: 0 0 auto; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: #fff; border-radius: var(--radius); cursor: pointer; font-size: 15px; line-height: 1; }
 .sl-eye:hover { background: #f2f7fd; border-color: var(--brand-2); }
+.cay-li { cursor: pointer; }
+.cay-li:hover { background: #f7f9fc; }
 
 /* İrsaliye görüntüleme modalı */
 .sv-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; }

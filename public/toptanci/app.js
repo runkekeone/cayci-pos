@@ -1315,9 +1315,9 @@ function cayGonder(o) {
   const tel = (o.dealerTel || "").replace(/\D/g, "");
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(txt)}`, "_blank");
 }
-function cayTeslim(o) {
+function cayTeslim(o, odemeTuru) {
   if (o.saleId) { alert("Bu sipariş zaten teslim edilip rapora işlendi."); return; }
-  if (!confirm("Sipariş teslim edilip satış olarak raporlara işlensin mi?")) return;
+  odemeTuru = odemeTuru || "bakiye";
   // Bayiyi müşteri olarak eşle/oluştur (cari borç). Önce TELEFON (kararlı), sonra isim.
   const dtel = (o.dealerTel || "").replace(/\D/g, "");
   let cust = (dtel && store.customers.find((c) => (c.telefon || "").replace(/\D/g, "") === dtel))
@@ -1334,12 +1334,32 @@ function cayTeslim(o) {
   const maliyet = items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? Number(pr.alis) || 0 : 0) * i.adet; }, 0);
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
-  const sale = { id: genId(), belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi: "Çay Ocağı", items, brut: toplam, iskonto: 0, toplam, maliyet, odeme: { nakit: 0, pos: 0, acik: toplam }, tarih: new Date().toISOString() };
+  // Ödeme türüne göre: nakit → nakit, kart → pos, bakiye → açık hesap (müşteri cari borcuna yazılır).
+  const odeme = odemeTuru === "nakit" ? { nakit: toplam, pos: 0, acik: 0 }
+    : odemeTuru === "kart" ? { nakit: 0, pos: toplam, acik: 0 }
+    : { nakit: 0, pos: 0, acik: toplam };
+  const odemeAdi = odemeTuru === "nakit" ? "Nakit" : odemeTuru === "kart" ? "Kart" : "Açık Hesap";
+  const sale = { id: genId(), belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi, items, brut: toplam, iskonto: 0, toplam, maliyet, odeme, tarih: new Date().toISOString() };
   store.sales.push(sale);
   items.forEach((i) => { const pr = findProduct(i.urunId); if (pr) pr.stok = (Number(pr.stok) || 0) - i.adet; });
-  o.durum = "teslim"; o.saleId = sale.id;
+  o.durum = "teslim"; o.saleId = sale.id; o.odemeTuru = odemeTuru;
   saveStore(); render(); cayDurumBulut(o);
-  alert("Teslim edildi ✔ Satış raporlara işlendi (Belge " + belgeNo + ", açık hesap: " + o.dealer + ").");
+  const son = odemeTuru === "bakiye" ? "Bayinin açık hesabına yazıldı: " + o.dealer : odemeAdi + " olarak tahsil edildi";
+  alert("Teslim edildi ✔ Satış raporlara işlendi (Belge " + belgeNo + ").\n" + son + ".");
+}
+/* Teslim ödeme seçimi — nakit / kart / bakiye (açık hesap) */
+function cayTeslimOde(o) {
+  if (o.saleId) { alert("Bu sipariş zaten teslim edilip rapora işlendi."); return; }
+  const body = `<p class="sub" style="margin:0 0 12px">Ödeme türünü seç. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.</p>
+    <div class="cay-ode-tut">Tutar <b>${money.format(o.toplam)}</b></div>
+    <div class="cay-ode-sec">
+      <button class="btn cay-ode" type="button" data-ode="nakit">💵 Nakit</button>
+      <button class="btn cay-ode" type="button" data-ode="kart">💳 Kart</button>
+      <button class="btn cay-ode cay-ode-bakiye" type="button" data-ode="bakiye">📒 Bakiye (Açık Hesap)</button>
+    </div>`;
+  const m = openModal("Teslim — Ödeme", body, { noFoot: true, onMount: (ov) => {
+    ov.querySelectorAll("[data-ode]").forEach((b) => b.addEventListener("click", () => { const tur = b.dataset.ode; m.close(); cayTeslim(o, tur); }));
+  } });
 }
 
 /* Teklif / Fiş yazdırma */
@@ -1390,48 +1410,71 @@ function caySiparisTableRow(o) {
     <td><div class="act-btns">${cayIslemBtns(o)}</div></td>
   </tr>`;
 }
-function caySiparisRow(o) {
+/* Tek satır liste — tıklayınca sipariş modalı açılır */
+function caySiparisListRow(o) {
   const a = cayAsama(o.durum);
   const kalem = o.items.length;
   const search = esc([o.dealer, o.dealerTel, o.items.map((l) => l.ad).join(" ")].join(" ").toLowerCase());
+  return `<li class="sl-row cay-li" data-search="${search}" data-cayopen="${o.id}">
+    <div class="sl-main">
+      <span class="sl-ad">${esc(o.dealer)}</span>
+      <span class="sl-nums">
+        <span class="sl-metric"><span class="sl-k">Tutar</span><b>${money.format(o.toplam)}</b></span>
+        <span class="sl-metric"><span class="sl-k">Kalem</span><b>${kalem}</b></span>
+        <span class="cay-badge ${a.badge}">${esc(a.ad)}</span>
+      </span>
+    </div>
+    <button class="sl-eye" type="button" data-cayopen="${o.id}" aria-label="Siparişi aç">👁</button>
+  </li>`;
+}
+/* Sipariş modalı — ürünler + aşama aksiyonları (Onayla / Teslim Et …) */
+function cayOrderModal(o) {
+  const a = cayAsama(o.durum);
+  const rows = o.items.map((l) => `<div class="cay-urow"><span class="cay-uad">${esc(l.ad)}</span><span class="cay-uqty">${num2.format(l.adet)} ${esc(l.birim || "")}</span><span class="cay-utut">${money.format(l.fiyat * l.adet)}</span></div>`).join("");
+  const btns = [];
+  if (o.durum === "yeni") btns.push(`<button class="btn" type="button" data-m-onayla>✔ Onayla</button>`);
+  if (o.durum === "onay") btns.push(`<button class="btn soft" type="button" data-m-dagitim>🚚 Dağıtıma Al</button>`);
+  if (o.durum === "onay" || o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-teklif>📄 Teklif</button>`);
+  if (o.durum === "dagitim" || o.durum === "teslim") btns.push(`<button class="btn soft" type="button" data-m-fis>🧾 Fiş</button>`);
+  if (o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-gonder>📤 Gönder</button>`);
+  if (o.durum !== "teslim") btns.push(`<button class="btn cay-teslim-btn" type="button" data-m-teslim>✅ Teslim Et</button>`);
+  btns.push(`<button class="del" type="button" data-m-del>Sil</button>`);
   const tesl = o.teslimTarih ? `<div class="cay-sub">🚚 Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</div>` : "";
-  return `<div class="cay-card" data-search="${search}">
-    <div class="cay-top">
-      <div class="cay-bayi">
-        <span class="cay-ad">${esc(o.dealer)}</span>
-        ${o.dealerTel ? `<span class="cay-tel">${esc(o.dealerTel)}</span>` : ""}
-      </div>
-      <span class="cay-badge ${a.badge}">${esc(a.ad)}</span>
+  const body = `
+    <div class="cay-modal-meta">
+      <div><span>Bayi</span><b>${esc(o.dealer)}</b></div>
+      ${o.dealerTel ? `<div><span>Telefon</span><b>${esc(o.dealerTel)}</b></div>` : ""}
+      <div><span>Durum</span><b><span class="cay-badge ${a.badge}">${esc(a.ad)}</span></b></div>
     </div>
-    <div class="cay-mid">
-      <span class="cay-tutar">${money.format(o.toplam)}</span>
-      <button class="cay-kalem" type="button" data-caydetay="${o.id}">${kalem} kalem ›</button>
-      <span class="cay-date">${fmtDate(o.alindi)}</span>
-    </div>
+    <div class="cay-ulist">${rows}</div>
+    <div class="cay-utoplam"><span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
+    ${o.not ? `<div class="cay-unot">Not: ${esc(o.not)}</div>` : ""}
     ${tesl}
-    <div class="cay-act act-btns">${cayIslemBtns(o)}</div>
-  </div>`;
+    <div class="cay-modal-act">${btns.join("")}</div>`;
+  const m = openModal(`${esc(o.dealer)} — Sipariş`, body, { noFoot: true, onMount: (ov) => {
+    const on = (sel, fn) => { const b = ov.querySelector(sel); if (b) b.addEventListener("click", fn); };
+    on("[data-m-onayla]", () => { m.close(); cayOnayla(o); });
+    on("[data-m-dagitim]", () => { m.close(); cayDagitim(o); });
+    on("[data-m-teklif]", () => cayDoc(o, "Teklif"));
+    on("[data-m-fis]", () => cayDoc(o, "Fiş"));
+    on("[data-m-gonder]", () => cayGonder(o));
+    on("[data-m-teslim]", () => { m.close(); cayTeslimOde(o); });
+    on("[data-m-del]", () => { if (confirm("Sipariş silinsin mi?")) { m.close(); store.gelenSiparisler = store.gelenSiparisler.filter((x) => x.id !== o.id); saveStore(); render(); } });
+  } });
 }
 function renderCayOcagi() {
-  const cards = store.gelenSiparisler.slice().reverse().map(caySiparisRow).join("");
+  const rows = store.gelenSiparisler.slice().reverse().map(caySiparisListRow).join("");
   const yeni = store.gelenSiparisler.filter((o) => o.durum === "yeni").length;
   return pageHead("Çay Ocağı Siparişleri", (store.gelenSiparisler.length + " sipariş") + (yeni ? ` · ${yeni} yeni` : ""), [
     { label: "📥 Kod Yapıştır", act: "cayKod" },
     { label: "📂 Dosyadan Al", cls: "soft", act: "cayDosya" },
   ]) + `<div class="cay-wrap">
     <div class="cay-search"><input type="text" class="cay-q" placeholder="Bayi, telefon veya ürün ara…" /></div>
-    <div class="cay-list">${cards || '<div class="cay-empty">Henüz sipariş yok.</div>'}</div>
+    ${rows ? `<ul class="sl-list cay-sl">${rows}</ul>` : '<div class="cay-empty">Henüz sipariş yok.</div>'}
   </div>`;
 }
 function wireCayOcagi() {
-  document.querySelectorAll("[data-onayla]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.onayla); if (o) cayOnayla(o); }));
-  document.querySelectorAll("[data-dagitim]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.dagitim); if (o) cayDagitim(o); }));
-  document.querySelectorAll("[data-teslim]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.teslim); if (o) cayTeslim(o); }));
-  document.querySelectorAll("[data-gonder]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.gonder); if (o) cayGonder(o); }));
-  document.querySelectorAll("[data-teklif]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.teklif); if (o) cayDoc(o, "Teklif"); }));
-  document.querySelectorAll("[data-fis]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.fis); if (o) cayDoc(o, "Fiş"); }));
-  document.querySelectorAll("[data-caydel]").forEach((b) => b.addEventListener("click", () => { if (confirm("Sipariş silinsin mi?")) { store.gelenSiparisler = store.gelenSiparisler.filter((x) => x.id !== b.dataset.caydel); saveStore(); render(); } }));
-  document.querySelectorAll("[data-caydetay]").forEach((b) => b.addEventListener("click", () => { const o = cayFind(b.dataset.caydetay); if (o) cayUrunModal(o); }));
+  document.querySelectorAll("[data-cayopen]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const o = cayFind(b.dataset.cayopen); if (o) cayOrderModal(o); }));
 }
 /* çay ocağı kart arama — data-search üzerinden filtre */
 function wireCaySearch() {
@@ -1439,7 +1482,7 @@ function wireCaySearch() {
   if (!inp) return;
   inp.addEventListener("input", () => {
     const q = inp.value.trim().toLowerCase();
-    document.querySelectorAll(".cay-card").forEach((c) => { c.style.display = (c.dataset.search || "").includes(q) ? "" : "none"; });
+    document.querySelectorAll(".cay-li").forEach((c) => { c.style.display = (c.dataset.search || "").includes(q) ? "" : "none"; });
   });
 }
 function mountCayOcagi() {
