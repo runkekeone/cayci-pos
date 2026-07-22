@@ -640,7 +640,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 }
 
 @media (max-width: 1024px) {
-  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pos2-cols { grid-template-columns: 340px minmax(0, 1fr); }
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .form-grid, .profile-grid { grid-template-columns: minmax(0, 1fr); }
@@ -797,12 +797,12 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .empty-row td::before { content: ""; }
   .act-btns { justify-content: flex-end; flex-wrap: nowrap; }
 
-  /* --- Özet kartları: 2 sütun dashboard tile --- */
-  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .stat { padding: 15px 16px; border-radius: var(--radius-md); gap: 6px; }
-  .stat .s-label { font-size: 12px; }
-  .stat .s-value { font-size: 22px; }
-  .stat .s-trend { position: static; margin-top: 2px; }
+  /* --- Özet kartları: satırda 4'lü kompakt tile --- */
+  .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .stat { padding: 9px 8px; border-radius: var(--radius-md); gap: 3px; align-items: stretch; overflow: hidden; }
+  .stat .s-label { font-size: 9.5px; letter-spacing: 0.2px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat .s-value { font-size: 13px; letter-spacing: -0.4px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat .s-trend { position: static; margin-top: 2px; align-self: flex-start; font-size: 9px; padding: 1px 5px; }
 
   /* --- Başlık + aksiyonlar: temiz, sarılabilir --- */
   .page-head .sub { width: 100%; }
@@ -1035,7 +1035,44 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 @media (max-width: 360px) {
   /* Çok dar ekranda ürün kartları 3 sütun */
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Özet 4'lü kalsın ama daha da kompakt (taşma yok) */
+  .summary-grid { gap: 4px; }
+  .stat { padding: 8px 5px; }
+  .stat .s-label { font-size: 8.5px; letter-spacing: 0; }
+  .stat .s-value { font-size: 11.5px; }
 }
+
+/* ===== Anasayfa — Son Satışlar kompakt liste ===== */
+.sl-list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); overflow: hidden; }
+.sl-empty { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 13px; }
+.sl-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); min-width: 0; }
+.sl-row:first-child { border-top: 0; }
+.sl-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sl-ad { font-weight: 700; font-size: 14px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-nums { display: flex; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
+.sl-metric { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+.sl-k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.sl-metric b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12.5px; color: var(--value-2); white-space: nowrap; }
+.sl-metric b.sl-neg { color: var(--red); }
+.sl-eye { flex: 0 0 auto; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: #fff; border-radius: var(--radius); cursor: pointer; font-size: 15px; line-height: 1; }
+.sl-eye:hover { background: #f2f7fd; border-color: var(--brand-2); }
+
+/* İrsaliye görüntüleme modalı */
+.sv-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; }
+.sv-meta > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sv-meta span, .sv-tot span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.sv-meta b { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.sv-wrap { overflow-x: auto; margin: 0 -2px; }
+.sv-items { width: 100%; border-collapse: collapse; }
+.sv-items th, .sv-items td { padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; }
+.sv-items th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.sv-items .r { text-align: right; }
+.sv-items td.r { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sv-items .sv-nm { min-width: 0; word-break: break-word; }
+.sv-tot { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.sv-tot > div { display: flex; flex-direction: column; gap: 2px; }
+.sv-tot b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 800; font-size: 16px; color: var(--value-2); }
+.sv-tot b.sl-neg { color: var(--red); }
 
 /* Duyurular */
 .duyuru-item { display: flex; flex-direction: column; gap: 8px; }

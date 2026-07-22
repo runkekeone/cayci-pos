@@ -796,18 +796,53 @@ function renderAnasayfa() {
   const kritikRows = kritik.slice(0, 10).map((p) => `<tr><td>${esc(p.ad)}</td><td class="stok-low">${num2.format(Number(p.stok) || 0)}</td><td>${Number(p.kritik) || 0}</td></tr>`).join("");
   const dun = localDateStr(new Date(Date.now() - 86400000));
   const dunCiro = store.sales.filter((s) => localDateStr(new Date(s.tarih)) === dun).reduce((a, s) => a + s.toplam, 0);
-  const cayBekleyen = store.gelenSiparisler.filter((o) => o.durum !== "teslim").length;
-  const cayRows = store.gelenSiparisler.slice().reverse().slice(0, 8).map(caySiparisTableRow).join("");
   return pageHead("Anasayfa", "Bugünün özeti") +
     grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
     `<div style="height:14px"></div>` +
     grid([["Nakit Kasa", money.format(nakit + tahsilat + gelir - gider), "green"], ["Gider (bugün)", money.format(gider)], ["Kâr (bugün)", money.format(ciro - maliyet), "green"], ["Toplam Alacak", money.format(toplamBorc)]]) +
-    `<h1 style="font-size:16px;margin:18px 0 10px">🍵 Çay Ocağı Siparişleri${cayBekleyen ? ` <span class="badge-amber">${cayBekleyen} bekliyor</span>` : ""}</h1>` +
-    tableCard(["Bayi", "Ürünler", "Tutar", "Aşama", "Alındı", "İşlem"], cayRows, infoLine(store.gelenSiparisler.length)) +
-    `<h1 style="font-size:16px;margin:18px 0 10px">Son Satışlar</h1>` + tableCard(["Belge No", "Müşteri", "Tutar", "Ödeme Tipi", "Tarih"], rows, infoLine(son.length)) +
+    `<h1 style="font-size:16px;margin:18px 0 10px">Son Satışlar</h1>` + sonSatisListesi(son) +
     `<h1 style="font-size:16px;margin:18px 0 10px">Kritik Stok (${kritik.length})</h1>` + tableCard(["Ürün", "Kalan Stok", "Kritik"], kritikRows, infoLine(kritik.length));
 }
-function mountAnasayfa() { wireSaleLinks(); wireCayOcagi(); }
+/* Son satışlar — kompakt tek satır liste (kutucuk değil) */
+function sonSatisListesi(son) {
+  if (!son.length) return `<div class="card"><div class="sl-empty">Henüz satış yok.</div></div>`;
+  const rows = son.map((s) => {
+    const c = s.musteriId && findCustomer(s.musteriId);
+    const ad = c ? esc(c.ad) : "Müşterisiz satış";
+    const odenen = (s.odeme.nakit || 0) + (s.odeme.pos || 0);
+    const kalan = c ? `<span class="sl-metric"><span class="sl-k">Kalan</span><b class="${s.odeme.acik ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</b></span>` : "";
+    return `<li class="sl-row">
+      <div class="sl-main">
+        <span class="sl-ad">${ad}</span>
+        <span class="sl-nums">
+          <span class="sl-metric"><span class="sl-k">Tutar</span><b>${money.format(s.toplam)}</b></span>
+          <span class="sl-metric"><span class="sl-k">Ödenen</span><b>${money.format(odenen)}</b></span>
+          ${kalan}
+        </span>
+      </div>
+      <button class="sl-eye" type="button" data-saleview="${s.id}" aria-label="İrsaliye detayı">👁</button>
+    </li>`;
+  }).join("");
+  return `<ul class="sl-list">${rows}</ul>`;
+}
+/* İrsaliye içeriği modalı — Düzenle → openSale */
+function openSaleView(id) {
+  const s = store.sales.find((x) => x.id === id);
+  if (!s) return;
+  const c = s.musteriId && findCustomer(s.musteriId);
+  const odenen = (s.odeme.nakit || 0) + (s.odeme.pos || 0);
+  const items = s.items.map((it) => `<tr><td class="sv-nm">${esc(it.ad)}</td><td class="r">${num2.format(it.adet)}</td><td class="r">${money.format(it.fiyat)}</td><td class="r">${money.format(it.fiyat * it.adet)}</td></tr>`).join("");
+  const body = `<div class="sv">
+    <div class="sv-meta"><div><span>Belge No</span><b>${esc(s.belgeNo)}</b></div><div><span>Müşteri</span><b>${c ? esc(c.ad) : "Müşterisiz satış"}</b></div></div>
+    <div class="sv-wrap"><table class="sv-items"><thead><tr><th>Ürün</th><th class="r">Adet</th><th class="r">B.Fiyat</th><th class="r">Tutar</th></tr></thead><tbody>${items}</tbody></table></div>
+    <div class="sv-tot"><div><span>Toplam</span><b>${money.format(s.toplam)}</b></div><div><span>Ödenen</span><b>${money.format(odenen)}</b></div>${c ? `<div><span>Kalan</span><b class="${s.odeme.acik ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</b></div>` : ""}</div>
+  </div>`;
+  openModal("İrsaliye " + esc(s.belgeNo), body, { okLabel: "✏️ Düzenle", onOk: () => { openSale(s.id); } });
+}
+function mountAnasayfa() {
+  wireSaleLinks();
+  document.querySelectorAll("[data-saleview]").forEach((b) => b.addEventListener("click", () => openSaleView(b.dataset.saleview)));
+}
 
 /* ============ RAPORLAR ============ */
 const reportFilters = {};
