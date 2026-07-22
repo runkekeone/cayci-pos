@@ -1680,12 +1680,25 @@ function render() {
 window.addEventListener("hashchange", render);
 
 /* ---- Mobil: tablo hücrelerine başlık etiketi ekle (dar ekranda kart görünümü için) ---- */
+const MOBIL_GIZLI_ETIKET = new Set(["Sıra", "Görsel", "Ürün Barkodu", "KDV", "Kritik Stok"]);
 function mobilTabloEtiketle() {
   document.querySelectorAll("table.grid").forEach((tbl) => {
     const bas = [...tbl.querySelectorAll("thead th")].map((th) => (th.childNodes[0] ? th.childNodes[0].textContent : th.textContent).trim());
     tbl.querySelectorAll("tbody tr").forEach((tr) => {
       if (tr.classList.contains("empty-row")) return;
-      [...tr.children].forEach((td, i) => { if (bas[i]) td.setAttribute("data-label", bas[i]); });
+      let baslikVar = false;
+      [...tr.children].forEach((td, i) => {
+        const et = bas[i] || "";
+        if (et) td.setAttribute("data-label", et);
+        td.classList.remove("m-title", "m-act");
+        // Aksiyon hücresi (İşlem / Detay / buton grubu) → kart altı kompakt satır
+        if (et === "İşlem" || et === "Detay" || td.querySelector(".act-btns")) {
+          td.classList.add("m-act");
+        } else if (!baslikVar && et && !MOBIL_GIZLI_ETIKET.has(et) && td.textContent.trim()) {
+          // İlk anlamlı metin hücresi → kart başlığı
+          td.classList.add("m-title"); baslikVar = true;
+        }
+      });
     });
   });
 }

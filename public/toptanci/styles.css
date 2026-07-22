@@ -743,33 +743,59 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .hamburger { font-size: 24px; padding: 8px 8px; min-height: 44px; min-width: 44px; }
   .searchbox { width: auto; flex: 1; max-width: none; min-width: 0; }
 
-  /* --- her tabloyu KARTA çevir (data-label ile) --- */
+  /* --- her tabloyu KOMPAKT karta çevir (data-label ile) --- */
   .table-wrap { overflow-x: visible; }
   table.grid, table.grid tbody, table.grid tr, table.grid td { display: block; width: 100%; }
   table.grid thead { display: none; }
   table.grid tr {
-    border: 1px solid var(--line); border-radius: var(--radius-md); margin-bottom: 12px;
-    padding: 6px 14px; background: var(--card); box-shadow: var(--shadow-soft);
+    border: 1px solid var(--line); border-radius: var(--radius-md); margin-bottom: 10px;
+    padding: 4px 14px 6px; background: var(--card); box-shadow: var(--shadow-soft);
   }
   table.grid tbody tr:hover { background: var(--card); }
+
+  /* Genel satır: etiket sol soluk / değer sağ net — sıkı aralık, tabular sayılar */
   table.grid td {
-    border-bottom: 1px solid var(--line); white-space: normal; min-width: 0;
-    padding: 11px 0; display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    text-align: right; font-size: 14px; font-weight: 600; color: var(--text);
+    border-bottom: 1px solid var(--line-soft); white-space: normal; min-width: 0;
+    padding: 6px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    text-align: right; font-size: 13.5px; font-weight: 600; color: var(--text);
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
   }
   table.grid tr td:last-child { border-bottom: 0; }
   table.grid td::before {
-    content: attr(data-label); flex: 0 0 40%; min-width: 0;
-    text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px;
+    content: attr(data-label); flex: 0 0 44%; min-width: 0;
+    text-align: left; font-weight: 500; color: var(--muted); font-size: 12px;
+    font-family: var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   table.grid td:not([data-label])::before { content: ""; flex: 0; }
-  /* Aksiyon satırı: kart altında tam genişlik, ayrık */
-  table.grid td.act-cell, table.grid td:has(.act-btns) {
-    justify-content: flex-end; padding-top: 12px;
+
+  /* Mobil gürültü sütunlarını gizle (masaüstünde görünür kalır) */
+  table.grid td[data-label="Sıra"],
+  table.grid td[data-label="Görsel"],
+  table.grid td[data-label="Ürün Barkodu"],
+  table.grid td[data-label="KDV"],
+  table.grid td[data-label="Kritik Stok"] { display: none; }
+
+  /* Başlık hücresi: kartın üstünde tam genişlik kalın isim (etiket gizli) */
+  table.grid td.m-title {
+    display: block; padding: 2px 0 7px; margin-bottom: 3px;
+    border-bottom: 1px solid var(--line);
+    text-align: left; font-size: 15.5px; font-weight: 700; line-height: 1.3;
+    color: var(--text); font-family: var(--font-body); white-space: normal;
   }
-  .empty-row td { display: block; text-align: center; font-weight: 500; color: var(--muted); }
+  table.grid td.m-title::before { content: ""; display: none; }
+  table.grid td.m-title .badge { font-weight: 500; margin-top: 4px; display: inline-block; }
+  table.grid td.m-title br { display: none; }
+
+  /* Aksiyon satırı: kart altında kompakt tek satır, gerekirse yatay kaydır */
+  table.grid td.m-act, table.grid td.act-cell, table.grid td:has(.act-btns) {
+    justify-content: flex-end; padding: 9px 0 2px; border-bottom: 0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  table.grid td.m-act::before { content: ""; display: none; }
+
+  .empty-row td { display: block; text-align: center; font-weight: 500; color: var(--muted); font-family: var(--font-body); }
   .empty-row td::before { content: ""; }
-  .act-btns { justify-content: flex-end; flex-wrap: wrap; }
+  .act-btns { justify-content: flex-end; flex-wrap: nowrap; }
 
   /* --- Özet kartları: 2 sütun dashboard tile --- */
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
