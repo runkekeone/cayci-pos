@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { availableQty, lowStock, unitCost, variantCost } from '../lib/cost'
 import { urunGorsel } from '../lib/urunGorsel'
 import { fmtTL, uid } from '../lib/units'
+import { extract } from '../lib/ocr'
 import type { Business, Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
@@ -82,6 +83,18 @@ export default function Satis() {
   const [undo, setUndo] = useState<Sale | null>(null)
   // Fiş görüntüle/paylaş.
   const [fisSale, setFisSale] = useState<Sale | null>(null)
+  // Fotoğraftan masayı doldur (AI).
+  const [fisOku, setFisOku] = useState(false)
+
+  // AI'dan gelen (ürün, adet) çiftlerini aktif masaya/hızlıya işle.
+  function fisDoldur(pairs: { itemId: string; qty: number }[]) {
+    for (const p of pairs) {
+      const item = s.items.find((i) => i.id === p.itemId)
+      if (!item) continue
+      for (let k = 0; k < p.qty; k++) ekle(item)
+    }
+    setFisOku(false)
+  }
 
   // İptali uygula ama satışı sakla: undo balonu geri getirebilsin.
   function iptalEt(sale: Sale) {
@@ -418,6 +431,11 @@ export default function Satis() {
                 ✕
               </button>
             )}
+          </div>
+          <div className="row" style={{ marginBottom: 12 }}>
+            <button className="btn sm" onClick={() => setFisOku(true)}>
+              📷 Fişten doldur
+            </button>
           </div>
           <div className="row cat-row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
@@ -802,8 +820,196 @@ export default function Satis() {
       )}
 
       {fisSale && <FisModal sale={fisSale} business={s.business} onClose={() => setFisSale(null)} />}
+      {fisOku && (
+        <FisOkuModal
+          items={s.items.filter((i) => i.sellable)}
+          onClose={() => setFisOku(false)}
+          onApply={fisDoldur}
+        />
+      )}
     </>
   )
+}
+
+/** Fotoğraftan masa adisyonu okuma: AI ürün+adet çıkarır, kullanıcı eşleştirip onaylar. */
+function FisOkuModal({
+  items,
+  onClose,
+  onApply,
+}: {
+  items: Item[]
+  onClose: () => void
+  onApply: (pairs: { itemId: string; qty: number }[]) => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [rows, setRows] = useState<{ name: string; qty: number; itemId: string }[] | null>(null)
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setErr('')
+    const data = await extract(
+      'masa',
+      file,
+      items.map((i) => i.name),
+    )
+    setBusy(false)
+    if (!data) {
+      setErr('Okunamadı. İnternet ve kurulum gerekli; tekrar dene veya elle ekle.')
+      return
+    }
+    setRows(
+      data.lines.map((l) => ({
+        name: l.name,
+        qty: l.qty || 1,
+        itemId: fisBestMatch(l.name, items),
+      })),
+    )
+  }
+
+  function upd(idx: number, patch: Partial<{ qty: number; itemId: string }>) {
+    setRows((r) => r?.map((row, i) => (i === idx ? { ...row, ...patch } : row)) ?? r)
+  }
+
+  const gecerli = rows?.some((r) => r.itemId && r.qty > 0)
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>📷 Fişten masayı doldur</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Masanın fişini/adisyonunu çek. Yapay zeka ürünleri çıkarır; onaylayınca masaya eklenir.
+        </p>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={onFile}
+        />
+
+        {!rows && (
+          <div className="row" style={{ justifyContent: 'center', margin: '18px 0' }}>
+            <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>
+              {busy ? 'Okunuyor…' : '📷 Fotoğraf çek / seç'}
+            </button>
+          </div>
+        )}
+
+        {err && (
+          <p className="hint" style={{ color: 'var(--bad, #c0392b)' }}>
+            {err}
+          </p>
+        )}
+
+        {rows && (
+          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Fişteki</th>
+                  <th>Ürün</th>
+                  <th className="num">Adet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={idx} style={{ opacity: row.itemId ? 1 : 0.5 }}>
+                    <td>{row.name}</td>
+                    <td>
+                      <select
+                        value={row.itemId}
+                        onChange={(e) => upd(idx, { itemId: e.target.value })}
+                      >
+                        <option value="">— atla —</option>
+                        {items.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.icon} {i.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        min={1}
+                        value={row.qty}
+                        style={{ width: 60 }}
+                        onChange={(e) => upd(idx, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="row" style={{ marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          {rows && (
+            <button
+              className="btn primary"
+              disabled={!gecerli}
+              onClick={() =>
+                onApply(
+                  rows
+                    .filter((r) => r.itemId && r.qty > 0)
+                    .map((r) => ({ itemId: r.itemId, qty: r.qty })),
+                )
+              }
+            >
+              Onayla & Ekle
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Ad eşleştirme (fiş okuma için) — Türkçe sadeleştirme + içerme/token örtüşmesi. */
+function fisNorm(s: string): string {
+  return s
+    .toLocaleLowerCase('tr')
+    .replace(/[ıİ]/g, 'i')
+    .replace(/[şŞ]/g, 's')
+    .replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u')
+    .replace(/[öÖ]/g, 'o')
+    .replace(/[çÇ]/g, 'c')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function fisBestMatch(name: string, items: Item[]): string {
+  const n = fisNorm(name)
+  if (!n) return ''
+  let best = ''
+  let bestScore = 0
+  for (const it of items) {
+    const m = fisNorm(it.name)
+    let score = 0
+    if (m === n) score = 100
+    else if (m.includes(n) || n.includes(m)) score = 60
+    else {
+      const nt = new Set(n.split(' '))
+      score = m.split(' ').filter((t) => nt.has(t)).length * 20
+    }
+    if (score > bestScore) {
+      bestScore = score
+      best = it.id
+    }
+  }
+  return bestScore >= 20 ? best : ''
 }
 
 /**

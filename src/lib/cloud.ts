@@ -29,6 +29,11 @@ function client(): SupabaseClient | null {
   return _client
 }
 
+/** Aynı Supabase client'ı başka modüllerin (ör. ocr.ts) yeniden kullanması için. */
+export function supabaseClient(): SupabaseClient | null {
+  return client()
+}
+
 export interface CloudRecord {
   value: unknown
   updatedAt: string

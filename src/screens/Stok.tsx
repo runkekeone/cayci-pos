@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStore } from '../store'
 import { lowStock, unitCost } from '../lib/cost'
 import {
@@ -10,11 +10,52 @@ import {
   packSizeGerekli,
   unitsFor,
 } from '../lib/units'
+import { extract } from '../lib/ocr'
+import type { Item } from '../types'
+
+/** Basit ad eşleştirme: küçük harf + Türkçe sadeleştirme, içerme / token örtüşmesi. */
+function normalize(s: string): string {
+  return s
+    .toLocaleLowerCase('tr')
+    .replace(/[ıİ]/g, 'i')
+    .replace(/[şŞ]/g, 's')
+    .replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u')
+    .replace(/[öÖ]/g, 'o')
+    .replace(/[çÇ]/g, 'c')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function bestMatch(name: string, items: Item[]): string {
+  const n = normalize(name)
+  if (!n) return ''
+  let best = ''
+  let bestScore = 0
+  for (const it of items) {
+    const m = normalize(it.name)
+    let score = 0
+    if (m === n) score = 100
+    else if (m.includes(n) || n.includes(m)) score = 60
+    else {
+      const nt = new Set(n.split(' '))
+      const mt = m.split(' ')
+      score = mt.filter((t) => nt.has(t)).length * 20
+    }
+    if (score > bestScore) {
+      bestScore = score
+      best = it.id
+    }
+  }
+  return bestScore >= 20 ? best : ''
+}
 
 export default function Stok() {
   const { s, addPurchase, addWaste } = useStore()
   const [alis, setAlis] = useState(false)
   const [fire, setFire] = useState(false)
+  const [fis, setFis] = useState(false)
 
   const azalan = lowStock(s.items)
   const stoklu = s.items.filter((i) => !i.recipe)
@@ -27,6 +68,9 @@ export default function Stok() {
       <div className="row" style={{ marginBottom: 16 }}>
         <button className="btn primary" onClick={() => setAlis(true)}>
           + Alış gir
+        </button>
+        <button className="btn" onClick={() => setFis(true)}>
+          📷 Fişten oku
         </button>
         <button className="btn" onClick={() => setFire(true)}>
           Fire / İkram
@@ -123,8 +167,220 @@ export default function Stok() {
       </div>
 
       {alis && <AlisModal onClose={() => setAlis(false)} onSave={addPurchase} />}
+      {fis && <FisModal onClose={() => setFis(false)} onSave={addPurchase} />}
       {fire && <FireModal onClose={() => setFire(false)} onSave={addWaste} />}
     </>
+  )
+}
+
+/** Fotoğraftan alış fişi okuma: AI kalemleri çıkarır, kullanıcı eşleştirip onaylar. */
+function FisModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void
+  onSave: (
+    itemId: string,
+    qty: number,
+    total: number,
+    supplier?: string,
+    birim?: { buyUnit: string; packSize?: number },
+    paidCash?: boolean,
+  ) => void
+}) {
+  const { s } = useStore()
+  const stoklu = s.items.filter((i) => !i.recipe)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [supplier, setSupplier] = useState('')
+  const [nakit, setNakit] = useState(true)
+  // Her satır: AI'dan gelen ad + kullanıcının düzenlediği miktar/tutar/eşleşen kalem.
+  const [rows, setRows] = useState<
+    { name: string; qty: number; total: number; itemId: string }[] | null
+  >(null)
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setErr('')
+    const data = await extract(
+      'alis',
+      file,
+      stoklu.map((i) => i.name),
+    )
+    setBusy(false)
+    if (!data) {
+      setErr('Okunamadı. İnternet ve kurulum gerekli; tekrar dene veya elle gir.')
+      return
+    }
+    if (data.supplier) setSupplier(data.supplier)
+    setRows(
+      data.items.map((it) => ({
+        name: it.name,
+        qty: it.qty || 0,
+        total: it.total || 0,
+        itemId: bestMatch(it.name, stoklu),
+      })),
+    )
+  }
+
+  function upd(idx: number, patch: Partial<{ qty: number; total: number; itemId: string }>) {
+    setRows((r) => r?.map((row, i) => (i === idx ? { ...row, ...patch } : row)) ?? r)
+  }
+
+  function kaydet() {
+    if (!rows) return
+    for (const row of rows) {
+      if (!row.itemId || row.qty <= 0 || row.total <= 0) continue
+      const item = s.items.find((i) => i.id === row.itemId)
+      if (!item) continue
+      // AI miktarını kalemin kendi alış birimine göre temel birime çevir.
+      const base = alisToBase(row.qty, item.unit, item.buyUnit, item.packSize ?? 1)
+      onSave(
+        row.itemId,
+        base > 0 ? base : row.qty,
+        row.total,
+        supplier || undefined,
+        { buyUnit: item.buyUnit, packSize: item.packSize },
+        nakit,
+      )
+    }
+    onClose()
+  }
+
+  const gecerli = rows?.some((r) => r.itemId && r.qty > 0 && r.total > 0)
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>📷 Fişten alış oku</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Alış fişinin/faturasının fotoğrafını çek. Yapay zeka kalemleri çıkarır; sen kontrol edip
+          onaylarsın.
+        </p>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={onFile}
+        />
+
+        {!rows && (
+          <div className="row" style={{ justifyContent: 'center', margin: '18px 0' }}>
+            <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>
+              {busy ? 'Okunuyor…' : '📷 Fotoğraf çek / seç'}
+            </button>
+          </div>
+        )}
+
+        {err && (
+          <p className="hint" style={{ color: 'var(--bad, #c0392b)' }}>
+            {err}
+          </p>
+        )}
+
+        {rows && (
+          <>
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fişteki</th>
+                    <th>Kalem</th>
+                    <th className="num">Miktar</th>
+                    <th className="num">Tutar ₺</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={idx} style={{ opacity: row.itemId ? 1 : 0.5 }}>
+                      <td>{row.name}</td>
+                      <td>
+                        <select
+                          value={row.itemId}
+                          onChange={(e) => upd(idx, { itemId: e.target.value })}
+                        >
+                          <option value="">— atla —</option>
+                          {stoklu.map((i) => (
+                            <option key={i.id} value={i.id}>
+                              {i.icon} {i.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.qty}
+                          style={{ width: 70 }}
+                          onChange={(e) => upd(idx, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                        />
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.total}
+                          style={{ width: 80 }}
+                          onChange={(e) =>
+                            upd(idx, { total: Math.max(0, Number(e.target.value) || 0) })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="field">
+              <label>Tedarikçi (isteğe bağlı)</label>
+              <input value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+            </div>
+
+            <div className="field">
+              <label>Nasıl ödedin</label>
+              <div className="row">
+                <button
+                  type="button"
+                  className={`btn sm ${nakit ? 'primary' : 'ghost'}`}
+                  onClick={() => setNakit(true)}
+                >
+                  💵 Kasadan nakit
+                </button>
+                <button
+                  type="button"
+                  className={`btn sm ${!nakit ? 'primary' : 'ghost'}`}
+                  onClick={() => setNakit(false)}
+                >
+                  💳 Kart / havale
+                </button>
+              </div>
+            </div>
+            <p className="hint">
+              Miktar, kalemin normal alış birimine göre stoğa girer. Eşleşmeyen satırlar atlanır.
+            </p>
+          </>
+        )}
+
+        <div className="row" style={{ marginTop: 18, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          {rows && (
+            <button className="btn primary" disabled={!gecerli} onClick={kaydet}>
+              Onayla & Kaydet
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

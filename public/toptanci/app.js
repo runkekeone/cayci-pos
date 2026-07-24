@@ -989,7 +989,7 @@ function renderAlisOlustur() {
     </div></div>
     <div class="card">
       <table class="line-table" id="aTable"><thead><tr><th style="width:40%">Ürün</th><th>Miktar</th><th>Birim Fiyat (₺)</th><th>Tutar</th><th></th></tr></thead><tbody id="aBody"></tbody></table>
-      <div style="margin-top:10px"><button class="btn soft" id="aAddRow" type="button">＋ Satır ekle</button></div>
+      <div style="margin-top:10px"><button class="btn soft" id="aAddRow" type="button">＋ Satır ekle</button> <button class="btn soft" id="aFoto" type="button">📷 Faturadan oku</button> <span id="aFotoDurum" class="hint"></span></div>
       <p class="hint">Not: Listeden ürün seçersen o ürünün stoğu artar. "Yeni ürün" seçersen faturaya yazılır ama stok tutulmaz.</p>
       <div class="totbox" style="margin-top:10px"><strong>Genel Toplam: <span id="aTotal">₺0,00</span></strong></div>
       <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="aSave" type="button">💾 Alış Faturasını Kaydet</button></div>
@@ -1011,9 +1011,69 @@ function alisRefresh() {
   document.querySelectorAll("[data-ar]").forEach((el) => el.addEventListener("input", () => { const i = Number(el.dataset.ar), fld = el.dataset.fld; alisRows[i][fld] = el.value; if (fld === "urunId") { const pr = findProduct(el.value); if (pr && !Number(alisRows[i].birimFiyat)) alisRows[i].birimFiyat = pr.alis || 0; alisRefresh(); } if (fld === "adet" || fld === "birimFiyat") alisRefresh(); }));
   document.querySelectorAll("[data-armv]").forEach((b) => b.addEventListener("click", () => { alisRows.splice(Number(b.dataset.armv), 1); if (!alisRows.length) alisRows.push({ urunId: "", ad: "", adet: 1, birimFiyat: 0 }); alisRefresh(); }));
 }
+/* ---- Fotoğraftan fatura okuma (AI Vision, Supabase Edge Function) ---- */
+function ocrNorm(s) {
+  return String(s || "").toLocaleLowerCase("tr")
+    .replace(/[ıİ]/g, "i").replace(/[şŞ]/g, "s").replace(/[ğĞ]/g, "g")
+    .replace(/[üÜ]/g, "u").replace(/[öÖ]/g, "o").replace(/[çÇ]/g, "c")
+    .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+function ocrMatch(name, list, key) {
+  const n = ocrNorm(name);
+  if (!n) return "";
+  let best = "", score = 0;
+  for (const it of list) {
+    const m = ocrNorm(it[key]);
+    let s = 0;
+    if (m === n) s = 100;
+    else if (m.includes(n) || n.includes(m)) s = 60;
+    else { const nt = new Set(n.split(" ")); s = m.split(" ").filter((t) => nt.has(t)).length * 20; }
+    if (s > score) { score = s; best = it.id; }
+  }
+  return score >= 20 ? best : "";
+}
+function ocrPickImage(cb) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+  inp.style.display = "none"; document.body.appendChild(inp);
+  inp.addEventListener("change", () => {
+    const f = inp.files && inp.files[0];
+    document.body.removeChild(inp);
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { const s = String(r.result), c = s.indexOf(","); const h = s.slice(0, c); const mt = (h.match(/data:([^;]+)/) || [])[1] || "image/jpeg"; cb(s.slice(c + 1), mt); };
+    r.readAsDataURL(f);
+  });
+  inp.click();
+}
+async function alisFotoOku() {
+  const durum = document.getElementById("aFotoDurum");
+  ocrPickImage(async (imageBase64, mediaType) => {
+    if (durum) durum.textContent = "Okunuyor…";
+    let res;
+    try {
+      const { data, error } = await SB.functions.invoke("ocr-extract", {
+        body: { mode: "fatura", imageBase64, mediaType, catalog: store.products.map((p) => p.ad) },
+      });
+      res = error ? null : data;
+    } catch (e) { res = null; }
+    if (!res || !res.ok || !res.data) { if (durum) durum.textContent = "Okunamadı — internet/kurulum gerekli. Elle girebilirsin."; return; }
+    const d = res.data;
+    if (d.no) { const el = document.getElementById("aNo"); if (el) el.value = d.no; }
+    if (d.tarih) { const t = new Date(d.tarih); if (!isNaN(t)) { const el = document.getElementById("aTarih"); if (el) el.value = t.toISOString().slice(0, 10); } }
+    if (d.firma) { const fid = ocrMatch(d.firma, store.firmalar, "ad"); const el = document.getElementById("aFirma"); if (fid && el) el.value = fid; }
+    if (Array.isArray(d.lines) && d.lines.length) {
+      alisRows = d.lines.map((l) => { const pid = ocrMatch(l.ad, store.products, "ad"); return { urunId: pid, ad: pid ? "" : (l.ad || ""), adet: Number(l.adet) || 1, birimFiyat: Number(l.birimFiyat) || 0 }; });
+      alisRefresh();
+    }
+    if (durum) durum.textContent = "Okundu — kontrol edip Kaydet'e bas.";
+  });
+}
 function mountAlisOlustur() {
   alisRefresh();
   document.getElementById("aAddRow").addEventListener("click", () => { alisRows.push({ urunId: "", ad: "", adet: 1, birimFiyat: 0 }); alisRefresh(); });
+  const foto = document.getElementById("aFoto");
+  if (foto) foto.addEventListener("click", alisFotoOku);
   document.getElementById("aSave").addEventListener("click", () => {
     const items = alisRows.filter((r) => (r.urunId || (r.ad || "").trim()) && Number(r.adet) > 0).map((r) => ({ urunId: r.urunId || null, ad: r.urunId ? (findProduct(r.urunId) || {}).ad : (r.ad || "").trim(), adet: Number(r.adet), birimFiyat: Number(r.birimFiyat) || 0 }));
     if (!items.length) { alert("En az bir ürün satırı girin."); return; }
