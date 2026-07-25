@@ -220,6 +220,7 @@ function importCustomers(text) {
 const MENU = [
   { ico: "▦", label: "Anasayfa", route: "anasayfa" },
   { ico: "🖊", label: "Satış Yap", route: "satis" },
+  { ico: "🚗", label: "Rota / Saha Satış", route: "rota" },
   { ico: "🎧", label: "Saha Koçu (Görüşme Analizi)", route: "saha-kocu" },
   { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
   { ico: "📢", label: "Duyurular", route: "duyurular" },
@@ -506,7 +507,7 @@ function renderSatisDetay() {
   const musOpts = `<option value="">— Müşteri yok —</option>` + store.customers.map((m) => `<option value="${m.id}" ${s.musteriId === m.id ? "selected" : ""}>${esc(m.ad)}</option>`).join("");
   const otip = s.odeme.acik ? "acik" : (s.odeme.pos ? "pos" : "nakit");
   const odOpts = [["nakit", "NAKİT"], ["pos", "POS"], ["acik", "AÇIK HESAP"]].map((o) => `<option value="${o[0]}" ${otip === o[0] ? "selected" : ""}>${o[1]}</option>`).join("");
-  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: "🖨 İrsaliye", cls: "soft", act: "print" }, { label: "🗑 Satışı Sil", cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
+  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: "🖨 İrsaliye", cls: "soft", act: "print" }, { label: "📲 WhatsApp", cls: "soft", act: "wa" }, { label: "🗑 Satışı Sil", cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
     `<div class="card"><div class="form-grid">
       <div class="field"><label>Müşteri</label><select id="sdMus">${musOpts}</select></div>
       <div class="field"><label>Ödeme Tipi</label><select id="sdOdeme">${odOpts}</select></div>
@@ -549,6 +550,7 @@ function mountSatisDetay() {
   sdRefresh();
   document.getElementById("sdIsk").addEventListener("input", sdRefresh);
   const pr = document.querySelector('[data-act="print"]'); if (pr) pr.addEventListener("click", () => printSale(s));
+  const wa = document.querySelector('[data-act="wa"]'); if (wa) wa.addEventListener("click", () => irsaliyeWa(s));
   const del = document.querySelector('[data-act="delsale"]');
   if (del) del.addEventListener("click", () => { if (!confirm("Satış silinsin mi? (stok geri yüklenir)")) return; s.items.forEach((it) => { const p = findProduct(it.urunId); if (p) p.stok = (Number(p.stok) || 0) + it.adet; }); store.sales = store.sales.filter((x) => x.id !== s.id); saveStore(); navigate("rapor-tarihsel"); });
   document.getElementById("sdSave").addEventListener("click", () => {
@@ -1713,6 +1715,7 @@ const PAGES = {
   duyurular: { render: renderDuyurular, mount: mountDuyurular },
   anasayfa: { render: renderAnasayfa, mount: mountAnasayfa },
   satis: { render: renderSatis, mount: mountSatis },
+  rota: { render: renderRota, mount: mountRota },
   "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
 
@@ -1955,6 +1958,184 @@ function mountSahaKocu() {
     store.gorusmeler = (store.gorusmeler || []).filter((x) => x.id !== b.dataset.gecdel);
     saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
   }));
+}
+
+/* ============ ROTA / SAHA SATIŞ ============ */
+const rota = { konum: null, kayit: null, kayitTimer: null };
+
+function haversine(a, b, c, d) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (c - a) * r, dLng = (d - b) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function mesafeMetin(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km"; }
+function konumAl() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) { rej(new Error("konum desteği yok")); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      (e) => rej(e), { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 });
+  });
+}
+function musteriAylikCiro(id) {
+  const ay = monthStartStr();
+  return store.sales.filter((s) => s.musteriId === id && localDateStr(new Date(s.tarih)) >= ay).reduce((a, s) => a + (Number(s.toplam) || 0), 0);
+}
+function musterininSonSatisi(id) {
+  const l = store.sales.filter((s) => s.musteriId === id).sort((a, b) => b.tarih.localeCompare(a.tarih));
+  return l[0] || null;
+}
+function blobToBase64(blob) {
+  return new Promise((res) => { const r = new FileReader(); r.onload = () => { const s = String(r.result); res(s.slice(s.indexOf(",") + 1)); }; r.readAsDataURL(blob); });
+}
+function saleIrsaliyeMetni(s) {
+  const c = s.musteriId && findCustomer(s.musteriId); const st = store.settings;
+  const kalem = s.items.map((it) => "• " + it.ad + " x" + num2.format(it.adet) + " = " + money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0))).join("\n");
+  return (st.fisBaslik || st.firmaAdi || "") + "\nİRSALİYE / SATIŞ FİŞİ\nBelge: " + s.belgeNo + "\nTarih: " + fmtDate(s.tarih) +
+    (c ? "\nMüşteri: " + c.ad : "") + "\n\n" + kalem + "\n" +
+    (s.iskonto ? "İskonto: -" + money.format(s.iskonto) + "\n" : "") +
+    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + "\n\n" + (st.fisAltbilgi || "Teşekkür ederiz");
+}
+function irsaliyeWa(sale) {
+  if (!sale) { alert("Bu müşteride gönderilecek satış yok."); return; }
+  const c = sale.musteriId && findCustomer(sale.musteriId);
+  let d = ((c && c.telefon) || "").replace(/\D/g, "");
+  if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  const metin = encodeURIComponent(saleIrsaliyeMetni(sale));
+  window.open((d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + metin, "_blank");
+}
+function openSaleForCustomer(id) {
+  const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
+}
+function konumKaydet(id) {
+  if (!rota.konum) { alert("Önce konumu al."); return; }
+  const c = findCustomer(id); if (!c) return;
+  c.lat = rota.konum.lat; c.lng = rota.konum.lng; c.konumTarih = new Date().toISOString();
+  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+  alert("Müşterinin konumu kaydedildi 📍"); render();
+}
+
+function ziyaretKartiHTML(id) {
+  const c = findCustomer(id); if (!c) return "";
+  const borc = customerBorc(id);
+  const ay = musteriAylikCiro(id);
+  const son = [...store.sales].filter((s) => s.musteriId === id).sort((a, b) => b.tarih.localeCompare(a.tarih)).slice(0, 3);
+  const sonRows = son.length ? son.map((s) => `<div class="zk-satis"><span>${fmtDate(s.tarih)} · ${s.items.length} kalem</span><b>${money.format(s.toplam)}</b></div>`).join("") : `<p class="hint">Henüz satış yok.</p>`;
+  const konumVar = c.lat != null && c.lng != null;
+  return `<div class="ziyaret-kart">
+    <div class="zk-head"><div><h2>${esc(c.ad)}</h2>${c.telefon ? `<span class="hint">${esc(c.telefon)}</span>` : ""}</div>
+      <button class="btn soft sm" data-zkapat type="button">✕</button></div>
+    <div class="zk-metrik">
+      <div class="zkm"><span>Bakiye</span><b class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</b></div>
+      <div class="zkm"><span>Bu ay ciro</span><b>${money.format(ay)}</b></div>
+      <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
+    </div>
+    <div class="zk-son"><h3>Son satışlar</h3>${sonRows}</div>
+    <div class="zk-aksiyon">
+      <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
+      <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
+      <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi WhatsApp</button>
+    </div>
+    <div class="zk-kayit">
+      <label class="zk-kvkk"><input type="checkbox" id="zkOnay" /> Müşteriye kayıt onayı verildi (KVKK)</label>
+      <button class="btn lg" id="zkKayit" data-mus="${id}" type="button" disabled>🎙 Görüşmeyi Kaydet</button>
+      <p class="hint" id="zkDurum">Kaydı başlat, konuşma bitince durdur → analiz.</p>
+      <div id="ziyaretKocKart" style="margin-top:10px"></div>
+    </div>
+  </div>`;
+}
+function ziyaretKartiWire(id) {
+  const kart = document.getElementById("rotaKart");
+  const c = findCustomer(id);
+  kart.querySelector("[data-zkapat]").onclick = () => { kart.innerHTML = ""; };
+  kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
+  kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
+  kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
+  // puan (bayi_puan:<tel>) — async
+  const tel = ((c && c.telefon) || "").replace(/\D/g, "");
+  const pEl = document.getElementById("zkPuan");
+  if (tel && typeof kvGet === "function") { kvGet("bayi_puan:" + tel).then((r) => { if (pEl) pEl.textContent = num2.format((r && r.value) || 0); }).catch(() => { if (pEl) pEl.textContent = "0"; }); }
+  else if (pEl) pEl.textContent = "0";
+  // kayıt
+  const onay = document.getElementById("zkOnay"), kbtn = document.getElementById("zkKayit"), durum = document.getElementById("zkDurum");
+  onay.addEventListener("change", () => { kbtn.disabled = !onay.checked && !rota.kayit; });
+  kbtn.addEventListener("click", () => {
+    if (rota.kayit) gorusmeKayitDurdur(kbtn, durum);
+    else { if (!onay.checked) { alert("Önce KVKK onayını işaretle."); return; } gorusmeKayitBaslat(id, kbtn, durum); }
+  });
+}
+async function gorusmeKayitBaslat(musteriId, btn, durum) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      durum.textContent = "Yükleniyor ve analiz ediliyor… (birkaç dakika)";
+      const b64 = await blobToBase64(blob);
+      let res;
+      try { const { data, error } = await SB.functions.invoke("ses-analiz", { body: { audioBase64: b64, mediaType: blob.type } }); res = error ? null : data; }
+      catch (e) { res = null; }
+      if (!res || !res.ok) { durum.textContent = "Analiz edilemedi: " + ((res && res.error) || "bağlantı/kurulum"); return; }
+      durum.textContent = "Analiz hazır ✔";
+      const g = { id: genId(), tarih: new Date().toISOString(), musteriId, plasiyerId: null, transcript: res.transcript || "", analiz: res.analiz };
+      store.gorusmeler = store.gorusmeler || []; store.gorusmeler.push(g); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+      const k = document.getElementById("ziyaretKocKart"); if (k) k.innerHTML = kocKartHTML(res.analiz);
+    };
+    rec.start();
+    rota.kayit = { rec, musteriId };
+    rota.kayitTimer = setTimeout(() => { if (rota.kayit) gorusmeKayitDurdur(btn, durum); }, 15 * 60 * 1000);
+    btn.textContent = "⏹ Kaydı Durdur";
+    btn.classList.add("kayit-aktif");
+    durum.textContent = "🔴 Kayıt sürüyor… (en fazla 15 dk)";
+  } catch (e) {
+    durum.textContent = "Mikrofon açılamadı — izin verildi mi / APK güncel mi? (" + (e.message || e) + ")";
+  }
+}
+function gorusmeKayitDurdur(btn, durum) {
+  if (rota.kayit && rota.kayit.rec && rota.kayit.rec.state !== "inactive") rota.kayit.rec.stop();
+  clearTimeout(rota.kayitTimer); rota.kayit = null;
+  if (btn) { btn.textContent = "🎙 Görüşmeyi Kaydet"; btn.classList.remove("kayit-aktif"); }
+}
+function rotaListeDoldur() {
+  const el = document.getElementById("rotaListe"); if (!el) return;
+  if (!rota.konum) { el.innerHTML = `<p class="hint" style="padding:8px">Yakındaki müşterileri görmek için "Konumu Al"a bas.</p>`; return; }
+  const konumlu = store.customers.filter((c) => c.lat != null && c.lng != null)
+    .map((c) => ({ c, d: haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng) }))
+    .sort((a, b) => a.d - b.d);
+  const konumsuz = store.customers.filter((c) => c.lat == null || c.lng == null);
+  const yakin = konumlu.map(({ c, d }) => `<div class="rota-satir" data-rmus="${c.id}"><span class="rota-mes ${d < 100 ? "yakin" : ""}">${mesafeMetin(d)}</span><div class="rota-mid"><b>${esc(c.ad)}</b><span class="hint">Bakiye ${money.format(customerBorc(c.id))}</span></div><span class="rota-ok">›</span></div>`).join("");
+  el.innerHTML =
+    (konumlu.length ? `<div class="section-title" style="margin:4px 0 8px">Yakındaki müşteriler</div>${yakin}` : `<p class="hint" style="padding:8px">Konumu kayıtlı müşteri yok. Bir müşteriye uğrayınca kartından "Konumu Kaydet" ile öğret.</p>`) +
+    (konumsuz.length ? `<details class="rota-konumsuz"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length})</summary>${konumsuz.map((c) => `<div class="rota-satir" data-rmus="${c.id}"><span class="rota-mes">—</span><div class="rota-mid"><b>${esc(c.ad)}</b><span class="hint">Bakiye ${money.format(customerBorc(c.id))}</span></div><span class="rota-ok">›</span></div>`).join("")}</details>` : "");
+  el.querySelectorAll("[data-rmus]").forEach((row) => row.addEventListener("click", () => {
+    const kart = document.getElementById("rotaKart"); kart.innerHTML = ziyaretKartiHTML(row.dataset.rmus); ziyaretKartiWire(row.dataset.rmus);
+    kart.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+}
+function renderRota() {
+  return pageHead("Rota / Saha Satış", "Konumundan yakındaki müşterileri bulur, ziyaret bilgisi + kayıt + satış") +
+    `<div class="card">
+      <div class="row" style="gap:10px;align-items:center">
+        <button class="btn primary lg" id="rotaKonum" type="button">📍 Konumu Al / Yenile</button>
+        <span class="hint" id="rotaKonumDurum">${rota.konum ? "Konum alındı ✓" : "Konum alınmadı"}</span>
+      </div>
+    </div>
+    <div id="rotaKart" style="margin-top:12px"></div>
+    <div class="card" style="margin-top:12px"><div id="rotaListe"></div></div>`;
+}
+function mountRota() {
+  rotaListeDoldur();
+  const btn = document.getElementById("rotaKonum"), durum = document.getElementById("rotaKonumDurum");
+  btn.addEventListener("click", async () => {
+    durum.textContent = "Konum alınıyor…"; btn.disabled = true;
+    try { rota.konum = await konumAl(); durum.textContent = "Konum alındı ✓"; rotaListeDoldur(); }
+    catch (e) { durum.textContent = "Konum alınamadı — GPS/izin açık mı? APK güncel mi? (" + (e.message || e) + ")"; }
+    btn.disabled = false;
+  });
 }
 
 /* ============ PROFİLİM ============ */
