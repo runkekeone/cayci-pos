@@ -570,6 +570,24 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 #zkKayit { width: 100%; }
 #zkKayit.kayit-aktif { background: var(--red); color: #fff; border-color: var(--red); animation: kayitYaniyor 1.2s ease-in-out infinite; }
 @keyframes kayitYaniyor { 50% { opacity: .72; } }
+/* Servis akışı */
+.servis-uyari { background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-ink); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; margin-bottom: 4px; }
+.servis-durak { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line-soft); }
+.servis-durak:last-child { border-bottom: 0; }
+.servis-durak.edildi { opacity: .55; }
+.sd-no { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-num); font-weight: 800; font-size: 13px; color: #fff; background: var(--brand); }
+.servis-durak.edildi .sd-no { background: var(--green-d); }
+.sd-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sd-mid b { font-size: 14.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sd-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--green-d); }
+.rota-kayit-satir { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-soft); }
+.rota-kayit-satir:last-child { border-bottom: 0; }
+.rk-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rk-mid b { font-size: 14.5px; color: var(--text); }
+.rota-secim { max-height: 46vh; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); }
+.rota-sec-satir { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.rota-sec-satir:last-child { border-bottom: 0; }
+.rota-sec-satir span:first-of-type { flex: 1; min-width: 0; font-size: 14px; }
 
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }

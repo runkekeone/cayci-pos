@@ -12,7 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
-    duyurular: [], gorusmeler: [],
+    duyurular: [], gorusmeler: [], rotalar: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -1962,6 +1962,45 @@ function mountSahaKocu() {
 
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
+// Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
+const servis = { aktif: false, musteriIds: [], edilen: [], watchId: null, uyarilan: {} };
+
+function rotaKaydet(ad, musteriIds) {
+  const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
+  store.rotalar = store.rotalar || []; store.rotalar.push(r); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+  return r;
+}
+function servisBaslat(musteriIds) {
+  servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.uyarilan = {};
+  servisKonumIzle(); render();
+}
+function servisBitir() {
+  servis.aktif = false;
+  if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
+  const n = servis.edilen.length, t = servis.musteriIds.length;
+  servis.musteriIds = []; servis.edilen = [];
+  render();
+  alert("Servis bitti ✓  " + n + "/" + t + " durak ziyaret edildi.");
+}
+function durakTamamla(id) {
+  if (!servis.edilen.includes(id)) servis.edilen.push(id);
+  const kart = document.getElementById("rotaKart"); if (kart) kart.innerHTML = "";
+  render();
+}
+function servisKonumIzle() {
+  if (!navigator.geolocation || servis.watchId != null) return;
+  servis.watchId = navigator.geolocation.watchPosition((p) => {
+    rota.konum = { lat: p.coords.latitude, lng: p.coords.longitude };
+    if (!servis.aktif) return;
+    const banner = document.getElementById("servisBanner"); if (!banner) return;
+    // 100m içinde, henüz ziyaret edilmemiş rota müşterileri (program tahmin yürütmez — hepsini listeler)
+    const yakin = servis.musteriIds.map(findCustomer).filter((c) => c && c.lat != null && !servis.edilen.includes(c.id))
+      .map((c) => ({ c, d: haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng) }))
+      .filter((x) => x.d <= 100).sort((a, b) => a.d - b.d);
+    if (!yakin.length) { banner.innerHTML = ""; return; }
+    banner.innerHTML = `<div class="servis-uyari"><b>📍 Yakındasın:</b> ${yakin.map((x) => `${esc(x.c.ad)} (${mesafeMetin(x.d)})`).join(" · ")}. Vardığın müşteride <b>Vardım</b>'a bas.</div>`;
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 8000, timeout: 15000 });
+}
 
 function haversine(a, b, c, d) {
   const R = 6371000, r = Math.PI / 180;
@@ -2036,6 +2075,7 @@ function ziyaretKartiHTML(id) {
       <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
       <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
       <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi WhatsApp</button>
+      ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>` : ""}
     </div>
     <div class="zk-kayit">
       <label class="zk-kvkk"><input type="checkbox" id="zkOnay" /> Müşteriye kayıt onayı verildi (KVKK)</label>
@@ -2052,6 +2092,7 @@ function ziyaretKartiWire(id) {
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
   kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
+  const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
   // puan (bayi_puan:<tel>) — async
   const tel = ((c && c.telefon) || "").replace(/\D/g, "");
   const pEl = document.getElementById("zkPuan");
@@ -2117,25 +2158,76 @@ function rotaListeDoldur() {
   }));
 }
 function renderRota() {
-  return pageHead("Rota / Saha Satış", "Konumundan yakındaki müşterileri bulur, ziyaret bilgisi + kayıt + satış") +
-    `<div class="card">
-      <div class="row" style="gap:10px;align-items:center">
-        <button class="btn primary lg" id="rotaKonum" type="button">📍 Konumu Al / Yenile</button>
-        <span class="hint" id="rotaKonumDurum">${rota.konum ? "Konum alındı ✓" : "Konum alınmadı"}</span>
-      </div>
-    </div>
-    <div id="rotaKart" style="margin-top:12px"></div>
-    <div class="card" style="margin-top:12px"><div id="rotaListe"></div></div>`;
+  return servis.aktif ? renderServisAktif() : renderServisBaslat();
+}
+function renderServisBaslat() {
+  const rotalar = store.rotalar || [];
+  const rlist = rotalar.length
+    ? rotalar.map((r) => `<div class="rota-kayit-satir"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri</span></div><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button><button class="rm" data-rsil="${r.id}" type="button">✕</button></div>`).join("")
+    : `<p class="hint" style="padding:6px">Kayıtlı rota yok. "Yeni Rota Oluştur" ile başla.</p>`;
+  return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir") +
+    `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">＋ Yeni Rota Oluştur & Servisi Başlat</button></div>
+    <div class="section-title" style="margin-top:14px">Kayıtlı Rotalar</div>
+    <div class="card">${rlist}</div>
+    <div class="section-title" style="margin-top:14px">Rotasız (serbest — yakındaki müşteriler)</div>
+    <div class="card">
+      <button class="btn soft" id="rotaKonum" type="button">📍 Konumu Al</button> <span class="hint" id="rotaKonumDurum"></span>
+      <div id="rotaKart" style="margin-top:10px"></div>
+      <div id="rotaListe" style="margin-top:10px"></div>
+    </div>`;
+}
+function renderServisAktif() {
+  const total = servis.musteriIds.length, done = servis.edilen.length;
+  const steps = servis.musteriIds.map((id, i) => {
+    const c = findCustomer(id); if (!c) return "";
+    const edildi = servis.edilen.includes(id);
+    const mes = (rota.konum && c.lat != null) ? mesafeMetin(haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng)) : "";
+    return `<div class="servis-durak ${edildi ? "edildi" : ""}">
+      <span class="sd-no">${edildi ? "✓" : (i + 1)}</span>
+      <div class="sd-mid"><b>${esc(c.ad)}</b><span class="hint">Bakiye ${money.format(customerBorc(id))}${mes ? " · " + mes : ""}</span></div>
+      ${edildi ? `<span class="sd-tag">edildi</span>` : `<button class="btn green sm" data-vardim="${id}" type="button">Vardım</button>`}
+    </div>`;
+  }).join("");
+  return pageHead("🚗 Servis — " + done + "/" + total + " durak", "Vardığın müşteride 'Vardım'a bas", [{ label: "⏹ Servisi Bitir", cls: "softred", act: "servisbitir" }]) +
+    `<div id="servisBanner"></div>
+    <div id="rotaKart" style="margin:12px 0"></div>
+    <div class="card">${steps || `<p class="hint">Rotada müşteri yok.</p>`}</div>`;
+}
+function rotaOlusturModal() {
+  const body = `<div class="field"><label>Rota Adı</label><input id="rotaAd" placeholder="ör. Salı Rotası" /></div>
+    <p class="hint">Bugün gideceğin müşterileri seç (seçim sırası = ziyaret sırası).</p>
+    <div class="rota-secim">${store.customers.length ? store.customers.map((c) => `<label class="rota-sec-satir"><input type="checkbox" data-rsec="${c.id}" /><span>${esc(c.ad)}</span><span class="hint">${money.format(customerBorc(c.id))}</span></label>`).join("") : `<p class="hint">Önce müşteri ekle.</p>`}</div>
+    <div style="text-align:right;margin-top:12px"><button class="btn green lg" id="rotaKaydetBtn" type="button">Oluştur & Başlat</button></div>`;
+  const m = openModal("Yeni Rota", body, { noFoot: true, onMount: (ov) => {
+    ov.querySelector("#rotaKaydetBtn").onclick = () => {
+      const ids = Array.from(ov.querySelectorAll("[data-rsec]:checked")).map((x) => x.dataset.rsec);
+      if (!ids.length) { alert("En az bir müşteri seç."); return; }
+      rotaKaydet(ov.querySelector("#rotaAd").value.trim(), ids);
+      m.close(); servisBaslat(ids);
+    };
+  } });
 }
 function mountRota() {
+  if (servis.aktif) {
+    const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
+    document.querySelectorAll("[data-vardim]").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.vardim; const kart = document.getElementById("rotaKart");
+      kart.innerHTML = ziyaretKartiHTML(id); ziyaretKartiWire(id); kart.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+    servisKonumIzle();
+    return;
+  }
+  const ol = document.getElementById("rotaOlustur"); if (ol) ol.addEventListener("click", rotaOlusturModal);
+  document.querySelectorAll("[data-rbaslat]").forEach((b) => b.addEventListener("click", () => {
+    const r = (store.rotalar || []).find((x) => x.id === b.dataset.rbaslat); if (r) servisBaslat(r.musteriIds);
+  }));
+  document.querySelectorAll("[data-rsil]").forEach((b) => b.addEventListener("click", () => {
+    if (!confirm("Rota silinsin mi?")) return;
+    store.rotalar = (store.rotalar || []).filter((x) => x.id !== b.dataset.rsil); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
+  }));
+  const kb = document.getElementById("rotaKonum"), kd = document.getElementById("rotaKonumDurum");
+  if (kb) kb.addEventListener("click", async () => { kd.textContent = "Konum alınıyor…"; kb.disabled = true; try { rota.konum = await konumAl(); kd.textContent = "✓"; rotaListeDoldur(); } catch (e) { kd.textContent = "alınamadı (" + (e.message || e) + ")"; } kb.disabled = false; });
   rotaListeDoldur();
-  const btn = document.getElementById("rotaKonum"), durum = document.getElementById("rotaKonumDurum");
-  btn.addEventListener("click", async () => {
-    durum.textContent = "Konum alınıyor…"; btn.disabled = true;
-    try { rota.konum = await konumAl(); durum.textContent = "Konum alındı ✓"; rotaListeDoldur(); }
-    catch (e) { durum.textContent = "Konum alınamadı — GPS/izin açık mı? APK güncel mi? (" + (e.message || e) + ")"; }
-    btn.disabled = false;
-  });
 }
 
 /* ============ PROFİLİM ============ */
