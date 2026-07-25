@@ -72,10 +72,43 @@ function fmtDate(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${
 function fmtDateShort(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`; }
 function isToday(iso) { return localDateStr(new Date(iso)) === todayStr(); }
 function inRange(iso, from, to) { const d = localDateStr(new Date(iso)); return (!from || d >= from) && (!to || d <= to); }
+const KATEGORILER = ["Sıcak İçecekler", "Soğuk İçecekler", "Atıştırmalık", "Şeker & Gıda", "Servis & Bardak", "Temizlik", "Kağıt & Hijyen", "Mutfak & Ekipman", "Mobilya & Dış Mekan", "Oyun & Eğlence", "Kırtasiye", "Teknik & Güvenlik"];
 function allGroupNames() {
-  const base = ["ÇAYLAR", "KAHVE", "KIRAATHANE ARAÇLARI", "MEŞRUBATLAR", "OYUN MALZEMELERİ", "SODALAR", "SOĞUK", "TOZ İÇECEKLER", "GRUPSUZ ÜRÜN"];
   const extra = store.groups.map((g) => g.ad);
-  return [...new Set(base.concat(extra))];
+  return [...new Set(KATEGORILER.concat(extra).concat(["GRUPSUZ ÜRÜN"]))];
+}
+/* Eski/granü grup adlarını temiz kategorilere haritalar (tek-sefer otomatik kategorileme) */
+const ESKI_GRUP_MAP = {
+  "ÇAYLAR": "Temizlik", "Genel temizlik": "Temizlik", "Bulasik": "Temizlik", "Dezenfektan": "Temizlik", "Ekipman": "Temizlik",
+  "Tuvalet": "Kağıt & Hijyen", "Personel sarf": "Kağıt & Hijyen",
+  "Cay ve sicak icecek": "Sıcak İçecekler",
+  "Tatlandirici": "Şeker & Gıda", "Mutfak sarf": "Şeker & Gıda",
+  "Sarf": "Servis & Bardak", "Servis": "Servis & Bardak",
+  "Mesrubat": "Soğuk İçecekler",
+  "Atistirmalik": "Atıştırmalık",
+  "Cay ocagi": "Mutfak & Ekipman", "Sogutma": "Mutfak & Ekipman", "Mutfak": "Mutfak & Ekipman",
+  "Mobilya": "Mobilya & Dış Mekan", "Bahce/on": "Mobilya & Dış Mekan",
+  "Oyun": "Oyun & Eğlence",
+  "Kasa": "Teknik & Güvenlik", "Guvenlik": "Teknik & Güvenlik", "Teknik": "Teknik & Güvenlik",
+  "Kirtasiye": "Kırtasiye",
+};
+function otomatikKategorile() {
+  const norm = (s) => String(s || "").toLocaleLowerCase("tr").replace(/[ıİ]/g, "i").replace(/[şŞ]/g, "s").replace(/[ğĞ]/g, "g").replace(/[üÜ]/g, "u").replace(/[öÖ]/g, "o").replace(/[çÇ]/g, "c");
+  let deg = 0;
+  store.products.forEach((p) => {
+    if (KATEGORILER.includes(p.grup)) return; // zaten temiz kategori — dokunma (idempotent + elle seçim korunur)
+    let cat;
+    if (p.grup === "Kontrol Edilecek") { const n = norm(p.ad); cat = n.includes("kokel") ? "Sıcak İçecekler" : (n.includes("cobanpinar") ? "Soğuk İçecekler" : "Şeker & Gıda"); }
+    else cat = ESKI_GRUP_MAP[p.grup] || "Şeker & Gıda";
+    const n = norm(p.ad);
+    if (/(cay|melamin|porselen|pasabahce|gunes).*(tabag|bardag)|cay kasig|fincan/.test(n)) cat = "Servis & Bardak";
+    if (p.grup !== cat) { p.grup = cat; deg++; }
+  });
+  const varOlan = new Set(store.groups.map((g) => g.ad));
+  KATEGORILER.forEach((ad, i) => { if (!varOlan.has(ad)) store.groups.push({ id: "grp_" + Date.now() + "_" + i, ad }); });
+  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+  alert(deg + " ürün kategorilere yerleştirildi ✔");
+  render();
 }
 
 /* ============ CSV / dosya yardımcıları ============ */
@@ -528,7 +561,8 @@ function newCart() { return { items: [], musteriId: null, iskonto: 0, odenen: 0 
 const pos = { carts: [newCart(), newCart(), newCart(), newCart(), newCart()], active: 0, cat: "ANA", personelId: null, q: "" };
 function activeCart() { return pos.carts[pos.active]; }
 function renderSatis() {
-  const cats = ["ANA"].concat(allGroupNames());
+  const usedSet = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
+  const cats = ["ANA"].concat(allGroupNames().filter((g) => usedSet.has(g)));
   const custTabs = pos.carts.map((c, n) => `<div class="cust-tab ${n === pos.active ? "on" : ""}" data-tab="${n}">Müşteri ${n + 1} (${num2.format(c.items.reduce((s, i) => s + i.fiyat * i.adet, 0))})</div>`).join("");
   const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c}</span>`).join("");
   const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
@@ -1630,7 +1664,7 @@ const PAGES = {
   urunler: { render: renderUrunler, mount: mountUrunler },
   "urun-ekle": { render: renderUrunEkle, mount: mountUrunEkle },
   "urun-varyantli": { render: () => renderUrunEkle(), mount: mountUrunEkle },
-  "urun-gruplari": { render: () => crudPage({ title: "Ürün Grupları", key: "groups", newLabel: "Yeni Grup", columns: ["Sıra", "Grup Adı"], row: (g, i) => [i + 1, esc(g.ad)], fields: [{ key: "ad", label: "Grup Adı", req: true }] }), mount: () => mountCrud({ key: "groups", fields: [{ key: "ad", label: "Grup Adı", req: true }] }) },
+  "urun-gruplari": { render: () => crudPage({ title: "Ürün Grupları", key: "groups", newLabel: "Yeni Grup", columns: ["Sıra", "Grup Adı"], row: (g, i) => [i + 1, esc(g.ad)], fields: [{ key: "ad", label: "Grup Adı", req: true }] }) + `<div class="card" style="margin-top:12px"><button class="btn green lg" id="autoKat" type="button">🏷️ Ürünleri Otomatik Kategorile</button><p class="hint" style="margin-top:8px">Tüm ürünlerini Sıcak/Soğuk İçecekler, Temizlik, Servis vb. temiz kategorilere dağıtır. Zaten kategorili ürünlere ve elle seçtiklerine dokunmaz.</p></div>`, mount: () => { mountCrud({ key: "groups", fields: [{ key: "ad", label: "Grup Adı", req: true }] }); const b = document.getElementById("autoKat"); if (b) b.addEventListener("click", () => { if (confirm("Tüm ürünler otomatik kategorilere dağıtılsın mı?")) otomatikKategorile(); }); } },
   "urun-transfer": { render: () => pageHead("Ürün Transferleri", "Tek şube — transfer yerine stok düzeltmesi için Stok Hareket Rapor'daki 'Stok Düzeltme' aracını kullanın.") + `<div class="card"><p class="sub">Şubeler arası transfer bu sürümde kapalı (tek işletme). Stok düzeltme: <button class="link-btn" data-goto="rapor-stokhareket">Stok Hareket Rapor</button>.</p></div>` },
   "alt-urun": { render: () => crudPage({ title: "Alt Ürün Tanımları", sub: "Reçete: bir ürün satılınca elle takip", key: "altUrunler", newLabel: "Yeni Alt Ürün", columns: ["Sıra", "Ana Ürün", "Alt Ürün", "Oran"], row: (a, i) => [i + 1, esc(a.ana), esc(a.alt), esc(a.oran)], fields: [{ key: "ana", label: "Ana Ürün" }, { key: "alt", label: "Alt Ürün" }, { key: "oran", label: "Oran", type: "number", step: "0.01", def: 1 }] }), mount: () => mountCrud({ key: "altUrunler", fields: [{ key: "ana", label: "Ana Ürün" }, { key: "alt", label: "Alt Ürün" }, { key: "oran", label: "Oran", type: "number", step: "0.01", def: 1 }] }) },
   "urun-varyantlari": { render: () => crudPage({ title: "Ürün Varyantları", key: "varyantlar", newLabel: "Yeni Varyant", columns: ["Sıra", "Varyant Adı", "Değerler"], row: (v, i) => [i + 1, esc(v.ad), esc(v.degerler)], fields: [{ key: "ad", label: "Varyant Adı", req: true, ph: "örn. Beden" }, { key: "degerler", label: "Değerler (virgülle)", ph: "S, M, L" }] }), mount: () => mountCrud({ key: "varyantlar", fields: [{ key: "ad", label: "Varyant Adı", req: true }, { key: "degerler", label: "Değerler" }] }) },
