@@ -92,10 +92,10 @@ const ESKI_GRUP_MAP = {
   "Kasa": "Teknik & Güvenlik", "Guvenlik": "Teknik & Güvenlik", "Teknik": "Teknik & Güvenlik",
   "Kirtasiye": "Kırtasiye",
 };
-function otomatikKategorile() {
+function otomatikKategorile(sessiz) {
   const norm = (s) => String(s || "").toLocaleLowerCase("tr").replace(/[ıİ]/g, "i").replace(/[şŞ]/g, "s").replace(/[ğĞ]/g, "g").replace(/[üÜ]/g, "u").replace(/[öÖ]/g, "o").replace(/[çÇ]/g, "c");
   let deg = 0;
-  store.products.forEach((p) => {
+  (store.products || []).forEach((p) => {
     if (KATEGORILER.includes(p.grup)) return; // zaten temiz kategori — dokunma (idempotent + elle seçim korunur)
     let cat;
     if (p.grup === "Kontrol Edilecek") { const n = norm(p.ad); cat = n.includes("kokel") ? "Sıcak İçecekler" : (n.includes("cobanpinar") ? "Soğuk İçecekler" : "Şeker & Gıda"); }
@@ -104,11 +104,24 @@ function otomatikKategorile() {
     if (/(cay|melamin|porselen|pasabahce|gunes).*(tabag|bardag)|cay kasig|fincan/.test(n)) cat = "Servis & Bardak";
     if (p.grup !== cat) { p.grup = cat; deg++; }
   });
-  const varOlan = new Set(store.groups.map((g) => g.ad));
+  const varOlan = new Set((store.groups || []).map((g) => g.ad));
   KATEGORILER.forEach((ad, i) => { if (!varOlan.has(ad)) store.groups.push({ id: "grp_" + Date.now() + "_" + i, ad }); });
-  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
-  alert(deg + " ürün kategorilere yerleştirildi ✔");
+  if (deg > 0 || !sessiz) {
+    saveStore();
+    const ts = new Date().toISOString();
+    try { localStorage.setItem(BULUT_KEY + ":ts", ts); } catch (e) {}
+    if (typeof kvSet === "function") kvSet(BULUT_KEY, store, ts);
+    else if (typeof bulutaYaz === "function") bulutaYaz();
+  }
+  if (!sessiz) alert(deg + " ürün kategorilere yerleştirildi ✔");
   render();
+  return deg;
+}
+/* Açılışta tek-sefer otomatik göç: hâlâ eski grup adı taşıyan ürün varsa temiz kategorilere dağıt. */
+function kategoriGocKontrol() {
+  if (!store || !store.products || !store.products.length) return;
+  const eski = store.products.some((p) => p.grup && p.grup !== "GRUPSUZ ÜRÜN" && !KATEGORILER.includes(p.grup));
+  if (eski) otomatikKategorile(true);
 }
 
 /* ============ CSV / dosya yardımcıları ============ */
@@ -1391,7 +1404,7 @@ function bulutaYaz() {
 
 /** Açılışta: buluttan çek. Bulut daha yeniyse benimse; yerel daha yeniyse buluta it. */
 async function bulutHydrate() {
-  if (!SB) { _bulutHazir = true; return; }
+  if (!SB) { _bulutHazir = true; kategoriGocKontrol(); return; }
   const localTs = localStorage.getItem(BULUT_KEY + ":ts") || "";
   const cloud = await kvGet(BULUT_KEY);
   if (cloud && cloud.value && (!localTs || cloud.updatedAt > localTs)) {
@@ -1405,6 +1418,7 @@ async function bulutHydrate() {
     kvSet(BULUT_KEY, store, ts);
   }
   _bulutHazir = true;
+  kategoriGocKontrol();
 }
 
 /* ---- İnternet kapısı: bağlantı yoksa tüm paneli kapatan tam ekran örtü ---- */
