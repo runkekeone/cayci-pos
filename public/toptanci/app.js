@@ -1716,6 +1716,7 @@ const PAGES = {
   anasayfa: { render: renderAnasayfa, mount: mountAnasayfa },
   satis: { render: renderSatis, mount: mountSatis },
   rota: { render: renderRota, mount: mountRota },
+  "rota-olustur": { render: renderRotaOlustur, mount: mountRotaOlustur },
   "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
 
@@ -2231,19 +2232,65 @@ function renderServisAktif() {
     <div id="rotaKart" style="margin:12px 0">${acikVar ? ziyaretKartiHTML(servis.acik) : ""}</div>
     <div class="card">${steps || `<p class="hint">Rotada müşteri yok.</p>`}</div>`;
 }
-function rotaOlusturModal() {
-  const body = `<div class="field"><label>Rota Adı</label><input id="rotaAd" placeholder="ör. Salı Rotası" /></div>
-    <p class="hint">Bugün gideceğin müşterileri seç (seçim sırası = ziyaret sırası).</p>
-    <div class="rota-secim">${store.customers.length ? store.customers.map((c) => `<label class="rota-sec-satir"><input type="checkbox" data-rsec="${c.id}" /><span>${esc(c.ad)}</span><span class="hint">${money.format(customerBorc(c.id))}</span></label>`).join("") : `<p class="hint">Önce müşteri ekle.</p>`}</div>
-    <div style="text-align:right;margin-top:12px"><button class="btn green lg" id="rotaKaydetBtn" type="button">Oluştur & Başlat</button></div>`;
-  const m = openModal("Yeni Rota", body, { noFoot: true, onMount: (ov) => {
-    ov.querySelector("#rotaKaydetBtn").onclick = () => {
-      const ids = Array.from(ov.querySelectorAll("[data-rsec]:checked")).map((x) => x.dataset.rsec);
-      if (!ids.length) { alert("En az bir müşteri seç."); return; }
-      rotaKaydet(ov.querySelector("#rotaAd").value.trim(), ids);
-      m.close(); servisBaslat(ids);
-    };
-  } });
+/* Sürükle-bırak rota oluşturma ekranı */
+let rotaYapim = { ad: "", sira: [] };
+function renderRotaOlustur() {
+  return pageHead("Rota Oluştur", "Müşteri kartına dokun → rotaya ekle · rotada ≡'yi sürükle → sırala", [{ label: "Geri", cls: "soft", route: "rota" }]) +
+    `<div class="card">
+      <div class="field"><label>Rota Adı</label><input id="ryAd" placeholder="ör. Salı Rotası" value="${esc(rotaYapim.ad)}" /></div>
+      <div class="section-title" style="margin:12px 0 6px">Rota Sırası</div>
+      <div id="rySira" class="ry-sira"></div>
+      <div style="margin-top:12px"><button class="btn green lg" id="rySave" type="button" style="width:100%">Kaydet & Servisi Başlat</button></div>
+    </div>
+    <div class="section-title" style="margin-top:14px">Müşteriler (dokun → ekle)</div>
+    <div id="ryHavuz" class="ry-havuz"></div>`;
+}
+function ryCiz() {
+  const sira = document.getElementById("rySira"), hav = document.getElementById("ryHavuz");
+  if (!sira || !hav) return;
+  sira.innerHTML = rotaYapim.sira.length
+    ? rotaYapim.sira.map((id, i) => { const c = findCustomer(id); return `<div class="ry-item" data-ryid="${id}"><span class="ry-tut" data-ryhandle="${id}">≡</span><span class="ry-no">${i + 1}</span><b>${c ? esc(c.ad) : "?"}</b><button class="rm" data-rycik="${id}" type="button">✕</button></div>`; }).join("")
+    : `<p class="hint" style="padding:8px">Aşağıdan müşteri ekle. Eklenenler burada sıralanır.</p>`;
+  const kalan = store.customers.filter((c) => !rotaYapim.sira.includes(c.id));
+  hav.innerHTML = kalan.length
+    ? kalan.map((c) => `<button class="ry-kart" data-ryekle="${c.id}" type="button"><span class="ry-kad">${esc(c.ad)}</span><span class="hint">${money.format(customerBorc(c.id))}</span></button>`).join("")
+    : `<p class="hint" style="padding:8px">Tüm müşteriler rotada.</p>`;
+  ryWire();
+}
+function ryWire() {
+  document.querySelectorAll("[data-ryekle]").forEach((b) => b.onclick = () => { rotaYapim.sira.push(b.dataset.ryekle); ryCiz(); });
+  document.querySelectorAll("[data-rycik]").forEach((b) => b.onclick = () => { rotaYapim.sira = rotaYapim.sira.filter((x) => x !== b.dataset.rycik); ryCiz(); });
+  document.querySelectorAll("[data-ryhandle]").forEach((h) => h.addEventListener("pointerdown", (e) => rySurukleBasla(e, h.dataset.ryhandle)));
+}
+function rySurukleBasla(e, id) {
+  e.preventDefault();
+  const liste = document.getElementById("rySira");
+  const el = liste.querySelector(`[data-ryid="${id}"]`); if (!el) return;
+  el.classList.add("suru");
+  const move = (ev) => {
+    const y = ev.clientY;
+    const kardes = [...liste.querySelectorAll(".ry-item:not(.suru)")];
+    const alt = kardes.find((k) => { const r = k.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    if (alt) liste.insertBefore(el, alt); else liste.appendChild(el);
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up);
+    el.classList.remove("suru");
+    rotaYapim.sira = [...liste.querySelectorAll(".ry-item")].map((x) => x.dataset.ryid);
+    ryCiz();
+  };
+  document.addEventListener("pointermove", move); document.addEventListener("pointerup", up);
+}
+function mountRotaOlustur() {
+  ryCiz();
+  const ad = document.getElementById("ryAd"); if (ad) ad.addEventListener("input", () => { rotaYapim.ad = ad.value; });
+  const save = document.getElementById("rySave");
+  if (save) save.onclick = () => {
+    if (!rotaYapim.sira.length) { alert("En az bir müşteri ekle."); return; }
+    rotaKaydet(rotaYapim.ad.trim(), rotaYapim.sira.slice());
+    const ids = rotaYapim.sira.slice(); rotaYapim = { ad: "", sira: [] };
+    servisBaslat(ids);
+  };
 }
 function mountRota() {
   if (servis.aktif) {
@@ -2253,7 +2300,7 @@ function mountRota() {
     servisKonumIzle();
     return;
   }
-  const ol = document.getElementById("rotaOlustur"); if (ol) ol.addEventListener("click", rotaOlusturModal);
+  const ol = document.getElementById("rotaOlustur"); if (ol) ol.addEventListener("click", () => { rotaYapim = { ad: "", sira: [] }; navigate("rota-olustur"); });
   document.querySelectorAll("[data-rbaslat]").forEach((b) => b.addEventListener("click", () => {
     const r = (store.rotalar || []).find((x) => x.id === b.dataset.rbaslat); if (r) servisBaslat(r.musteriIds);
   }));
