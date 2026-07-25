@@ -1008,6 +1008,20 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .line-table th, .line-table td { white-space: nowrap; }
   .line-table input, .line-table select { min-width: 88px; min-height: 40px; font-size: 16px; }
 
+  /* Satış detay ürün tablosu: mobilde yatay kaydırma yok — kart görünümü (tüm veri sığar) */
+  .sd-lines { display: block; overflow: visible; }
+  .sd-lines thead { display: none; }
+  .sd-lines tbody, .sd-lines tr, .sd-lines td { display: block; width: 100%; }
+  .sd-lines tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .sd-lines td { border: 0 !important; padding: 0; white-space: normal; display: flex; flex-direction: column; gap: 3px; }
+  .sd-lines td::before { content: attr(data-label); font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .sd-lines td.sd-ad { grid-column: 1 / -1; font-weight: 700; font-size: 14.5px; }
+  .sd-lines td.sd-ad::before { content: ""; }
+  .sd-lines td.sd-rm { grid-column: 1 / -1; }
+  .sd-lines td.sd-rm::before { content: ""; }
+  .sd-lines td.sd-rm .rm { width: 100%; padding: 9px; }
+  .sd-lines input { width: 100% !important; min-width: 0 !important; box-sizing: border-box; }
+
   /* --- modal → alttan açılan sheet: tam genişlik, üstü yuvarlak, ferah --- */
   .modal-overlay { padding: 0; align-items: flex-end; justify-content: stretch; }
   .modal {

@@ -469,12 +469,12 @@ function renderSatisDetay() {
       <div class="field"><label>Satış Yapan</label><input value="${(s.personelId && (store.personeller.find((p) => p.id === s.personelId) || {}).ad) || "-"}" disabled /></div>
     </div></div>
     <div class="card"><h1 style="font-size:15px;margin:0 0 8px">Ürünler</h1>
-      <table class="line-table"><thead><tr><th style="width:36%">Ürün</th><th>KDV</th><th>Adet</th><th>Birim Fiyat</th><th>Tutar</th><th></th></tr></thead><tbody id="sdBody"></tbody></table>
+      <table class="line-table sd-lines"><thead><tr><th style="width:34%">Ürün</th><th>Adet</th><th>Birim Fiyat</th><th>KDV</th><th>Tutar</th><th></th></tr></thead><tbody id="sdBody"></tbody></table>
       <div class="totbox" style="margin-top:10px"><strong>Genel Toplam: <span id="sdTot">₺0,00</span></strong></div>
       <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="sdSave" type="button">💾 Güncelle</button></div>
     </div>`;
 }
-function sdRowHTML(r, i) { return `<tr><td>${esc(r.ad)}</td><td>%${Number(r.kdv) || 0}</td><td><input class="row-in" data-sd="${i}" data-f="adet" type="number" step="0.01" value="${r.adet}" style="width:80px" /></td><td><input class="row-in" data-sd="${i}" data-f="fiyat" type="number" step="0.01" value="${r.fiyat}" style="width:100px" /></td><td>${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</td><td><button class="rm" data-sdmv="${i}" type="button">✕</button></td></tr>`; }
+function sdRowHTML(r, i) { return `<tr><td class="sd-ad" data-label="Ürün">${esc(r.ad)}</td><td data-label="Adet"><input class="row-in" data-sd="${i}" data-f="adet" type="number" step="0.01" value="${r.adet}" style="width:100%;box-sizing:border-box" /></td><td data-label="Birim Fiyat"><input class="row-in" data-sd="${i}" data-f="fiyat" type="number" step="0.01" value="${r.fiyat}" style="width:100%;box-sizing:border-box" /></td><td data-label="KDV">%${Number(r.kdv) || 0}</td><td data-label="Tutar">${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</td><td class="sd-rm"><button class="rm" data-sdmv="${i}" type="button">✕</button></td></tr>`; }
 function sdRefresh() {
   document.getElementById("sdBody").innerHTML = saleLines.map(sdRowHTML).join("");
   const isk = Number(document.getElementById("sdIsk").value) || 0;
