@@ -515,6 +515,31 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .aile-opt .ao-ad { font-weight: 600; font-size: 14px; color: var(--text); min-width: 0; }
 .aile-opt .ao-fiyat { flex: 0 0 auto; font-family: var(--font-num); font-weight: 800; font-size: 15px; color: var(--green-d); }
 
+/* ---- Saha Koçu: KVKK + koçluk kartı + geçmiş ---- */
+.koc-kvkk { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); padding: 11px 13px; }
+.koc-kvkk label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--accent-ink); cursor: pointer; }
+.koc-kvkk input { margin-top: 2px; flex: 0 0 auto; }
+.koc-kart { display: flex; flex-direction: column; gap: 12px; }
+.koc-head { display: flex; align-items: center; gap: 14px; background: var(--brand-soft); border: 1px solid var(--brand-ring); border-radius: var(--radius-md); padding: 14px; }
+.koc-puan { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font-num); font-weight: 800; font-size: 22px; color: #fff; line-height: 1; }
+.koc-puan span { font-size: 10px; font-weight: 600; opacity: .85; }
+.koc-puan.iyi { background: var(--green-d); } .koc-puan.orta { background: var(--accent); } .koc-puan.dusuk { background: var(--red); }
+.koc-ozet { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
+.koc-blok { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: #fff; }
+.koc-blok h3 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--brand-dark); }
+.koc-blok.koc-iyi h3 { color: var(--green-d); }
+.koc-blok.koc-eksik h3 { color: var(--red); }
+.koc-blok.koc-oneri { background: var(--accent-soft); border-color: var(--accent); }
+.koc-blok.koc-oneri h3 { color: var(--accent-ink); }
+.koc-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.koc-list li { font-size: 13.5px; line-height: 1.45; color: var(--text); }
+.koc-gec { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.koc-gec:last-child { border-bottom: 0; }
+.koc-gpuan { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-num); font-weight: 800; font-size: 13px; color: #fff; }
+.koc-gpuan.iyi { background: var(--green-d); } .koc-gpuan.orta { background: var(--accent); } .koc-gpuan.dusuk { background: var(--red); }
+.koc-gmid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.koc-gmid b { font-size: 14px; color: var(--text); }
+
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }
 .sheet-body { display: flex; flex-direction: column; }

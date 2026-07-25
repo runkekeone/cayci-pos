@@ -12,7 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
-    duyurular: [],
+    duyurular: [], gorusmeler: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -220,6 +220,7 @@ function importCustomers(text) {
 const MENU = [
   { ico: "▦", label: "Anasayfa", route: "anasayfa" },
   { ico: "🖊", label: "Satış Yap", route: "satis" },
+  { ico: "🎧", label: "Saha Koçu (Görüşme Analizi)", route: "saha-kocu" },
   { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
   { ico: "📢", label: "Duyurular", route: "duyurular" },
   { ico: "📈", label: "Raporlar", children: [
@@ -1712,6 +1713,7 @@ const PAGES = {
   duyurular: { render: renderDuyurular, mount: mountDuyurular },
   anasayfa: { render: renderAnasayfa, mount: mountAnasayfa },
   satis: { render: renderSatis, mount: mountSatis },
+  "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
 
   "rapor-gunluk": { render: renderRaporGunluk, mount: () => mountReport("rapor-gunluk") },
@@ -1859,6 +1861,101 @@ function renderEFaturaAyarlar() {
   </div><div style="margin-top:14px"><button class="btn green lg" type="submit">💾 Kaydet</button></div></form>`;
 }
 function mountEFaturaAyarlar() { document.getElementById("efAyarForm").addEventListener("submit", (e) => { e.preventDefault(); const f = new FormData(e.target); ["firmaAdi", "firmaNo", "eposta", "gib"].forEach((k) => store.settings[k] = f.get(k)); saveStore(); alert("Kaydedildi ✔"); }); }
+
+/* ============ SAHA KOÇU (Görüşme Analizi) ============ */
+function sesDosyaSec(cb) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "audio/*"; inp.setAttribute("capture", "microphone");
+  inp.style.display = "none"; document.body.appendChild(inp);
+  inp.addEventListener("change", () => {
+    const f = inp.files && inp.files[0]; document.body.removeChild(inp);
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { const s = String(r.result), c = s.indexOf(","); const h = s.slice(0, c); const mt = (h.match(/data:([^;]+)/) || [])[1] || "audio/webm"; cb(s.slice(c + 1), mt); };
+    r.readAsDataURL(f);
+  });
+  inp.click();
+}
+function kocKartHTML(a) {
+  if (!a) return "";
+  const list = (arr) => (arr && arr.length) ? `<ul class="koc-list">${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="hint">—</p>`;
+  const puan = Math.max(0, Math.min(100, Math.round(Number(a.puan) || 0)));
+  const renk = puan >= 70 ? "iyi" : puan >= 45 ? "orta" : "dusuk";
+  const itir = (a.itirazlar && a.itirazlar.length)
+    ? `<ul class="koc-list">${a.itirazlar.map((i) => `<li><b>${esc(i.itiraz)}</b><br><span class="hint">→ ${esc(i.karsilanma)}</span></li>`).join("")}</ul>`
+    : `<p class="hint">Belirgin itiraz yok.</p>`;
+  return `<div class="koc-kart">
+    <div class="koc-head">
+      <div class="koc-puan ${renk}">${puan}<span>/100</span></div>
+      <div class="koc-ozet">${esc(a.ozet || "")}</div>
+    </div>
+    <div class="koc-blok koc-iyi"><h3>✓ İyi yapılanlar</h3>${list(a.iyi)}</div>
+    <div class="koc-blok koc-eksik"><h3>✗ Kaçırılanlar</h3>${list(a.eksik)}</div>
+    <div class="koc-blok"><h3>💬 İtirazlar & karşılanma</h3>${itir}</div>
+    <div class="koc-blok"><h3>🎯 Kaçan fırsatlar</h3>${list(a.firsatlar)}</div>
+    <div class="koc-blok koc-oneri"><h3>💡 Öneriler ("şöyle deseydin")</h3>${list(a.oneriler)}</div>
+  </div>`;
+}
+function renderSahaKocu() {
+  const gec = [...(store.gorusmeler || [])].reverse().slice(0, 20);
+  const musOpts = `<option value="">Müşteri seç (ops.)</option>` + store.customers.map((m) => `<option value="${m.id}">${esc(m.ad)}</option>`).join("");
+  const persOpts = store.personeller.length ? `<select id="skPers"><option value="">Plasiyer seç (ops.)</option>${store.personeller.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("")}</select>` : "";
+  const gecRows = gec.length ? gec.map((g) => {
+    const c = g.musteriId && findCustomer(g.musteriId);
+    const p = Math.round(Number(g.analiz && g.analiz.puan) || 0);
+    const renk = p >= 70 ? "iyi" : p >= 45 ? "orta" : "dusuk";
+    return `<div class="koc-gec" data-gec="${g.id}"><span class="koc-gpuan ${renk}">${p}</span><div class="koc-gmid"><b>${c ? esc(c.ad) : "Görüşme"}</b><span class="hint">${fmtDate(g.tarih)}</span></div><button class="rm" data-gecdel="${g.id}" type="button">✕</button></div>`;
+  }).join("") : `<p class="hint">Henüz görüşme analizi yok.</p>`;
+  return pageHead("Saha Koçu", "Görüşme kaydını yükle → yapay zeka satışını analiz etsin") +
+    `<div class="card">
+      <div class="koc-kvkk">
+        <label><input type="checkbox" id="skOnay" /> <b>Müşteriye kayıt alındığı bildirildi ve onay verildi.</b> (KVKK — zorunlu)</label>
+      </div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field"><label>Müşteri</label><select id="skMus">${musOpts}</select></div>
+        ${persOpts ? `<div class="field"><label>Plasiyer</label>${persOpts}</div>` : ""}
+      </div>
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn green lg" id="skSes" type="button" disabled>🎧 Ses Kaydını Yükle & Analiz Et</button>
+        <p class="hint" id="skDurum" style="margin-top:10px">Telefonun ses kayıt uygulamasıyla görüşmeyi kaydet, sonra buradan yükle. (En fazla ~15 dk.)</p>
+      </div>
+      <div id="skSonuc" style="margin-top:12px"></div>
+    </div>
+    <div class="section-title" style="margin-top:16px">Geçmiş Görüşmeler</div>
+    <div class="card">${gecRows}</div>`;
+}
+function mountSahaKocu() {
+  const onay = document.getElementById("skOnay"), btn = document.getElementById("skSes"), durum = document.getElementById("skDurum"), sonuc = document.getElementById("skSonuc");
+  if (onay) onay.addEventListener("change", () => { btn.disabled = !onay.checked; });
+  if (btn) btn.addEventListener("click", () => {
+    if (!onay.checked) { alert("Önce KVKK onayını işaretle."); return; }
+    sesDosyaSec(async (audioBase64, mediaType) => {
+      durum.textContent = "Yükleniyor ve analiz ediliyor… (birkaç dakika sürebilir)"; btn.disabled = true;
+      let res;
+      try {
+        const { data, error } = await SB.functions.invoke("ses-analiz", { body: { audioBase64, mediaType } });
+        res = error ? null : data;
+      } catch (e) { res = null; }
+      btn.disabled = false;
+      if (!res || !res.ok) { durum.textContent = "Analiz edilemedi — internet/kurulum (OpenAI anahtarı) gerekli. Hata: " + ((res && res.error) || "bağlantı"); return; }
+      durum.textContent = "Analiz hazır ✔";
+      sonuc.innerHTML = kocKartHTML(res.analiz);
+      const g = { id: genId(), tarih: new Date().toISOString(), musteriId: document.getElementById("skMus").value || null, plasiyerId: (document.getElementById("skPers") || {}).value || null, transcript: res.transcript || "", analiz: res.analiz };
+      store.gorusmeler = store.gorusmeler || []; store.gorusmeler.push(g);
+      saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+    });
+  });
+  document.querySelectorAll("[data-gec]").forEach((el) => el.addEventListener("click", (e) => {
+    if (e.target.closest("[data-gecdel]")) return;
+    const g = (store.gorusmeler || []).find((x) => x.id === el.dataset.gec);
+    if (g) { document.getElementById("skSonuc").innerHTML = kocKartHTML(g.analiz); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  }));
+  document.querySelectorAll("[data-gecdel]").forEach((b) => b.addEventListener("click", () => {
+    if (!confirm("Bu görüşme analizi silinsin mi?")) return;
+    store.gorusmeler = (store.gorusmeler || []).filter((x) => x.id !== b.dataset.gecdel);
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
+  }));
+}
 
 /* ============ PROFİLİM ============ */
 function renderProfilim() {
