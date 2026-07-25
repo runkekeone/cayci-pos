@@ -511,7 +511,7 @@ function mountSatisDetay() {
 
 /* ============ SATIŞ (POS) ============ */
 function newCart() { return { items: [], musteriId: null, iskonto: 0, odenen: 0 }; }
-const pos = { carts: [newCart(), newCart(), newCart(), newCart(), newCart()], active: 0, cat: "ANA", personelId: null };
+const pos = { carts: [newCart(), newCart(), newCart(), newCart(), newCart()], active: 0, cat: "ANA", personelId: null, q: "" };
 function activeCart() { return pos.carts[pos.active]; }
 function renderSatis() {
   const cats = ["ANA"].concat(allGroupNames());
@@ -587,8 +587,15 @@ function renderSatis() {
 
         <!-- SAĞ sütun (mobilde akışta alt blok): kategoriler + ürünler -->
         <div class="pos2-right">
-          <!-- 8. Kategori pill'leri -->
-          <div class="cat-tabs" id="catTabs">${catTabs}</div>
+          <!-- 8. Ürün arama + kategori pill'leri (yapışkan) -->
+          <div class="prod-filterbar">
+            <div class="prod-search">
+              <span class="prod-search-ic">&#128269;</span>
+              <input id="prodSearch" class="prod-search-in" placeholder="Ürün ara (isim / barkod)..." value="${esc(pos.q || "")}" />
+              <button class="prod-search-x" id="prodSearchX" type="button" aria-label="Temizle" style="${pos.q ? "" : "display:none"}">&times;</button>
+            </div>
+            <div class="cat-tabs" id="catTabs">${catTabs}</div>
+          </div>
           <!-- 9. Ürün ızgarası -->
           <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
         </div>
@@ -617,7 +624,12 @@ function cartRowsHTML() {
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
   if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
-  if (!list.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Bu kategoride ürün yok. <a href="#/urun-ekle">Ürün ekleyin</a>.</div>`;
+  const q = ocrNorm(pos.q || "");
+  if (q) {
+    const qr = (pos.q || "").trim().toLocaleLowerCase("tr");
+    list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
+  }
+  if (!list.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">${q ? "Aramaya uyan ürün yok." : `Bu kategoride ürün yok. <a href="#/urun-ekle">Ürün ekleyin</a>.`}</div>`;
   return list.map((p) => `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`).join("");
 }
 function netLine(it) { const t = (Number(it.fiyat) || 0) * (Number(it.adet) || 0); return t * (1 - (Number(it.iskyuzde) || 0) / 100); }
@@ -758,6 +770,11 @@ function mountSatis() {
   const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
   const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
   const sFoto = document.getElementById("sabFoto"); if (sFoto) sFoto.addEventListener("click", satisFotoOku);
+  const psearch = document.getElementById("prodSearch");
+  const psx = document.getElementById("prodSearchX");
+  const gridYenile = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); } if (psx) psx.style.display = pos.q ? "" : "none"; };
+  if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; gridYenile(); });
+  if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } gridYenile(); });
   const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", () => focusEl("barInput"));
   syncTotals();
 }
