@@ -527,7 +527,6 @@ function renderSatis() {
           <button class="sab-ico" id="sabIsk" type="button" title="İskonto uygula">&#10549;</button>
           <button class="sab-ico" id="sabAra" type="button" title="Ürün / barkod ara">&#8853;</button>
           <button class="sab-ico" id="sabMuh" type="button" title="Muhtelif tutar ekle"><span class="sab-num">100</span></button>
-          <button class="sab-ico" id="sabFoto" type="button" title="Fişten oku">&#128247;</button>
           <button class="sab-ico" id="posYazdir" type="button" title="Yazdır">&#128424;</button>
         </div>
       </div>
@@ -602,7 +601,7 @@ function renderSatis() {
       </div>
 
       <!-- 10. Yüzen "Tara" butonu (barkod inputunu odaklar) -->
-      <button class="pos-tara" id="posTara" type="button" aria-label="Barkod tara" title="Tara">&#128247;<span>Tara</span></button>
+      <button class="pos-tara" id="posTara" type="button" aria-label="Fişten oku" title="Fişten oku">&#128247;<span>Fiş Oku</span></button>
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
@@ -769,13 +768,12 @@ function mountSatis() {
   const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", openIskModal);
   const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
   const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
-  const sFoto = document.getElementById("sabFoto"); if (sFoto) sFoto.addEventListener("click", satisFotoOku);
   const psearch = document.getElementById("prodSearch");
   const psx = document.getElementById("prodSearchX");
   const gridYenile = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); } if (psx) psx.style.display = pos.q ? "" : "none"; };
   if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; gridYenile(); });
   if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } gridYenile(); });
-  const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", () => focusEl("barInput"));
+  const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", satisFotoOku);
   syncTotals();
 }
 
