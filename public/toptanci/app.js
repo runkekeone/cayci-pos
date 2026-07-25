@@ -475,19 +475,18 @@ function renderSatisDetay() {
     </div>`;
 }
 function sdRowHTML(r, i) {
+  const kdv = Number(r.kdv) || 0;
   return `<div class="sd-card">
     <div class="sd-card-top">
-      <div class="sd-card-name">${esc(r.ad)}</div>
-      <div class="sd-card-meta">
-        <span class="sd-kdv">KDV %${Number(r.kdv) || 0}</span>
-        <button class="sd-del" data-sdmv="${i}" type="button" aria-label="Ürünü sil" title="Ürünü sil">&#128465;</button>
-      </div>
+      <div class="sd-card-name">${esc(r.ad)}${kdv ? ` <span class="sd-kdv">%${kdv}</span>` : ""}</div>
+      <b class="sd-card-tot">${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</b>
+      <button class="sd-del" data-sdmv="${i}" type="button" aria-label="Ürünü sil" title="Ürünü sil">&times;</button>
     </div>
-    <div class="sd-card-fields">
-      <label class="sd-fld"><span>Adet</span><input class="row-in" data-sd="${i}" data-f="adet" type="number" step="0.01" inputmode="decimal" value="${r.adet}" /></label>
-      <label class="sd-fld"><span>Birim Fiyat (₺)</span><input class="row-in" data-sd="${i}" data-f="fiyat" type="number" step="0.01" inputmode="decimal" value="${r.fiyat}" /></label>
+    <div class="sd-card-sub">
+      <label class="sd-mini"><span>Adet</span><input class="row-in" data-sd="${i}" data-f="adet" type="number" step="0.01" inputmode="decimal" value="${r.adet}" /></label>
+      <span class="sd-x">×</span>
+      <label class="sd-mini"><span>B.Fiyat ₺</span><input class="row-in" data-sd="${i}" data-f="fiyat" type="number" step="0.01" inputmode="decimal" value="${r.fiyat}" /></label>
     </div>
-    <div class="sd-card-tot"><span>Satır Toplamı</span><b>${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</b></div>
   </div>`;
 }
 function sdRefresh() {
