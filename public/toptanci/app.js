@@ -681,6 +681,29 @@ function cartRowsHTML() {
   </div>`;
   }).join("");
 }
+/* Ürün ailesi: aynı ürünün marka/model çeşitleri tek başlık altında toplansın.
+   Ada göre çalışma-anında (veri değişmez). Sadece net marka kümeleri. null = tekil ürün. */
+function aileGetir(ad) {
+  const n = ocrNorm(ad);
+  if (/sade soda/.test(n)) return "Sade Soda";
+  if (/limonlu soda/.test(n)) return "Limonlu Soda";
+  if (/elmali soda/.test(n)) return "Elmalı Soda";
+  if (/meyveli soda/.test(n)) return "Meyveli Soda";
+  if (/meyve suyu/.test(n)) return "Meyve Suyu";
+  if (/\bkola\b/.test(n) || /coca|pepsi/.test(n)) return "Kola";
+  if (/gazoz/.test(n)) return "Gazoz";
+  if (/ayran/.test(n)) return "Ayran";
+  if (/ice tea/.test(n)) return "İce Tea";
+  if (/filiz cay/.test(n)) return "Filiz Çay 5kg";
+  if (/kup seker/.test(n)) return "Küp Şeker";
+  if (/toz seker/.test(n)) return "Toz Şeker";
+  // Su: içme suyu (meyve suyu/soda/ayran/süt değil)
+  if (/\bsu\b/.test(n) && !/suyu|soda|ayran|kola/.test(n)) return "Su";
+  return null;
+}
+function posSoloCard(p) {
+  return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
+}
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
   if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
@@ -690,7 +713,31 @@ function prodGridHTML() {
     list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
   }
   if (!list.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">${q ? "Aramaya uyan ürün yok." : `Bu kategoride ürün yok. <a href="#/urun-ekle">Ürün ekleyin</a>.`}</div>`;
-  return list.map((p) => `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`).join("");
+  // Aileye göre grupla (sıra korunur)
+  const fams = new Map();
+  list.forEach((p) => {
+    const t = aileGetir(p.ad);
+    const key = t ? "aile:" + t : "solo:" + p.id;
+    if (!fams.has(key)) fams.set(key, { title: t, members: [] });
+    fams.get(key).members.push(p);
+  });
+  const cards = [];
+  for (const f of fams.values()) {
+    if (f.members.length < 2) { cards.push(posSoloCard(f.members[0])); continue; }
+    const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
+    const min = fiyat.length ? Math.min(...fiyat) : 0;
+    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-name">${esc(f.title)}</span><span class="fam-badge">${f.members.length} marka</span><span class="p-price">${min ? money.format(min) + "+" : ""}</span></div>`);
+  }
+  return cards.join("");
+}
+/* Aile kutusuna dokununca: marka seçim popup'ı */
+function openAilePopup(title) {
+  let list = store.products.filter((p) => p.gorunur !== false);
+  if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
+  const members = list.filter((p) => aileGetir(p.ad) === title);
+  if (!members.length) return;
+  const body = `<div class="aile-pop">${members.map((p) => `<button class="aile-opt" data-aileadd="${p.id}" type="button"><span class="ao-ad">${esc(p.ad)}</span><span class="ao-fiyat">${money.format(Number(p.satis) || 0)}</span></button>`).join("")}</div>`;
+  const m = openModal(esc(title) + " — marka seç", body, { noFoot: true, onMount: (ov) => { ov.querySelectorAll("[data-aileadd]").forEach((b) => b.onclick = () => { addToCart(b.dataset.aileadd); m.close(); }); } });
 }
 function netLine(it) { const t = (Number(it.fiyat) || 0) * (Number(it.adet) || 0); return t * (1 - (Number(it.iskyuzde) || 0) / 100); }
 function cartCount() { const c = activeCart(); return `${c.items.length} (${num2.format(c.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))})`; }
@@ -775,7 +822,10 @@ function finalizeSale(type, odemeAdi) {
   const grid = document.getElementById("prodGrid"); if (grid) { grid.innerHTML = prodGridHTML(); wireProdCards(); }
   if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(store.sales[store.sales.length - 1]);
 }
-function wireProdCards() { document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add)); }
+function wireProdCards() {
+  document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add));
+  document.querySelectorAll("[data-fam]").forEach((el) => el.onclick = () => openAilePopup(el.dataset.fam));
+}
 function openCustPicker() {
   const listHTML = store.customers.length ? `<ul class="pick-list">${store.customers.map((c) => `<li data-pick="${c.id}">${esc(c.ad)} <small>· borç ${money.format(customerBorc(c.id))}</small></li>`).join("")}</ul>` : `<p class="sub">Kayıtlı müşteri yok.</p>`;
   openModal("Müşteri Seç", `<input class="pick-search" id="pickSearch" placeholder="Müşteri ara..." />${listHTML}<div style="margin-top:10px"><button class="btn soft" id="pickYeni" type="button">＋ Yeni Müşteri</button></div>`, {
