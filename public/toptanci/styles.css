@@ -398,7 +398,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pos-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pos-tot { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; box-shadow: var(--shadow-soft); text-align: center; }
 .pos-tot .l { font-size: 11px; color: var(--muted); font-weight: 600; }
-.pos-tot .v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pos-tot .v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); white-space: nowrap; }
 .pos-tot.red .v { color: var(--red); } .pos-tot.green .v { color: var(--green-d); } .pos-tot.brand .v { color: var(--brand); }
 
 /* Satış app-bar (mavi gradyan, BenimPOS) — masaüstünde gizli, mobilde tek bar */
@@ -902,10 +902,10 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   /* Yer tutan / az kullanılan aksiyonları mobilde gizle (Fiyat Gör, Ödeme Ekle, Yazdır) */
   .pos-search .pos-btn.green, .pos-search .pos-btn.teal, .pos-search #posYazdir { display: none; }
   /* Özet çubuğu (Miktar|Brüt|İskonto|Tutar) mobilde de görünür — kompakt 4 sütun */
-  .pos-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .pos-tot { padding: 7px 6px; }
+  .pos-totals { display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 6px; }
+  .pos-tot { padding: 7px 5px; }
   .pos-tot .l { font-size: 10px; }
-  .pos-tot .v { font-size: 16px; }
+  .pos-tot .v { font-size: 14px; letter-spacing: -0.4px; }
 
   /* Tek dikey akış: SOL blok (adisyon+ödeme) üstte, SAĞ blok (kategoriler+ürünler) altta */
   .pos2 { gap: 10px; }
@@ -1050,7 +1050,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 
 @media (max-width: 420px) {
   .prod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .pos-tot .v { font-size: 15px; }
+  .pos-tot .v { font-size: 13px; }
 }
 @media (max-width: 360px) {
   /* Çok dar ekranda ürün kartları 3 sütun */
@@ -1070,7 +1070,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .sl-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); min-width: 0; }
 .sl-row:first-child { border-top: 0; }
 .sl-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sl-ad { font-weight: 700; font-size: 14px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-ad { font-weight: 700; font-size: 16px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-nums { display: flex; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
 .sl-metric { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
 .sl-k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }

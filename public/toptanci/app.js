@@ -527,6 +527,7 @@ function renderSatis() {
           <button class="sab-ico" id="sabIsk" type="button" title="İskonto uygula">&#10549;</button>
           <button class="sab-ico" id="sabAra" type="button" title="Ürün / barkod ara">&#8853;</button>
           <button class="sab-ico" id="sabMuh" type="button" title="Muhtelif tutar ekle"><span class="sab-num">100</span></button>
+          <button class="sab-ico" id="sabFoto" type="button" title="Fişten oku">&#128247;</button>
           <button class="sab-ico" id="posYazdir" type="button" title="Yazdır">&#128424;</button>
         </div>
       </div>
@@ -756,6 +757,7 @@ function mountSatis() {
   const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", openIskModal);
   const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
   const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
+  const sFoto = document.getElementById("sabFoto"); if (sFoto) sFoto.addEventListener("click", satisFotoOku);
   const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", () => focusEl("barInput"));
   syncTotals();
 }
@@ -1067,6 +1069,29 @@ async function alisFotoOku() {
       alisRefresh();
     }
     if (durum) durum.textContent = "Okundu — kontrol edip Kaydet'e bas.";
+  });
+}
+/* Satış ekranı — fotoğraftan fiş okuyup sepete ürün ekle (mode: masa) */
+async function satisFotoOku() {
+  ocrPickImage(async (imageBase64, mediaType) => {
+    let res;
+    try {
+      const { data, error } = await SB.functions.invoke("ocr-extract", {
+        body: { mode: "masa", imageBase64, mediaType, catalog: store.products.map((p) => p.ad) },
+      });
+      res = error ? null : data;
+    } catch (e) { res = null; }
+    if (!res || !res.ok || !res.data || !Array.isArray(res.data.lines)) { alert("Okunamadı — internet/kurulum gerekli. Elle ekleyebilirsin."); return; }
+    let eklendi = 0, atlandi = 0;
+    res.data.lines.forEach((l) => {
+      const pid = ocrMatch(l.name, store.products, "ad");
+      if (!pid) { atlandi++; return; }
+      const q = Math.max(1, Math.round(Number(l.qty) || 1));
+      for (let k = 0; k < q; k++) addToCart(pid);
+      eklendi++;
+    });
+    render();
+    alert(eklendi + " ürün sepete eklendi" + (atlandi ? ", " + atlandi + " ürün eşleşmedi (elle ekle)" : "") + ".");
   });
 }
 function mountAlisOlustur() {
