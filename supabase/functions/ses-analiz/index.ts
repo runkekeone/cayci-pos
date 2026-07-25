@@ -39,17 +39,21 @@ const ANALIZ_SCHEMA = {
   required: ['ozet', 'puan', 'iyi', 'eksik', 'oneriler'],
 }
 
-const ANALIZ_PROMPT =
-  `Aşağıda bir saha satış plasiyeri ile müşteri arasındaki YÜZ YÜZE görüşmenin metni var. ` +
-  `Deneyimli bir satış koçu gibi analiz et ve sadece istenen alanları doldur:\n` +
-  `- ozet: görüşmenin 1-2 cümle özeti.\n` +
-  `- puan: 0-100 arası genel satış performansı.\n` +
-  `- iyi: plasiyerin iyi yaptığı şeyler (madde madde).\n` +
-  `- eksik: kaçırdığı/geliştirmesi gereken noktalar.\n` +
-  `- itirazlar: müşterinin itirazları ve plasiyerin bunları nasıl karşıladığı.\n` +
-  `- firsatlar: kaçan ek satış / çapraz satış fırsatları.\n` +
-  `- oneriler: "şöyle deseydin daha iyi olurdu" tarzı somut öneriler.\n` +
-  `Türkçe, kısa ve uygulanabilir yaz.\n\nGÖRÜŞME METNİ:\n`
+const ANALIZ_PROMPT = [
+  'Aşağıda bir saha satış plasiyeri ile müşteri arasındaki YÜZ YÜZE görüşmenin metni var.',
+  'Deneyimli bir satış koçu gibi analiz et ve sadece istenen alanları doldur:',
+  '- ozet: görüşmenin 1-2 cümle özeti.',
+  '- puan: 0-100 arası genel satış performansı.',
+  '- iyi: plasiyerin iyi yaptığı şeyler (madde madde).',
+  '- eksik: kaçırdığı/geliştirmesi gereken noktalar.',
+  '- itirazlar: müşterinin itirazları ve plasiyerin bunları nasıl karşıladığı.',
+  '- firsatlar: kaçan ek satış / çapraz satış fırsatları.',
+  '- oneriler: "şöyle deseydin daha iyi olurdu" tarzı somut öneriler.',
+  'Türkçe, kısa ve uygulanabilir yaz.',
+  '',
+  'GÖRÜŞME METNİ:',
+  '',
+].join('\n')
 
 async function whisper(audioBase64: string, mediaType: string): Promise<string> {
   const key = Deno.env.get('OPENAI_API_KEY')
