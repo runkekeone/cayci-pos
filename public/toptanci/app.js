@@ -1963,7 +1963,7 @@ function mountSahaKocu() {
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
-const servis = { aktif: false, musteriIds: [], edilen: [], watchId: null, uyarilan: {} };
+const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, watchId: null };
 
 function rotaKaydet(ad, musteriIds) {
   const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
@@ -1971,21 +1971,45 @@ function rotaKaydet(ad, musteriIds) {
   return r;
 }
 function servisBaslat(musteriIds) {
-  servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.uyarilan = {};
-  servisKonumIzle(); render();
+  servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.acik = null;
+  navigate("rota"); servisKonumIzle();
 }
 function servisBitir() {
-  servis.aktif = false;
+  servis.aktif = false; servis.acik = null;
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
   const n = servis.edilen.length, t = servis.musteriIds.length;
-  servis.musteriIds = []; servis.edilen = [];
+  servis.musteriIds = []; servis.edilen = []; servis.paslar = [];
   render();
-  alert("Servis bitti ✓  " + n + "/" + t + " durak ziyaret edildi.");
+  alert("Servis bitti ✓  " + n + "/" + t + " durak satışla kapatıldı.");
 }
 function durakTamamla(id) {
   if (!servis.edilen.includes(id)) servis.edilen.push(id);
-  const kart = document.getElementById("rotaKart"); if (kart) kart.innerHTML = "";
-  render();
+  servis.paslar = servis.paslar.filter((x) => x !== id);
+  servis.acik = null; render();
+}
+function durakPasGec(id) {
+  if (!servis.paslar.includes(id) && !servis.edilen.includes(id)) servis.paslar.push(id);
+  servis.acik = null; render();
+}
+function durakSonaAt(id) {
+  const i = servis.musteriIds.indexOf(id);
+  if (i >= 0) { servis.musteriIds.splice(i, 1); servis.musteriIds.push(id); }
+  servis.acik = null; render();
+}
+// "7 soda 2 gazoz 17 adet su" → [{q, k}]
+function siparisParse(text) {
+  const out = []; const re = /(\d+(?:[.,]\d+)?)\s*(?:adet|tane|koli|paket|kutu|şişe|sise|kg|lt)?\s*([a-zA-ZğüşıöçİĞÜŞÖÇ][a-zA-ZğüşıöçİĞÜŞÖÇ ]*?)(?=\s*\d|$)/g;
+  let m; while ((m = re.exec(text))) { const q = Number(String(m[1]).replace(",", ".")); const k = (m[2] || "").trim(); if (q > 0 && k) out.push({ q, k }); }
+  return out;
+}
+function hizliSiparisDoldur(id, text, durumEl) {
+  const parc = siparisParse(text);
+  if (!parc.length) { if (durumEl) durumEl.textContent = "Anlaşılamadı. Örnek: 7 soda 2 gazoz 17 su"; return; }
+  const c = pos.carts[pos.active]; c.musteriId = id;
+  let ekli = 0; const atil = [];
+  parc.forEach((p) => { const pid = ocrMatch(p.k, store.products, "ad"); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); ekli++; } else atil.push(p.q + " " + p.k); });
+  if (!ekli) { if (durumEl) durumEl.textContent = "Ürün eşleşmedi: " + atil.join(", "); return; }
+  navigate("satis");
 }
 function servisKonumIzle() {
   if (!navigator.geolocation || servis.watchId != null) return;
@@ -2071,11 +2095,17 @@ function ziyaretKartiHTML(id) {
       <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
     </div>
     <div class="zk-son"><h3>Son satışlar</h3>${sonRows}</div>
+    ${servis.aktif ? `<div class="zk-hizli">
+      <label>Hızlı sipariş (ne aldı, kaç adet)</label>
+      <div class="zk-hizli-row"><input id="zkHizli" placeholder="7 soda 2 gazoz 17 su" /><button class="btn green" id="zkHizliBtn" type="button">Sepete Doldur → Satış</button></div>
+      <p class="hint" id="zkHizliDurum">Yaz → ürünler sepete dolar, satış ekranına geçer. (Boş bırakıp "Satış Yap" ile de girebilirsin.)</p>
+    </div>` : ""}
     <div class="zk-aksiyon">
       <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
       <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
       <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi WhatsApp</button>
-      ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>` : ""}
+      ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>
+      <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
     </div>
     <div class="zk-kayit">
       <label class="zk-kvkk"><input type="checkbox" id="zkOnay" /> Müşteriye kayıt onayı verildi (KVKK)</label>
@@ -2088,11 +2118,15 @@ function ziyaretKartiHTML(id) {
 function ziyaretKartiWire(id) {
   const kart = document.getElementById("rotaKart");
   const c = findCustomer(id);
-  kart.querySelector("[data-zkapat]").onclick = () => { kart.innerHTML = ""; };
+  kart.querySelector("[data-zkapat]").onclick = () => { if (servis.aktif) { servis.acik = null; render(); } else kart.innerHTML = ""; };
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
   kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
   const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
+  const pasbtn = kart.querySelector("[data-zkpas]"); if (pasbtn) pasbtn.onclick = () => { if (confirm("Bu müşteri pas geçilsin mi?")) durakPasGec(id); };
+  const sonabtn = kart.querySelector("[data-zksona]"); if (sonabtn) sonabtn.onclick = () => durakSonaAt(id);
+  const hzbtn = kart.querySelector("#zkHizliBtn");
+  if (hzbtn) hzbtn.onclick = () => hizliSiparisDoldur(id, (kart.querySelector("#zkHizli") || {}).value || "", kart.querySelector("#zkHizliDurum"));
   // puan (bayi_puan:<tel>) — async
   const tel = ((c && c.telefon) || "").replace(/\D/g, "");
   const pEl = document.getElementById("zkPuan");
@@ -2177,20 +2211,24 @@ function renderServisBaslat() {
     </div>`;
 }
 function renderServisAktif() {
-  const total = servis.musteriIds.length, done = servis.edilen.length;
+  const total = servis.musteriIds.length, done = servis.edilen.length, pas = servis.paslar.length;
+  const acikVar = !!servis.acik;
   const steps = servis.musteriIds.map((id, i) => {
     const c = findCustomer(id); if (!c) return "";
-    const edildi = servis.edilen.includes(id);
+    const edildi = servis.edilen.includes(id), pasli = servis.paslar.includes(id), bu = servis.acik === id;
     const mes = (rota.konum && c.lat != null) ? mesafeMetin(haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng)) : "";
-    return `<div class="servis-durak ${edildi ? "edildi" : ""}">
-      <span class="sd-no">${edildi ? "✓" : (i + 1)}</span>
+    const durum = edildi ? "edildi" : pasli ? "pas" : bu ? "acik" : "";
+    const rozet = edildi ? `<span class="sd-tag ok">✓ satıldı</span>` : pasli ? `<span class="sd-tag pas">pas</span>` : bu ? `<span class="sd-tag now">açık</span>` : "";
+    const btn = (edildi || pasli || acikVar) ? "" : `<button class="btn green sm" data-vardim="${id}" type="button">Vardım</button>`;
+    return `<div class="servis-durak ${durum}">
+      <span class="sd-no">${edildi ? "✓" : pasli ? "–" : (i + 1)}</span>
       <div class="sd-mid"><b>${esc(c.ad)}</b><span class="hint">Bakiye ${money.format(customerBorc(id))}${mes ? " · " + mes : ""}</span></div>
-      ${edildi ? `<span class="sd-tag">edildi</span>` : `<button class="btn green sm" data-vardim="${id}" type="button">Vardım</button>`}
+      ${rozet}${btn}
     </div>`;
   }).join("");
-  return pageHead("🚗 Servis — " + done + "/" + total + " durak", "Vardığın müşteride 'Vardım'a bas", [{ label: "⏹ Servisi Bitir", cls: "softred", act: "servisbitir" }]) +
+  return pageHead("🚗 Servis — " + done + "/" + total + " durak" + (pas ? " (" + pas + " pas)" : ""), acikVar ? "Bu müşteriyi bitirmeden sonrakine geçilmez" : "Vardığın müşteride 'Vardım'a bas", [{ label: "⏹ Servisi Bitir", cls: "softred", act: "servisbitir" }]) +
     `<div id="servisBanner"></div>
-    <div id="rotaKart" style="margin:12px 0"></div>
+    <div id="rotaKart" style="margin:12px 0">${acikVar ? ziyaretKartiHTML(servis.acik) : ""}</div>
     <div class="card">${steps || `<p class="hint">Rotada müşteri yok.</p>`}</div>`;
 }
 function rotaOlusturModal() {
@@ -2210,10 +2248,8 @@ function rotaOlusturModal() {
 function mountRota() {
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
-    document.querySelectorAll("[data-vardim]").forEach((b) => b.addEventListener("click", () => {
-      const id = b.dataset.vardim; const kart = document.getElementById("rotaKart");
-      kart.innerHTML = ziyaretKartiHTML(id); ziyaretKartiWire(id); kart.scrollIntoView({ behavior: "smooth", block: "start" });
-    }));
+    if (servis.acik) { ziyaretKartiWire(servis.acik); }
+    else { document.querySelectorAll("[data-vardim]").forEach((b) => b.addEventListener("click", () => { servis.acik = b.dataset.vardim; render(); })); }
     servisKonumIzle();
     return;
   }
@@ -2364,10 +2400,10 @@ function mobilTabloEtiketle() {
 
 /* ---- Mobil alt sekme çubuğu ---- */
 const MOBILBAR = [
-  { ico: "🏠", label: "Ana", route: "anasayfa" },
+  { ico: "🚗", label: "Rota", route: "rota" },
   { ico: "🛒", label: "Satış", route: "satis" },
-  { ico: "🍵", label: "Çay Ocağı", route: "cay-ocagi" },
-  { ico: "📊", label: "Rapor", route: "rapor-gunluk" },
+  { ico: "📊", label: "Özet", route: "anasayfa" },
+  { ico: "📈", label: "Rapor", route: "rapor-gunluk" },
   { ico: "☰", label: "Menü", act: "menu" },
 ];
 function mobilBarKur() {

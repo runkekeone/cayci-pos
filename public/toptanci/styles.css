@@ -588,6 +588,19 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .rota-sec-satir { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
 .rota-sec-satir:last-child { border-bottom: 0; }
 .rota-sec-satir span:first-of-type { flex: 1; min-width: 0; font-size: 14px; }
+.servis-durak.acik { background: var(--brand-soft); border-radius: var(--radius); }
+.servis-durak.pas .sd-no { background: var(--muted); }
+.sd-tag.ok { color: var(--green-d); }
+.sd-tag.pas { color: var(--muted); }
+.sd-tag.now { color: var(--brand); }
+.zk-hizli { border-top: 1px solid var(--line); padding-top: 12px; }
+.zk-hizli > label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.zk-hizli-row { display: flex; gap: 8px; }
+.zk-hizli-row input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 11px; font-size: 14px; }
+.zk-hizli-row input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+.zk-hizli-row .btn { flex: 0 0 auto; }
+.zk-alt { display: flex; gap: 8px; margin-top: 8px; }
+.zk-alt .btn { flex: 1; }
 
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }
