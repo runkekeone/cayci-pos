@@ -830,7 +830,7 @@ function finalizeSale(type, odemeAdi) {
     servis.sonSatisId = yeniSale.id;
     if (confirm("İrsaliyeyi bu müşteriye WhatsApp'tan gönderelim mi?")) irsaliyeWa(yeniSale);
     servis.adim = "kapanis";
-    navigate("rota");
+    render();
   }
 }
 function wireProdCards() {
@@ -900,10 +900,11 @@ function mountSatis() {
 
 /* Yazdırma */
 function openPrint(title, html) {
-  const w = window.open("", "_blank", "width=420,height=640");
-  if (!w) { alert("Yazdırma penceresi engellendi."); return; }
-  w.document.write(`<html><head><title>${title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:monospace;padding:10px;font-size:13px;margin:0}h2{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse}td{padding:2px 0}hr{border:0;border-top:1px dashed #000}.r{text-align:right}.c{text-align:center}.pbar{position:sticky;top:0;display:flex;gap:8px;background:#1E40AF;padding:10px;margin:-10px -10px 12px}.pbar button{flex:1;padding:13px;border:0;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}.pbar .kapat{background:#fff;color:#1E40AF}.pbar .yaz{background:#16a34a;color:#fff}@media print{.pbar{display:none}}</style></head><body><div class="pbar"><button class="kapat" onclick="window.close()">&#10005; Kapat / Geri</button><button class="yaz" onclick="window.print()">&#128424; Yazdır</button></div>${html}</body></html>`);
-  w.document.close();
+  // Uygulama-içi önizleme modalı (WebView'de ayrı pencere + window.close güvenilmez).
+  openModal(title, `<div class="fis-onizle">${html}</div><div style="text-align:right;margin-top:12px"><button class="btn soft" id="fisYazdir" type="button">🖨 Yazdır</button></div>`, {
+    noFoot: true,
+    onMount: (ov) => { const y = ov.querySelector("#fisYazdir"); if (y) y.onclick = () => window.print(); },
+  });
 }
 function printSale(s) {
   const c = s.musteriId && findCustomer(s.musteriId);

@@ -660,6 +660,13 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .rk { background: var(--brand-soft); border-radius: var(--radius); padding: 12px; text-align: center; }
 .rk span { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
 .rk b { font-family: var(--font-num); font-size: 19px; font-weight: 800; color: var(--brand-dark); }
+.fis-onizle { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #111; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.fis-onizle h2 { text-align: center; margin: 4px 0; font-size: 15px; }
+.fis-onizle table { width: 100%; border-collapse: collapse; }
+.fis-onizle td { padding: 2px 0; }
+.fis-onizle hr { border: 0; border-top: 1px dashed #999; margin: 6px 0; }
+.fis-onizle .r { text-align: right; }
+.fis-onizle .c { text-align: center; }
 
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }
