@@ -613,6 +613,35 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .ry-kart:active { border-color: var(--brand); transform: scale(0.98); }
 .ry-kad { font-size: 12.5px; font-weight: 600; line-height: 1.25; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 380px) { .ry-havuz { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Servis sihirbazı + yüzen özet */
+.servis-fab { position: fixed; top: 70px; right: 12px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; background: var(--brand); color: #fff; border: 0; border-radius: var(--radius); padding: 8px 12px; box-shadow: var(--shadow-lift); cursor: pointer; }
+.servis-fab span { font-size: 10px; opacity: .9; }
+.servis-fab b { font-family: var(--font-num); font-size: 15px; }
+.sihir { padding: 16px; }
+.sihir h2 { margin: 2px 0 2px; font-size: 19px; }
+.sihir-adim { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--brand); }
+.sihir-soru { font-size: 15px; font-weight: 700; color: var(--text); margin: 14px 0 10px; }
+.sihir-btn { display: flex; flex-direction: column; gap: 8px; }
+.sihir-btn .btn { width: 100%; }
+.sihir-odeme { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sihir-tot { font-size: 15px; margin: 6px 0; }
+.sihir-tot b { font-family: var(--font-num); font-size: 22px; font-weight: 800; color: var(--value); }
+.sihir .prod-grid { max-height: 40vh; }
+.sihir-sepet { margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
+.ss-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.ss-row:last-of-type { border-bottom: 0; }
+.ss-ad { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-adet { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.ss-adet b { font-family: var(--font-num); min-width: 20px; text-align: center; }
+.ss-b { width: 26px; height: 26px; border: 1px solid var(--line); background: #fff; border-radius: 6px; font-size: 16px; line-height: 1; cursor: pointer; }
+.ss-tut { flex: 0 0 auto; font-family: var(--font-num); font-weight: 700; color: var(--value); min-width: 64px; text-align: right; }
+.ss-tot { display: flex; justify-content: space-between; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--line); font-family: var(--font-num); }
+.servis-tumu { margin-top: 12px; }
+.servis-tumu summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--brand-dark); padding: 8px 0; }
+.so-list { display: flex; flex-direction: column; }
+.so-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.so-row b { font-family: var(--font-num); color: var(--value); }
+.so-tot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-family: var(--font-num); }
 
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }

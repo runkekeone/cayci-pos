@@ -828,6 +828,7 @@ function finalizeSale(type, odemeAdi) {
   if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   // Servis akışı: satış açık servis müşterisine yapıldıysa → o durağı otomatik tamamla + sonraki
   if (servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus) {
+    servis.satislar = servis.satislar || []; servis.satislar.push(yeniSale.id);
     if (confirm("İrsaliyeyi bu müşteriye WhatsApp'tan gönderelim mi?")) irsaliyeWa(yeniSale);
     durakTamamla(satilanMus);
     navigate("rota");
@@ -1972,7 +1973,7 @@ function mountSahaKocu() {
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
-const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, watchId: null };
+const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], watchId: null };
 
 function rotaKaydet(ad, musteriIds) {
   const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
@@ -1980,8 +1981,13 @@ function rotaKaydet(ad, musteriIds) {
   return r;
 }
 function servisBaslat(musteriIds) {
-  servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.acik = null;
+  servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.satislar = [];
+  servis.acik = servis.musteriIds[0] || null; servis.adim = "onay";
   navigate("rota"); servisKonumIzle();
+}
+function servisSonrakiAc() {
+  const next = servis.musteriIds.find((id) => !servis.edilen.includes(id) && !servis.paslar.includes(id));
+  servis.acik = next || null; servis.adim = "onay";
 }
 function servisBitir() {
   servis.aktif = false; servis.acik = null;
@@ -1994,16 +2000,26 @@ function servisBitir() {
 function durakTamamla(id) {
   if (!servis.edilen.includes(id)) servis.edilen.push(id);
   servis.paslar = servis.paslar.filter((x) => x !== id);
-  servis.acik = null; render();
+  servisSonrakiAc(); render();
 }
 function durakPasGec(id) {
   if (!servis.paslar.includes(id) && !servis.edilen.includes(id)) servis.paslar.push(id);
-  servis.acik = null; render();
+  servisSonrakiAc(); render();
 }
 function durakSonaAt(id) {
   const i = servis.musteriIds.indexOf(id);
   if (i >= 0) { servis.musteriIds.splice(i, 1); servis.musteriIds.push(id); }
-  servis.acik = null; render();
+  servisSonrakiAc(); render();
+}
+function servisGunOzet() {
+  const sat = (servis.satislar || []).map((sid) => store.sales.find((s) => s.id === sid)).filter(Boolean);
+  const toplam = sat.reduce((a, s) => a + (Number(s.toplam) || 0), 0);
+  return { adet: sat.length, toplam, sat };
+}
+function servisOzetAc() {
+  const o = servisGunOzet();
+  const rows = o.sat.length ? o.sat.map((s) => { const c = s.musteriId && findCustomer(s.musteriId); return `<div class="so-row"><span>${c ? esc(c.ad) : "Müşterisiz"}</span><b>${money.format(s.toplam)}</b></div>`; }).join("") : `<p class="hint">Henüz satış yok.</p>`;
+  openModal("Bugünkü Servis Özeti", `<div class="so-list">${rows}</div><div class="so-tot"><b>Toplam</b><b>${money.format(o.toplam)}</b> · ${o.adet} satış</div><p class="hint" style="margin-top:8px">Genel rapor için Menü → Raporlar.</p>`, { noFoot: true });
 }
 // "7 soda 2 gazoz 17 adet su" → [{q, k}]
 function siparisParse(text) {
@@ -2219,26 +2235,102 @@ function renderServisBaslat() {
       <div id="rotaListe" style="margin-top:10px"></div>
     </div>`;
 }
-function renderServisAktif() {
-  const total = servis.musteriIds.length, done = servis.edilen.length, pas = servis.paslar.length;
-  const acikVar = !!servis.acik;
-  const steps = servis.musteriIds.map((id, i) => {
+function servisStepperHTML() {
+  return servis.musteriIds.map((id, i) => {
     const c = findCustomer(id); if (!c) return "";
     const edildi = servis.edilen.includes(id), pasli = servis.paslar.includes(id), bu = servis.acik === id;
-    const mes = (rota.konum && c.lat != null) ? mesafeMetin(haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng)) : "";
     const durum = edildi ? "edildi" : pasli ? "pas" : bu ? "acik" : "";
-    const rozet = edildi ? `<span class="sd-tag ok">✓ satıldı</span>` : pasli ? `<span class="sd-tag pas">pas</span>` : bu ? `<span class="sd-tag now">açık</span>` : "";
-    const btn = (edildi || pasli || acikVar) ? "" : `<button class="btn green sm" data-vardim="${id}" type="button">Vardım</button>`;
-    return `<div class="servis-durak ${durum}">
-      <span class="sd-no">${edildi ? "✓" : pasli ? "–" : (i + 1)}</span>
-      <div class="sd-mid"><b>${esc(c.ad)}</b><span class="hint">Bakiye ${money.format(customerBorc(id))}${mes ? " · " + mes : ""}</span></div>
-      ${rozet}${btn}
-    </div>`;
+    const sag = edildi ? `<span class="sd-tag ok">✓</span>` : pasli ? `<span class="sd-tag pas">pas</span>` : bu ? `<span class="sd-tag now">şimdi</span>` : `<button class="btn soft sm" data-durakac="${id}" type="button">Aç</button>`;
+    return `<div class="servis-durak ${durum}"><span class="sd-no">${edildi ? "✓" : pasli ? "–" : (i + 1)}</span><div class="sd-mid"><b>${esc(c.ad)}</b></div>${sag}</div>`;
   }).join("");
-  return pageHead("🚗 Servis — " + done + "/" + total + " durak" + (pas ? " (" + pas + " pas)" : ""), acikVar ? "Bu müşteriyi bitirmeden sonrakine geçilmez" : "Vardığın müşteride 'Vardım'a bas", [{ label: "⏹ Servisi Bitir", cls: "softred", act: "servisbitir" }]) +
-    `<div id="servisBanner"></div>
-    <div id="rotaKart" style="margin:12px 0">${acikVar ? ziyaretKartiHTML(servis.acik) : ""}</div>
-    <div class="card">${steps || `<p class="hint">Rotada müşteri yok.</p>`}</div>`;
+}
+function servisSepetHTML() {
+  const it = activeCart().items;
+  if (!it.length) return `<p class="hint" style="padding:6px">Sepet boş — yukarıdan ürün ekle.</p>`;
+  const t = cartTotals();
+  return it.map((l, i) => `<div class="ss-row"><span class="ss-ad">${esc(l.ad)}</span><span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span><span class="ss-tut">${money.format((Number(l.fiyat) || 0) * (Number(l.adet) || 0))}</span></div>`).join("") + `<div class="ss-tot"><b>Toplam</b><b>${money.format(t.toplam)}</b></div>`;
+}
+function servisProdGridHTML() {
+  const q = ocrNorm(pos.q || "");
+  let list = store.products.filter((p) => p.gorunur !== false);
+  if (q) { const qr = (pos.q || "").trim().toLocaleLowerCase("tr"); list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr)); }
+  if (!list.length) return `<p class="hint" style="grid-column:1/-1;padding:14px;text-align:center">Ürün yok.</p>`;
+  return list.map((p) => `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`).join("");
+}
+function servisSihirbaz(id) {
+  const c = findCustomer(id); if (!c) return "";
+  const adim = servis.adim || "onay";
+  if (adim === "onay") {
+    const borc = customerBorc(id), ay = musteriAylikCiro(id), son = musterininSonSatisi(id);
+    return `<div class="card sihir">
+      <div class="sihir-adim">Durak · 1/4</div><h2>${esc(c.ad)}</h2>
+      ${c.telefon ? `<p class="hint">${esc(c.telefon)}${c.adres ? " · " + esc(c.adres) : ""}</p>` : ""}
+      <div class="zk-metrik" style="margin:12px 0">
+        <div class="zkm"><span>Bakiye</span><b class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</b></div>
+        <div class="zkm"><span>Bu ay</span><b>${money.format(ay)}</b></div>
+        <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
+      </div>
+      ${son ? `<p class="hint">Son satış: ${fmtDate(son.tarih)} · ${money.format(son.toplam)}</p>` : ""}
+      <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
+      <div class="sihir-btn">
+        <button class="btn green lg" data-sonay="${id}" type="button">✓ Evet — Devam</button>
+        <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Sona At</button></div>
+      </div>
+    </div>`;
+  }
+  if (adim === "satisMi") {
+    return `<div class="card sihir"><div class="sihir-adim">Satış · 2/4</div><h2>${esc(c.ad)}</h2>
+      <p class="sihir-soru">Satış var mı?</p>
+      <div class="sihir-btn"><button class="btn green lg" data-satvar="${id}" type="button">✅ Evet, ürün seç</button><button class="btn soft lg" data-satyok="${id}" type="button">🚫 Satış yok — sadece ziyaret</button></div>
+    </div>`;
+  }
+  if (adim === "urun") {
+    return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
+      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn green" id="zkHizliBtn" type="button">Doldur</button></div>
+      <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
+      <div class="prod-grid" id="prodGrid">${servisProdGridHTML()}</div>
+      <div class="sihir-sepet" id="sihirSepet">${servisSepetHTML()}</div>
+      <div class="sihir-btn"><button class="btn primary lg" id="odemeGec" type="button">Ödemeye Geç →</button><button class="btn soft sm" data-sgeri="satisMi" type="button">← Geri</button></div>
+    </div>`;
+  }
+  const t = cartTotals();
+  return `<div class="card sihir"><div class="sihir-adim">Ödeme · 4/4</div><h2>${esc(c.ad)}</h2>
+    <div class="sihir-tot">Toplam <b>${money.format(t.toplam)}</b></div>
+    <p class="sihir-soru">Nasıl ödendi?</p>
+    <div class="sihir-odeme">
+      <button class="btn green lg" data-sode="nakit" type="button">₺ Nakit</button>
+      <button class="btn lg" data-sode="pos" type="button">▤ POS</button>
+      <button class="btn soft lg" data-sode="acik" type="button">📖 Açık Hesap</button>
+      <button class="btn soft lg" data-sode="parcali" type="button">⇄ Parçalı</button>
+    </div>
+    <button class="btn soft sm" data-sgeri="urun" type="button" style="margin-top:10px">← Ürünlere Dön</button>
+  </div>`;
+}
+function renderServisAktif() {
+  const total = servis.musteriIds.length, done = servis.edilen.length, pas = servis.paslar.length;
+  const o = servisGunOzet();
+  const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>📋 ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
+  const govde = servis.acik
+    ? servisSihirbaz(servis.acik)
+    : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
+  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+    fab + `<div id="servisBanner"></div>` + govde +
+    `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
+}
+function servisSepetGuncelle() {
+  const el = document.getElementById("sihirSepet"); if (el) { el.innerHTML = servisSepetHTML(); servisSepetWire(); }
+}
+function servisSepetWire() {
+  document.querySelectorAll("#sihirSepet [data-ssp]").forEach((b) => b.onclick = () => { const it = activeCart().items[Number(b.dataset.ssp)]; if (it) it.adet = (Number(it.adet) || 0) + 1; servisSepetGuncelle(); });
+  document.querySelectorAll("#sihirSepet [data-ssm]").forEach((b) => b.onclick = () => { const c = activeCart(); const idx = Number(b.dataset.ssm); const it = c.items[idx]; if (it) { it.adet = (Number(it.adet) || 0) - 1; if (it.adet <= 0) c.items.splice(idx, 1); } servisSepetGuncelle(); });
+}
+function hizliSiparisDoldurInline(id) {
+  const inp = document.getElementById("zkHizli"); const text = inp ? inp.value : "";
+  const parc = siparisParse(text); if (!parc.length) { alert("Anlaşılamadı. Örnek: 7 soda 2 gazoz 17 su"); return; }
+  const c = activeCart(); c.musteriId = id;
+  parc.forEach((p) => { const pid = ocrMatch(p.k, store.products, "ad"); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); } });
+  if (inp) inp.value = "";
+  servisSepetGuncelle();
 }
 /* Sürükle-bırak rota oluşturma ekranı */
 let rotaYapim = { ad: "", sira: [] };
@@ -2303,8 +2395,30 @@ function mountRotaOlustur() {
 function mountRota() {
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
-    if (servis.acik) { ziyaretKartiWire(servis.acik); }
-    else { document.querySelectorAll("[data-vardim]").forEach((b) => b.addEventListener("click", () => { servis.acik = b.dataset.vardim; render(); })); }
+    const fab = document.getElementById("servisOzetFab"); if (fab) fab.addEventListener("click", servisOzetAc);
+    document.querySelectorAll("[data-durakac]").forEach((b) => b.addEventListener("click", () => { servis.acik = b.dataset.durakac; servis.adim = "onay"; render(); }));
+    const onay = document.querySelector("[data-sonay]");
+    if (onay) {
+      onay.addEventListener("click", () => { servis.adim = "satisMi"; render(); });
+      const tel = ((findCustomer(servis.acik) || {}).telefon || "").replace(/\D/g, ""); const pEl = document.getElementById("zkPuan");
+      if (tel && typeof kvGet === "function") kvGet("bayi_puan:" + tel).then((r) => { if (pEl) pEl.textContent = num2.format((r && r.value) || 0); }).catch(() => { if (pEl) pEl.textContent = "0"; });
+      else if (pEl) pEl.textContent = "0";
+    }
+    document.querySelectorAll("[data-zkpas]").forEach((b) => b.addEventListener("click", () => { if (confirm("Pas geçilsin mi?")) durakPasGec(b.dataset.zkpas); }));
+    document.querySelectorAll("[data-zksona]").forEach((b) => b.addEventListener("click", () => durakSonaAt(b.dataset.zksona)));
+    const satvar = document.querySelector("[data-satvar]"); if (satvar) satvar.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; servis.adim = "urun"; render(); });
+    const satyok = document.querySelector("[data-satyok]"); if (satyok) satyok.addEventListener("click", () => durakTamamla(servis.acik));
+    if (servis.adim === "urun") {
+      activeCart().musteriId = servis.acik;
+      const wireAdds = () => document.querySelectorAll("#prodGrid [data-add]").forEach((el) => el.onclick = () => { addToCart(el.dataset.add); servisSepetGuncelle(); });
+      wireAdds();
+      const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = servisProdGridHTML(); wireAdds(); } });
+      const hz = document.getElementById("zkHizliBtn"); if (hz) hz.addEventListener("click", () => hizliSiparisDoldurInline(servis.acik));
+      const og = document.getElementById("odemeGec"); if (og) og.addEventListener("click", () => { if (!activeCart().items.length) { alert("Sepet boş — ürün ekle."); return; } servis.adim = "odeme"; render(); });
+      servisSepetWire();
+    }
+    document.querySelectorAll("[data-sode]").forEach((b) => b.addEventListener("click", () => finalizeSale(b.dataset.sode)));
+    document.querySelectorAll("[data-sgeri]").forEach((b) => b.addEventListener("click", () => { servis.adim = b.dataset.sgeri; render(); }));
     servisKonumIzle();
     return;
   }
