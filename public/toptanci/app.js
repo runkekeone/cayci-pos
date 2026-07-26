@@ -664,8 +664,6 @@ function renderSatis() {
         </div>
       </div>
 
-      <!-- 10. Yüzen "Tara" butonu (barkod inputunu odaklar) -->
-      <button class="pos-tara" id="posTara" type="button" aria-label="Fişten oku" title="Fişten oku">&#128247;<span>Fiş Oku</span></button>
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
@@ -896,7 +894,6 @@ function mountSatis() {
   const gridYenile = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); } if (psx) psx.style.display = pos.q ? "" : "none"; };
   if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; gridYenile(); });
   if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } gridYenile(); });
-  const tara = document.getElementById("posTara"); if (tara) tara.addEventListener("click", satisFotoOku);
   syncTotals();
 }
 
@@ -2300,7 +2297,7 @@ function servisSihirbaz(id) {
   }
   if (adim === "urun") {
     return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
-      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn green" id="zkHizliBtn" type="button">Doldur</button></div>
+      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn green" id="zkHizliBtn" type="button">Doldur</button><button class="btn soft" id="sFoto" type="button" title="Fiş/faturadan oku">&#128247;</button></div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
       <div class="prod-grid" id="prodGrid">${servisProdGridHTML()}</div>
       <div class="sihir-sepet" id="sihirSepet">${servisSepetHTML()}</div>
@@ -2428,6 +2425,7 @@ function mountRota() {
       wireAdds();
       const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = servisProdGridHTML(); wireAdds(); } });
       const hz = document.getElementById("zkHizliBtn"); if (hz) hz.addEventListener("click", () => hizliSiparisDoldurInline(servis.acik));
+      const sf = document.getElementById("sFoto"); if (sf) sf.addEventListener("click", satisFotoOku);
       const og = document.getElementById("odemeGec"); if (og) og.addEventListener("click", () => { if (!activeCart().items.length) { alert("Sepet boş — ürün ekle."); return; } servis.adim = "odeme"; render(); });
       servisSepetWire();
     }
