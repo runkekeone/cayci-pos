@@ -802,6 +802,7 @@ function finalizeCustom(tipId) { const tip = store.odemeTipleri.find((t) => t.id
 function finalizeSale(type, odemeAdi) {
   const c = activeCart();
   if (!c.items.length) { alert("Sepet boş."); return; }
+  const satilanMus = c.musteriId;
   const { brut, toplam } = cartTotals();
   const odeme = { nakit: 0, pos: 0, acik: 0 };
   if (type === "nakit") odeme.nakit = toplam;
@@ -823,7 +824,14 @@ function finalizeSale(type, odemeAdi) {
   pos.carts[pos.active] = newCart();
   refreshPOS();
   const grid = document.getElementById("prodGrid"); if (grid) { grid.innerHTML = prodGridHTML(); wireProdCards(); }
-  if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(store.sales[store.sales.length - 1]);
+  const yeniSale = store.sales[store.sales.length - 1];
+  if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
+  // Servis akışı: satış açık servis müşterisine yapıldıysa → o durağı otomatik tamamla + sonraki
+  if (servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus) {
+    if (confirm("İrsaliyeyi bu müşteriye WhatsApp'tan gönderelim mi?")) irsaliyeWa(yeniSale);
+    durakTamamla(satilanMus);
+    navigate("rota");
+  }
 }
 function wireProdCards() {
   document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add));
