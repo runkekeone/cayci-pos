@@ -904,7 +904,7 @@ function mountSatis() {
 function openPrint(title, html) {
   const w = window.open("", "_blank", "width=420,height=640");
   if (!w) { alert("Yazdırma penceresi engellendi."); return; }
-  w.document.write(`<html><head><title>${title}</title><style>body{font-family:monospace;padding:10px;font-size:13px}h2{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse}td{padding:2px 0}hr{border:0;border-top:1px dashed #000}.r{text-align:right}.c{text-align:center}</style></head><body>${html}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.write(`<html><head><title>${title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:monospace;padding:10px;font-size:13px;margin:0}h2{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse}td{padding:2px 0}hr{border:0;border-top:1px dashed #000}.r{text-align:right}.c{text-align:center}.pbar{position:sticky;top:0;display:flex;gap:8px;background:#1E40AF;padding:10px;margin:-10px -10px 12px}.pbar button{flex:1;padding:13px;border:0;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}.pbar .kapat{background:#fff;color:#1E40AF}.pbar .yaz{background:#16a34a;color:#fff}@media print{.pbar{display:none}}</style></head><body><div class="pbar"><button class="kapat" onclick="window.close()">&#10005; Kapat / Geri</button><button class="yaz" onclick="window.print()">&#128424; Yazdır</button></div>${html}</body></html>`);
   w.document.close();
 }
 function printSale(s) {
@@ -1989,11 +1989,25 @@ function servisSonrakiAc() {
   const next = servis.musteriIds.find((id) => !servis.edilen.includes(id) && !servis.paslar.includes(id));
   servis.acik = next || null; servis.adim = "onay";
 }
+function servisKaydet() {
+  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, carts: pos.carts, active: pos.active })); } catch (e) {}
+}
+function servisYukle() {
+  try {
+    const s = JSON.parse(localStorage.getItem("servis-v1") || "null");
+    if (s && s.aktif) {
+      servis.aktif = true; servis.musteriIds = s.musteriIds || []; servis.edilen = s.edilen || []; servis.paslar = s.paslar || [];
+      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.watchId = null;
+      if (s.carts && s.carts.length) { pos.carts = s.carts; pos.active = s.active || 0; }
+    }
+  } catch (e) {}
+}
 function servisBitir() {
   servis.aktif = false; servis.acik = null;
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
   const n = servis.edilen.length, t = servis.musteriIds.length;
-  servis.musteriIds = []; servis.edilen = []; servis.paslar = [];
+  servis.musteriIds = []; servis.edilen = []; servis.paslar = []; servis.satislar = [];
+  try { localStorage.removeItem("servis-v1"); } catch (e) {}
   render();
   alert("Servis bitti ✓  " + n + "/" + t + " durak satışla kapatıldı.");
 }
@@ -2420,6 +2434,7 @@ function mountRota() {
     document.querySelectorAll("[data-sode]").forEach((b) => b.addEventListener("click", () => finalizeSale(b.dataset.sode)));
     document.querySelectorAll("[data-sgeri]").forEach((b) => b.addEventListener("click", () => { servis.adim = b.dataset.sgeri; render(); }));
     servisKonumIzle();
+    servisKaydet();
     return;
   }
   const ol = document.getElementById("rotaOlustur"); if (ol) ol.addEventListener("click", () => { rotaYapim = { ad: "", sira: [] }; navigate("rota-olustur"); });
@@ -2696,10 +2711,12 @@ function wireGlobalSearch() {
 }
 
 /* ============ Başlat ============ */
+servisYukle();
 buildMenu();
 initTopbar();
 mobilBarKur();
 render();
+if (servis.aktif) navigate("rota");
 // Bulut yedeği: açılışta store'u buluttan çek (başka cihazdan da erişilsin).
 bulutHydrate();
 // İnternet kapısı: bağlantı yoksa paneli kapat, gelince aç (tümü-buluttan mimarisi).
