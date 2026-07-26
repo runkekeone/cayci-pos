@@ -642,6 +642,24 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .so-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
 .so-row b { font-family: var(--font-num); color: var(--value); }
 .so-tot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-family: var(--font-num); }
+/* Faz2: öneri + kapanış + rapor */
+.oner-kutu { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 12px; margin: 10px 0; }
+.oner-bas { font-size: 11px; font-weight: 800; color: var(--accent-ink); margin-bottom: 8px; }
+.oner-cip { display: flex; flex-wrap: wrap; gap: 6px; }
+.oner-c { border: 1px solid var(--accent); background: #fff; color: var(--accent-ink); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.oner-c:active { background: var(--accent-soft); }
+.kp-blok { margin: 12px 0; }
+.kp-blok > label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.kp-blok input, .kp-blok select { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 11px; font-size: 14px; }
+.kp-blok > input { width: 100%; box-sizing: border-box; }
+.kp-sebep { display: flex; flex-wrap: wrap; gap: 6px; }
+.kp-sb { border: 1px solid var(--line); background: #fff; border-radius: var(--radius-pill); padding: 8px 13px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.kp-sb.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.kp-ok { background: #eafaf0; border: 1px solid var(--green); color: var(--green-d); border-radius: var(--radius); padding: 10px 12px; font-weight: 700; }
+.rapor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rk { background: var(--brand-soft); border-radius: var(--radius); padding: 12px; text-align: center; }
+.rk span { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.rk b { font-family: var(--font-num); font-size: 19px; font-weight: 800; color: var(--brand-dark); }
 
 /* POS: fiş+ödeme (sol kolon) — masaüstünde normal blok, mobilde alt-panel */
 .pos-sheet { display: flex; flex-direction: column; }

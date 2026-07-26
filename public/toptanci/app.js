@@ -12,7 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
-    duyurular: [], gorusmeler: [], rotalar: [],
+    duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -236,7 +236,7 @@ const MENU = [
       { label: "Varyantlı Ürün Ekle", route: "urun-varyantli" }, { label: "Ürün Grupları", route: "urun-gruplari" },
       { label: "Ürün Transferleri", route: "urun-transfer" }, { label: "Alt Ürün Tanımları", route: "alt-urun" },
       { label: "Ürün Varyantları", route: "urun-varyantlari" }, { label: "Ürün İadesi Al", route: "urun-iade" },
-      { label: "İade Talepleri", route: "iade-talepleri" }, { label: "Ürün Etiketi Üret", route: "urun-etiket" },
+      { label: "İade Talepleri", route: "iade-talepleri" }, { label: "İstenen Ürünler (Talepler)", route: "talepler" }, { label: "Ürün Etiketi Üret", route: "urun-etiket" },
       { label: "Etiket Tasarla & Üret", route: "etiket-tasarla" }, { label: "Barkodlu Terazi Çıktısı", route: "terazi-cikti" },
   ] },
   { ico: "📄", label: "Alış Faturaları", children: [
@@ -827,8 +827,9 @@ function finalizeSale(type, odemeAdi) {
   // Servis akışı: satış açık servis müşterisine yapıldıysa → o durağı otomatik tamamla + sonraki
   if (servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus) {
     servis.satislar = servis.satislar || []; servis.satislar.push(yeniSale.id);
+    servis.sonSatisId = yeniSale.id;
     if (confirm("İrsaliyeyi bu müşteriye WhatsApp'tan gönderelim mi?")) irsaliyeWa(yeniSale);
-    durakTamamla(satilanMus);
+    servis.adim = "kapanis";
     navigate("rota");
   }
 }
@@ -1724,6 +1725,7 @@ const PAGES = {
   rota: { render: renderRota, mount: mountRota },
   "rota-olustur": { render: renderRotaOlustur, mount: mountRotaOlustur },
   "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
+  talepler: { render: renderTalepler, mount: mountTalepler },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
 
   "rapor-gunluk": { render: renderRaporGunluk, mount: () => mountReport("rapor-gunluk") },
@@ -1970,7 +1972,7 @@ function mountSahaKocu() {
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
-const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], watchId: null };
+const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null };
 
 function rotaKaydet(ad, musteriIds) {
   const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
@@ -1984,29 +1986,94 @@ function servisBaslat(musteriIds) {
 }
 function servisSonrakiAc() {
   const next = servis.musteriIds.find((id) => !servis.edilen.includes(id) && !servis.paslar.includes(id));
-  servis.acik = next || null; servis.adim = "onay";
+  servis.acik = next || null; servis.adim = "onay"; servis.sonSatisId = null;
+}
+// Upsell: müşterinin son 60 günde alıp bu ay almadığı ürünler + kampanya işaretliler.
+function musteriOneri(id) {
+  const bugun = new Date(), ay = monthStartStr();
+  const alt = localDateStr(new Date(bugun.getTime() - 60 * 86400000));
+  const gecmis = {}, buAy = {};
+  store.sales.filter((s) => s.musteriId === id).forEach((s) => {
+    const g = localDateStr(new Date(s.tarih));
+    s.items.forEach((it) => { if (g >= alt) gecmis[it.urunId] = (gecmis[it.urunId] || 0) + 1; if (g >= ay) buAy[it.urunId] = 1; });
+  });
+  const oner = Object.keys(gecmis).filter((pid) => !buAy[pid]).map((pid) => findProduct(pid)).filter(Boolean);
+  const kamp = store.products.filter((p) => p.kampanya && p.gorunur !== false && !oner.some((o) => o.id === p.id));
+  return oner.concat(kamp).slice(0, 6);
+}
+function ziyaretKapat(id) {
+  const c = findCustomer(id);
+  const satildi = !!servis.sonSatisId;
+  const sebepEl = document.querySelector(".kp-sb.on"); const sebep = sebepEl ? sebepEl.dataset.sebep : null;
+  const tah = Number((document.getElementById("kpTahsil") || {}).value) || 0;
+  const tahTip = (document.getElementById("kpTahsilTip") || {}).value || "nakit";
+  if (tah > 0 && c) { store.payments.push({ id: genId(), musteriId: id, tutar: tah, not: "Saha tahsilat (" + tahTip + ")", tarih: new Date().toISOString() }); if (typeof bayiPuanEkle === "function") bayiPuanEkle(c, tah); }
+  const iadeUrun = (document.getElementById("kpIadeUrun") || {}).value;
+  const iadeAdet = Number((document.getElementById("kpIadeAdet") || {}).value) || 0;
+  let iadeTutar = 0;
+  if (iadeUrun && iadeAdet > 0) { const pr = findProduct(iadeUrun); if (pr) { iadeTutar = (Number(pr.satis) || 0) * iadeAdet; store.iadeler.push({ id: genId(), urunId: pr.id, ad: pr.ad, adet: iadeAdet, tutar: iadeTutar, musteriId: id, tarih: new Date().toISOString() }); pr.stok = (Number(pr.stok) || 0) + iadeAdet; if (id) store.payments.push({ id: genId(), musteriId: id, tutar: iadeTutar, not: "Ürün iadesi: " + pr.ad, tarih: new Date().toISOString() }); } }
+  const talep = ((document.getElementById("kpTalep") || {}).value || "").trim();
+  if (talep) store.talepler.push({ id: genId(), musteriId: id, metin: talep, tarih: new Date().toISOString(), durum: "acik" });
+  const not = ((document.getElementById("kpNot") || {}).value || "").trim();
+  const sonraki = (document.getElementById("kpSonraki") || {}).value || null;
+  store.ziyaretler.push({ id: genId(), musteriId: id, tarih: new Date().toISOString(), sonuc: satildi ? "satis" : "yok", sebep: satildi ? null : sebep, not, sonraki, satisId: servis.sonSatisId || null, tahsilat: tah, iadeTutar, servisGun: localDateStr(new Date()) });
+  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+  durakTamamla(id);
+}
+function servisRaporModal(r) {
+  openModal("Gün Sonu — Servis Raporu", `<div class="rapor-grid">
+    <div class="rk"><span>Ziyaret</span><b>${r.ziyaret}</b></div>
+    <div class="rk"><span>Satış</span><b>${r.satisAdet}</b></div>
+    <div class="rk"><span>Satış ₺</span><b>${money.format(r.satisTop)}</b></div>
+    <div class="rk"><span>Tahsilat ₺</span><b>${money.format(r.tahsilat)}</b></div>
+    <div class="rk"><span>İade ₺</span><b>${money.format(r.iade)}</b></div>
+    <div class="rk"><span>Satış yok</span><b>${r.yok}</b></div>
+    <div class="rk"><span>Pas</span><b>${r.pas}</b></div>
+    <div class="rk"><span>Talep</span><b>${r.talep}</b></div>
+  </div><p class="hint" style="margin-top:10px">Detay için Menü → Raporlar · İstenen ürünler için Ürünler → Talepler.</p>`, { noFoot: true });
+}
+function renderTalepler() {
+  const acik = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
+  const rows = acik.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<tr><td>${fmtDate(t.tarih)}</td><td>${c ? esc(c.ad) : "-"}</td><td>${esc(t.metin)}</td><td><div class="act-btns"><button class="edit" data-talepok="${t.id}">✓ Karşılandı</button><button class="del" data-talepsil="${t.id}">Sil</button></div></td></tr>`; }).join("");
+  return pageHead("İstenen Ürünler (Talepler)", acik.length + " açık talep — sahada müşterinin istediği ama verilemeyenler") +
+    tableCard(["Tarih", "Müşteri", "İstenen ürün", "İşlem"], rows, infoLine(acik.length));
+}
+function mountTalepler() {
+  document.querySelectorAll("[data-talepok]").forEach((b) => b.addEventListener("click", () => { const t = store.talepler.find((x) => x.id === b.dataset.talepok); if (t) t.durum = "kapali"; saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render(); }));
+  document.querySelectorAll("[data-talepsil]").forEach((b) => b.addEventListener("click", () => { store.talepler = store.talepler.filter((x) => x.id !== b.dataset.talepsil); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render(); }));
+  if (typeof wireTableSearch === "function") wireTableSearch();
 }
 function servisKaydet() {
-  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, carts: pos.carts, active: pos.active })); } catch (e) {}
+  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, sonSatisId: servis.sonSatisId, carts: pos.carts, active: pos.active })); } catch (e) {}
 }
 function servisYukle() {
   try {
     const s = JSON.parse(localStorage.getItem("servis-v1") || "null");
     if (s && s.aktif) {
       servis.aktif = true; servis.musteriIds = s.musteriIds || []; servis.edilen = s.edilen || []; servis.paslar = s.paslar || [];
-      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.watchId = null;
+      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.sonSatisId = s.sonSatisId || null; servis.watchId = null;
       if (s.carts && s.carts.length) { pos.carts = s.carts; pos.active = s.active || 0; }
     }
   } catch (e) {}
 }
 function servisBitir() {
+  const gun = localDateStr(new Date());
+  const zys = store.ziyaretler.filter((z) => z.servisGun === gun);
+  const sat = zys.filter((z) => z.sonuc === "satis").map((z) => store.sales.find((s) => s.id === z.satisId)).filter(Boolean);
+  const rapor = {
+    ziyaret: zys.length, pas: servis.paslar.length,
+    satisAdet: sat.length, satisTop: sat.reduce((a, s) => a + (Number(s.toplam) || 0), 0),
+    tahsilat: zys.reduce((a, z) => a + (Number(z.tahsilat) || 0), 0),
+    iade: zys.reduce((a, z) => a + (Number(z.iadeTutar) || 0), 0),
+    talep: store.talepler.filter((t) => localDateStr(new Date(t.tarih)) === gun).length,
+    yok: zys.filter((z) => z.sonuc === "yok").length,
+  };
   servis.aktif = false; servis.acik = null;
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
-  const n = servis.edilen.length, t = servis.musteriIds.length;
-  servis.musteriIds = []; servis.edilen = []; servis.paslar = []; servis.satislar = [];
+  servis.musteriIds = []; servis.edilen = []; servis.paslar = []; servis.satislar = []; servis.sonSatisId = null;
   try { localStorage.removeItem("servis-v1"); } catch (e) {}
   render();
-  alert("Servis bitti ✓  " + n + "/" + t + " durak satışla kapatıldı.");
+  servisRaporModal(rapor);
 }
 function durakTamamla(id) {
   if (!servis.edilen.includes(id)) servis.edilen.push(id);
@@ -2282,6 +2349,7 @@ function servisSihirbaz(id) {
         <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
       </div>
       ${son ? `<p class="hint">Son satış: ${fmtDate(son.tarih)} · ${money.format(son.toplam)}</p>` : ""}
+      ${(() => { const o = musteriOneri(id); return o.length ? `<div class="oner-kutu"><div class="oner-bas">🎯 Öner (geçen aldı, bu ay almadı)</div><div class="oner-cip">${o.map((p) => `<button class="oner-c" data-oner="${p.id}" type="button">${esc(p.ad)}</button>`).join("")}</div></div>` : ""; })()}
       <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
       <div class="sihir-btn">
         <button class="btn green lg" data-sonay="${id}" type="button">✓ Evet — Devam</button>
@@ -2302,6 +2370,21 @@ function servisSihirbaz(id) {
       <div class="prod-grid" id="prodGrid">${servisProdGridHTML()}</div>
       <div class="sihir-sepet" id="sihirSepet">${servisSepetHTML()}</div>
       <div class="sihir-btn"><button class="btn primary lg" id="odemeGec" type="button">Ödemeye Geç →</button><button class="btn soft sm" data-sgeri="satisMi" type="button">← Geri</button></div>
+    </div>`;
+  }
+  if (adim === "kapanis") {
+    const borc = customerBorc(id);
+    const satildi = !!servis.sonSatisId;
+    const sale = satildi ? store.sales.find((s) => s.id === servis.sonSatisId) : null;
+    const urunOpts = `<option value="">— iade ürünü —</option>` + store.products.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("");
+    return `<div class="card sihir"><div class="sihir-adim">Kapanış</div><h2>${esc(c.ad)}</h2>
+      ${satildi ? `<div class="kp-ok">✓ Satış yapıldı · ${money.format(sale ? sale.toplam : 0)}</div>` : `<div class="kp-blok"><label>Satış yok — sebep?</label><div class="kp-sebep">${["Stok dolu", "Borç fazla", "Kapalı", "Küs", "Fiyat", "Diğer"].map((s) => `<button class="kp-sb" data-sebep="${s}" type="button">${s}</button>`).join("")}</div></div>`}
+      ${borc > 0 ? `<div class="kp-blok"><label>💰 Tahsilat — bakiye ${money.format(borc)}</label><div class="zk-hizli-row"><input id="kpTahsil" type="number" inputmode="decimal" placeholder="0" /><select id="kpTahsilTip"><option value="nakit">Nakit</option><option value="pos">POS</option></select></div></div>` : ""}
+      <div class="kp-blok"><label>↩ İade (varsa)</label><div class="zk-hizli-row"><select id="kpIadeUrun">${urunOpts}</select><input id="kpIadeAdet" type="number" inputmode="decimal" placeholder="adet" style="max-width:78px" /></div></div>
+      <div class="kp-blok"><label>📋 İstediği ama veremediğin ürün</label><input id="kpTalep" placeholder="ör. 5 koli X marka ayran" /></div>
+      <div class="kp-blok"><label>📝 Not</label><input id="kpNot" placeholder="ziyaret notu / şikayet" /></div>
+      <div class="kp-blok"><label>📅 Sonraki ziyaret</label><input id="kpSonraki" type="date" /></div>
+      <button class="btn primary lg" id="kpBitir" type="button" style="width:100%;margin-top:10px">✓ Ziyareti Bitir → Sonraki</button>
     </div>`;
   }
   const t = cartTotals();
@@ -2418,7 +2501,12 @@ function mountRota() {
     document.querySelectorAll("[data-zkpas]").forEach((b) => b.addEventListener("click", () => { if (confirm("Pas geçilsin mi?")) durakPasGec(b.dataset.zkpas); }));
     document.querySelectorAll("[data-zksona]").forEach((b) => b.addEventListener("click", () => durakSonaAt(b.dataset.zksona)));
     const satvar = document.querySelector("[data-satvar]"); if (satvar) satvar.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; servis.adim = "urun"; render(); });
-    const satyok = document.querySelector("[data-satyok]"); if (satyok) satyok.addEventListener("click", () => durakTamamla(servis.acik));
+    const satyok = document.querySelector("[data-satyok]"); if (satyok) satyok.addEventListener("click", () => { servis.sonSatisId = null; servis.adim = "kapanis"; render(); });
+    document.querySelectorAll("[data-oner]").forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; addToCart(b.dataset.oner); servis.adim = "urun"; render(); }));
+    if (servis.adim === "kapanis") {
+      document.querySelectorAll("[data-sebep]").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll("[data-sebep]").forEach((x) => x.classList.remove("on")); b.classList.add("on"); }));
+      const kb = document.getElementById("kpBitir"); if (kb) kb.addEventListener("click", () => ziyaretKapat(servis.acik));
+    }
     if (servis.adim === "urun") {
       activeCart().musteriId = servis.acik;
       const wireAdds = () => document.querySelectorAll("#prodGrid [data-add]").forEach((el) => el.onclick = () => { addToCart(el.dataset.add); servisSepetGuncelle(); });
