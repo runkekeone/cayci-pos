@@ -410,7 +410,7 @@ function renderUrunEkle() {
         <div class="field"><label>Kritik Stok</label><input name="kritik" type="number" step="0.01" value="${v("kritik")}" placeholder="0" /></div>
         <div class="field"><label>KDV (%)</label><input name="kdv" type="number" step="1" value="${v("kdv")}" placeholder="0" /></div>
         <div class="field"><label>Ürün Grubu</label><select name="grup">${grupOpts}</select></div>
-        <div class="field"><label>Ürün Birimi</label><select name="birim"><option ${p && p.birim === "Adet" ? "selected" : ""}>Adet</option><option ${p && p.birim === "Kg" ? "selected" : ""}>Kg</option><option ${p && p.birim === "Litre" ? "selected" : ""}>Litre</option></select></div>
+        <div class="field"><label>Ürün Birimi (koli/paketse seç — satış o birimden)</label><select name="birim">${["Adet", "Koli", "Paket", "Çuval", "Kg", "Litre"].map((u) => `<option ${p && p.birim === u ? "selected" : ""}>${u}</option>`).join("")}</select></div>
         <div class="field"><label>Satış Sayfasında Göster</label><select name="gorunur"><option value="1" ${!gorunurSel ? "selected" : ""}>Göster</option><option value="0" ${gorunurSel ? "selected" : ""}>Gösterme</option></select></div>
       </div>
       <div style="margin-top:16px"><button class="btn green lg" type="submit">💾 ${p ? "Güncelle" : "Ürünü Kaydet"}</button></div>
@@ -2327,14 +2327,14 @@ function servisSepetHTML() {
   const it = activeCart().items;
   if (!it.length) return `<p class="hint" style="padding:6px">Sepet boş — yukarıdan ürün ekle.</p>`;
   const t = cartTotals();
-  return it.map((l, i) => `<div class="ss-row"><span class="ss-ad">${esc(l.ad)}</span><span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span><span class="ss-tut">${money.format((Number(l.fiyat) || 0) * (Number(l.adet) || 0))}</span></div>`).join("") + `<div class="ss-tot"><b>Toplam</b><b>${money.format(t.toplam)}</b></div>`;
+  return it.map((l, i) => { const b = (findProduct(l.urunId) || {}).birim || "Adet"; const bl = b !== "Adet" ? ` <small>${esc(b.toLowerCase())}</small>` : ""; return `<div class="ss-row"><span class="ss-ad">${esc(l.ad)}</span><span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}${bl}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span><span class="ss-tut">${money.format((Number(l.fiyat) || 0) * (Number(l.adet) || 0))}</span></div>`; }).join("") + `<div class="ss-tot"><b>Toplam</b><b>${money.format(t.toplam)}</b></div>`;
 }
 function servisProdGridHTML() {
   const q = ocrNorm(pos.q || "");
   let list = store.products.filter((p) => p.gorunur !== false);
   if (q) { const qr = (pos.q || "").trim().toLocaleLowerCase("tr"); list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr)); }
   if (!list.length) return `<p class="hint" style="grid-column:1/-1;padding:14px;text-align:center">Ürün yok.</p>`;
-  return list.map((p) => `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`).join("");
+  return list.map((p) => { const b = (p.birim && p.birim !== "Adet") ? ` <small>/ ${esc(p.birim.toLowerCase())}</small>` : ""; return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}${b}</span></div>`; }).join("");
 }
 function servisSihirbaz(id) {
   const c = findCustomer(id); if (!c) return "";
@@ -2437,8 +2437,8 @@ function renderRotaOlustur() {
       <div id="rySira" class="ry-sira"></div>
       <div style="margin-top:12px"><button class="btn green lg" id="rySave" type="button" style="width:100%">Kaydet & Servisi Başlat</button></div>
     </div>
-    <div class="section-title" style="margin-top:14px">Müşteriler (dokun → ekle)</div>
-    <div id="ryHavuz" class="ry-havuz"></div>`;
+    <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;gap:10px"><div class="section-title" style="margin:0">Müşteriler (dokun → ekle)</div><button class="btn soft sm" id="ryYeniMus" type="button">＋ Yeni Müşteri</button></div>
+    <div id="ryHavuz" class="ry-havuz" style="margin-top:8px"></div>`;
 }
 function ryCiz() {
   const sira = document.getElementById("rySira"), hav = document.getElementById("ryHavuz");
@@ -2478,6 +2478,12 @@ function rySurukleBasla(e, id) {
 }
 function mountRotaOlustur() {
   ryCiz();
+  const ym = document.getElementById("ryYeniMus");
+  if (ym) ym.addEventListener("click", () => {
+    const ad = (prompt("Yeni müşteri adı:") || "").trim(); if (!ad) return;
+    const m = { id: genId(), ad, balance: 0 }; store.customers.push(m);
+    rotaYapim.sira.push(m.id); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); ryCiz();
+  });
   const ad = document.getElementById("ryAd"); if (ad) ad.addEventListener("input", () => { rotaYapim.ad = ad.value; });
   const save = document.getElementById("rySave");
   if (save) save.onclick = () => {
