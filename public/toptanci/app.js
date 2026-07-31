@@ -558,7 +558,7 @@ function renderSatisDetay() {
   const musOpts = `<option value="">— Müşteri yok —</option>` + store.customers.map((m) => `<option value="${m.id}" ${s.musteriId === m.id ? "selected" : ""}>${esc(m.ad)}</option>`).join("");
   const otip = s.odeme.acik ? "acik" : (s.odeme.pos ? "pos" : "nakit");
   const odOpts = [["nakit", "NAKİT"], ["pos", "POS"], ["acik", "AÇIK HESAP"]].map((o) => `<option value="${o[0]}" ${otip === o[0] ? "selected" : ""}>${o[1]}</option>`).join("");
-  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: "🖨 İrsaliye", cls: "soft", act: "print" }, { label: "📲 WhatsApp", cls: "soft", act: "wa" }, { label: "🗑 Satışı Sil", cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
+  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: "🖨 İrsaliye", cls: "soft", act: "print" }, { label: "📲 WhatsApp", cls: "soft", act: "wa" }, { label: "🖼 Resim Paylaş", cls: "soft", act: "resim" }, { label: "🗑 Satışı Sil", cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
     `<div class="card"><div class="form-grid">
       <div class="field"><label>Müşteri</label><select id="sdMus">${musOpts}</select></div>
       <div class="field"><label>Ödeme Tipi</label><select id="sdOdeme">${odOpts}</select></div>
@@ -601,7 +601,8 @@ function mountSatisDetay() {
   sdRefresh();
   document.getElementById("sdIsk").addEventListener("input", sdRefresh);
   const pr = document.querySelector('[data-act="print"]'); if (pr) pr.addEventListener("click", () => printSale(s));
-  const wa = document.querySelector('[data-act="wa"]'); if (wa) wa.addEventListener("click", () => irsaliyePaylas(s));
+  const wa = document.querySelector('[data-act="wa"]'); if (wa) wa.addEventListener("click", () => irsaliyeWa(s));
+  const rs = document.querySelector('[data-act="resim"]'); if (rs) rs.addEventListener("click", () => irsaliyePaylas(s));
   const del = document.querySelector('[data-act="delsale"]');
   if (del) del.addEventListener("click", () => { if (!confirm("Satış silinsin mi? (stok geri yüklenir)")) return; s.items.forEach((it) => { const p = findProduct(it.urunId); if (p) p.stok = (Number(p.stok) || 0) + it.adet; }); store.sales = store.sales.filter((x) => x.id !== s.id); saveStore(); navigate("rapor-tarihsel"); });
   document.getElementById("sdSave").addEventListener("click", () => {
@@ -881,13 +882,13 @@ function finalizeSale(type, odemeAdi) {
     servis.sonSatisId = yeniSale.id;
     // Adisyon otomatik WhatsApp — müşterinin numarası varsa (kullanıcı jesti içinde, confirm'siz).
     const musc = findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
     servis.adim = "kapanis";
     render();
   } else {
     // Normal satış: müşterinin telefonu varsa adisyon otomatik WhatsApp; yoksa yazdırma sor.
     const musc = satilanMus && findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
     else if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
@@ -2335,7 +2336,7 @@ function ziyaretKartiWire(id) {
   kart.querySelector("[data-zkapat]").onclick = () => { if (servis.aktif) { servis.acik = null; render(); } else kart.innerHTML = ""; };
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
-  kart.querySelector("[data-zkwa]").onclick = () => irsaliyePaylas(musterininSonSatisi(id));
+  kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
   const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
   const pasbtn = kart.querySelector("[data-zkpas]"); if (pasbtn) pasbtn.onclick = () => { if (confirm("Bu müşteri pas geçilsin mi?")) durakPasGec(id); };
   const sonabtn = kart.querySelector("[data-zksona]"); if (sonabtn) sonabtn.onclick = () => durakSonaAt(id);
