@@ -433,7 +433,7 @@ function renderMusteriler() {
   const toplamBorc = store.customers.reduce((s, c) => s + customerBorc(c.id), 0);
   const rows = store.customers.map((c, i) => {
     const borc = customerBorc(c.id);
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
   return pageHead("Müşteriler", `${store.customers.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
     tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(store.customers.length));
@@ -481,6 +481,7 @@ async function rehberdenNumaraAta(custId) {
 function mountMusteriler() {
   const y = document.querySelector('[data-act="yeni-musteri"]'); if (y) y.addEventListener("click", () => openYeniMusteri());
   const rm = document.querySelector('[data-act="rehber-musteri"]'); if (rm) rm.addEventListener("click", rehberdenMusteriEkle);
+  document.querySelectorAll("[data-duzenlec]").forEach((b) => b.addEventListener("click", () => openYeniMusteri(null, findCustomer(b.dataset.duzenlec))));
   document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
   document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
   document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
