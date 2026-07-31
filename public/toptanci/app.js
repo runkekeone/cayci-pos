@@ -435,7 +435,7 @@ function renderMusteriler() {
     const borc = customerBorc(c.id);
     return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
-  return pageHead("Müşteriler", `${store.customers.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
+  return pageHead("Müşteriler", `${store.customers.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
     tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(store.customers.length));
 }
 function openYeniMusteri(onDone, item) {
@@ -455,8 +455,32 @@ function openYeniMusteri(onDone, item) {
     saveStore(); if (onDone) onDone(); else render();
   });
 }
+// Telefon rehberinden kişi seç (Contact Picker Web API; WebView desteklemezse elle).
+async function rehberdenSec() {
+  if (!(navigator.contacts && navigator.contacts.select)) { alert("Rehber seçimi bu sürümde desteklenmiyor — telefonu elle gir. (Gerekirse APK güncellemesiyle native rehber eklenir.)"); return null; }
+  try {
+    const r = await navigator.contacts.select(["name", "tel"], { multiple: false });
+    if (!r || !r.length) return null;
+    return { ad: (r[0].name && r[0].name[0]) || "", tel: (r[0].tel && r[0].tel[0]) || "" };
+  } catch (e) { return null; }
+}
+async function rehberdenMusteriEkle() {
+  const k = await rehberdenSec(); if (!k) return;
+  const ad = (k.ad || "").trim() || (prompt("Müşteri adı:") || "").trim(); if (!ad) return;
+  store.customers.push({ id: genId(), ad, telefon: (k.tel || "").trim() });
+  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
+  alert("Müşteri eklendi: " + ad + (k.tel ? " · " + k.tel : ""));
+}
+async function rehberdenNumaraAta(custId) {
+  const k = await rehberdenSec(); if (!k) return;
+  if (!k.tel) { alert("Seçilen kişide numara yok."); return; }
+  const c = findCustomer(custId); if (!c) return;
+  c.telefon = k.tel.trim(); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
+  alert("Numara atandı: " + c.telefon);
+}
 function mountMusteriler() {
   const y = document.querySelector('[data-act="yeni-musteri"]'); if (y) y.addEventListener("click", () => openYeniMusteri());
+  const rm = document.querySelector('[data-act="rehber-musteri"]'); if (rm) rm.addEventListener("click", rehberdenMusteriEkle);
   document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
   document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
   document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
@@ -483,13 +507,15 @@ function renderMusteriDetay() {
   const pays = store.payments.filter((p) => p.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const salesRows = sales.map((s, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${s.items.reduce((a, it) => a + it.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.odeme.acik)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`).join("");
   const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>Tahsilat</td><td>${esc(p.not || "-")}</td><td>${money.format(p.tutar)}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
+  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length));
 }
 function mountMusteriDetay() {
   const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(selectedCustomerId));
+  const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
+  const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
   wireSaleLinks();
 }
 function odemeLabel(o) { const p = []; if (o.nakit) p.push("Nakit"); if (o.pos) p.push("POS"); if (o.acik) p.push("Açık Hesap"); return p.join(" + ") || "-"; }
@@ -823,14 +849,18 @@ function finalizeSale(type, odemeAdi) {
   refreshPOS();
   const grid = document.getElementById("prodGrid"); if (grid) { grid.innerHTML = prodGridHTML(); wireProdCards(); }
   const yeniSale = store.sales[store.sales.length - 1];
-  if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
-  // Servis akışı: satış açık servis müşterisine yapıldıysa → o durağı otomatik tamamla + sonraki
-  if (servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus) {
+  const inServis = servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus;
+  // Servis dışında (normal POS): irsaliye yazdırma sor. Serviste: otomatik WhatsApp.
+  if (inServis) {
     servis.satislar = servis.satislar || []; servis.satislar.push(yeniSale.id);
     servis.sonSatisId = yeniSale.id;
-    if (confirm("İrsaliyeyi bu müşteriye WhatsApp'tan gönderelim mi?")) irsaliyeWa(yeniSale);
+    // Adisyon otomatik WhatsApp — müşterinin numarası varsa (kullanıcı jesti içinde, confirm'siz).
+    const musc = findCustomer(satilanMus);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
     servis.adim = "kapanis";
     render();
+  } else {
+    if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
 function wireProdCards() {
@@ -2437,7 +2467,7 @@ function renderRotaOlustur() {
       <div id="rySira" class="ry-sira"></div>
       <div style="margin-top:12px"><button class="btn green lg" id="rySave" type="button" style="width:100%">Kaydet & Servisi Başlat</button></div>
     </div>
-    <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;gap:10px"><div class="section-title" style="margin:0">Müşteriler (dokun → ekle)</div><button class="btn soft sm" id="ryYeniMus" type="button">＋ Yeni Müşteri</button></div>
+    <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;gap:10px"><div class="section-title" style="margin:0">Müşteriler (dokun → ekle)</div><div class="row" style="gap:6px"><button class="btn soft sm" id="ryYeniMus" type="button">＋ Yeni</button><button class="btn soft sm" id="ryRehber" type="button">📇 Rehberden</button></div></div>
     <div id="ryHavuz" class="ry-havuz" style="margin-top:8px"></div>`;
 }
 function ryCiz() {
@@ -2482,6 +2512,13 @@ function mountRotaOlustur() {
   if (ym) ym.addEventListener("click", () => {
     const ad = (prompt("Yeni müşteri adı:") || "").trim(); if (!ad) return;
     const m = { id: genId(), ad, balance: 0 }; store.customers.push(m);
+    rotaYapim.sira.push(m.id); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); ryCiz();
+  });
+  const yr = document.getElementById("ryRehber");
+  if (yr) yr.addEventListener("click", async () => {
+    const k = await rehberdenSec(); if (!k) return;
+    const ad = (k.ad || "").trim() || (prompt("Müşteri adı:") || "").trim(); if (!ad) return;
+    const m = { id: genId(), ad, telefon: (k.tel || "").trim() }; store.customers.push(m);
     rotaYapim.sira.push(m.id); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); ryCiz();
   });
   const ad = document.getElementById("ryAd"); if (ad) ad.addEventListener("input", () => { rotaYapim.ad = ad.value; });
