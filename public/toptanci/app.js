@@ -465,12 +465,28 @@ function openYeniMusteri(onDone, item) {
 }
 // Telefon rehberinden kişi seç (Contact Picker Web API; WebView desteklemezse elle).
 async function rehberdenSec() {
-  if (!(navigator.contacts && navigator.contacts.select)) { alert("Rehber seçimi bu sürümde desteklenmiyor — telefonu elle gir. (Gerekirse APK güncellemesiyle native rehber eklenir.)"); return null; }
-  try {
-    const r = await navigator.contacts.select(["name", "tel"], { multiple: false });
-    if (!r || !r.length) return null;
-    return { ad: (r[0].name && r[0].name[0]) || "", tel: (r[0].tel && r[0].tel[0]) || "" };
-  } catch (e) { return null; }
+  // 1) Native (Capacitor Contacts) — APK'da eklentiyle gelir.
+  const CC = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Contacts;
+  if (CC && CC.pickContact) {
+    try {
+      if (CC.requestPermissions) { try { await CC.requestPermissions(); } catch (e) {} }
+      const res = await CC.pickContact({ projection: { name: true, phones: true } });
+      const c = res && res.contact; if (!c) return null;
+      const ad = (c.name && (c.name.display || [c.name.given, c.name.family].filter(Boolean).join(" "))) || "";
+      const tel = (c.phones && c.phones[0] && c.phones[0].number) || "";
+      return { ad, tel };
+    } catch (e) { return null; }
+  }
+  // 2) Web Contact Picker (tarayıcı) — WebView'de genelde yok.
+  if (navigator.contacts && navigator.contacts.select) {
+    try {
+      const r = await navigator.contacts.select(["name", "tel"], { multiple: false });
+      if (!r || !r.length) return null;
+      return { ad: (r[0].name && r[0].name[0]) || "", tel: (r[0].tel && r[0].tel[0]) || "" };
+    } catch (e) { return null; }
+  }
+  alert("Rehber bu sürümde desteklenmiyor. Yeni APK'yı kur (rehber izinli) — telefonu şimdilik elle gir.");
+  return null;
 }
 async function rehberdenMusteriEkle() {
   const k = await rehberdenSec(); if (!k) return;
