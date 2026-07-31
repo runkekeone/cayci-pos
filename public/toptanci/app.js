@@ -885,7 +885,10 @@ function finalizeSale(type, odemeAdi) {
     servis.adim = "kapanis";
     render();
   } else {
-    if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
+    // Normal satış: müşterinin telefonu varsa adisyon otomatik WhatsApp; yoksa yazdırma sor.
+    const musc = satilanMus && findCustomer(satilanMus);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
+    else if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
 function wireProdCards() {
