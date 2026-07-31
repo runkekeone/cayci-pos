@@ -317,9 +317,17 @@ function formModal(title, fields, item, onSave) {
     const val = item && item[f.key] != null ? item[f.key] : (f.def != null ? f.def : "");
     if (f.type === "select") return `<div class="field"><label>${f.label}</label><select data-k="${f.key}">${f.options.map((o) => { const v = typeof o === "object" ? o.v : o; const t = typeof o === "object" ? o.t : o; return `<option value="${esc(v)}" ${String(val) === String(v) ? "selected" : ""}>${esc(t)}</option>`; }).join("")}</select></div>`;
     if (f.type === "textarea") return `<div class="field"><label>${f.label}</label><textarea data-k="${f.key}" rows="3">${esc(val)}</textarea></div>`;
+    if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">📇 Rehber</button></div></div>`;
     return `<div class="field"><label>${f.label}${f.req ? " *" : ""}</label><input data-k="${f.key}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""} value="${esc(val)}" placeholder="${f.ph || ""}" /></div>`;
   }).join("");
   openModal(title, body, {
+    onMount: (ov) => {
+      ov.querySelectorAll("[data-rehberfor]").forEach((b) => b.addEventListener("click", async () => {
+        const k = await rehberdenSec(); if (!k) return;
+        const inp = ov.querySelector(`[data-k="${b.dataset.rehberfor}"]`); if (inp && k.tel) inp.value = k.tel;
+        const adInp = ov.querySelector('[data-k="ad"]'); if (adInp && !adInp.value && k.ad) adInp.value = k.ad;
+      }));
+    },
     onOk: (ov) => {
       const data = {};
       let ok = true;
@@ -442,7 +450,7 @@ function openYeniMusteri(onDone, item) {
   formModal(item ? "Müşteri Düzenle" : "Yeni Müşteri Oluştur", [
     { key: "ad", label: "Müşteri Tanımı", req: true, ph: "Ad Soyad / Ünvan" },
     { key: "vade", label: "Vade Süresi (gün)", type: "number", ph: "opsiyonel" },
-    { key: "telefon", label: "Telefon", ph: "05xx" },
+    { key: "telefon", label: "Telefon", ph: "05xx", rehber: true },
     { key: "adres", label: "Adres" },
     { key: "not", label: "Müşteri Notu" },
     { key: "limit", label: "Açık Hesap Limiti (₺)", type: "number", step: "0.01", def: 0 },
