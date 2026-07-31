@@ -601,7 +601,7 @@ function mountSatisDetay() {
   sdRefresh();
   document.getElementById("sdIsk").addEventListener("input", sdRefresh);
   const pr = document.querySelector('[data-act="print"]'); if (pr) pr.addEventListener("click", () => printSale(s));
-  const wa = document.querySelector('[data-act="wa"]'); if (wa) wa.addEventListener("click", () => irsaliyeWa(s));
+  const wa = document.querySelector('[data-act="wa"]'); if (wa) wa.addEventListener("click", () => irsaliyePaylas(s));
   const del = document.querySelector('[data-act="delsale"]');
   if (del) del.addEventListener("click", () => { if (!confirm("Satış silinsin mi? (stok geri yüklenir)")) return; s.items.forEach((it) => { const p = findProduct(it.urunId); if (p) p.stok = (Number(p.stok) || 0) + it.adet; }); store.sales = store.sales.filter((x) => x.id !== s.id); saveStore(); navigate("rapor-tarihsel"); });
   document.getElementById("sdSave").addEventListener("click", () => {
@@ -881,13 +881,13 @@ function finalizeSale(type, odemeAdi) {
     servis.sonSatisId = yeniSale.id;
     // Adisyon otomatik WhatsApp — müşterinin numarası varsa (kullanıcı jesti içinde, confirm'siz).
     const musc = findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
     servis.adim = "kapanis";
     render();
   } else {
     // Normal satış: müşterinin telefonu varsa adisyon otomatik WhatsApp; yoksa yazdırma sor.
     const musc = satilanMus && findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
     else if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
@@ -2230,6 +2230,58 @@ function irsaliyeWa(sale) {
   const metin = encodeURIComponent(saleIrsaliyeMetni(sale));
   window.open((d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + metin, "_blank");
 }
+// İrsaliyeyi tam-boy PNG görsel olarak üret (canvas).
+function irsaliyeGorsel(s) {
+  const c = s.musteriId && findCustomer(s.musteriId), st = store.settings;
+  const rows = [];
+  rows.push({ t: st.fisBaslik || st.firmaAdi || "", size: 22, bold: true, center: true });
+  rows.push({ t: "İRSALİYE / SATIŞ FİŞİ", size: 13, center: true, color: "#555" });
+  rows.push({ sep: 1 });
+  rows.push({ t: "Belge No: " + s.belgeNo });
+  rows.push({ t: "Tarih: " + fmtDate(s.tarih) });
+  if (c) rows.push({ t: "Müşteri: " + c.ad });
+  rows.push({ sep: 1 });
+  s.items.forEach((it) => rows.push({ t: it.ad, r: money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0)), sub: num2.format(it.adet) + " × " + money.format(it.fiyat) }));
+  rows.push({ sep: 1 });
+  if (s.iskonto) rows.push({ t: "İskonto", r: "-" + money.format(s.iskonto) });
+  rows.push({ t: "TOPLAM", r: money.format(s.toplam), bold: true, size: 20 });
+  rows.push({ t: "Ödeme: " + saleOdeme(s), color: "#555" });
+  rows.push({ sep: 1 });
+  rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
+  const W = 520, pad = 28, lh = 30; let H = pad * 2;
+  rows.forEach((r) => H += r.sep ? 16 : (r.sub ? lh + 14 : lh));
+  const dpr = 2, cv = document.createElement("canvas"); cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr);
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.textBaseline = "top";
+  let y = pad;
+  rows.forEach((r) => {
+    if (r.sep) { g.strokeStyle = "#ccc"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(pad, y + 8); g.lineTo(W - pad, y + 8); g.stroke(); g.setLineDash([]); y += 16; return; }
+    g.fillStyle = r.color || "#111"; g.font = (r.bold ? "700 " : "400 ") + (r.size || 16) + "px system-ui,sans-serif";
+    if (r.center) { g.textAlign = "center"; g.fillText(r.t, W / 2, y); }
+    else { g.textAlign = "left"; g.fillText(r.t, pad, y); if (r.r) { g.textAlign = "right"; g.font = "700 " + (r.size || 16) + "px system-ui,sans-serif"; g.fillText(r.r, W - pad, y); } }
+    g.textAlign = "left"; y += lh;
+    if (r.sub) { g.fillStyle = "#777"; g.font = "400 12px system-ui,sans-serif"; g.fillText(r.sub, pad, y - 8); y += 14; }
+  });
+  return cv.toDataURL("image/png");
+}
+function dataURLtoFile(d, name) {
+  const arr = d.split(","), mime = (arr[0].match(/:(.*?);/) || [])[1] || "image/png", bstr = atob(arr[1]);
+  let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n);
+  return new File([u8], name, { type: mime });
+}
+async function irsaliyePaylas(s) {
+  if (!s) { alert("Gönderilecek satış yok."); return; }
+  const url = irsaliyeGorsel(s), c = s.musteriId && findCustomer(s.musteriId);
+  try {
+    const file = dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png");
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: (c ? c.ad + " – " : "") + "İrsaliye " + s.belgeNo });
+      return;
+    }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  openModal("İrsaliye " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="irsaliye" /><p class="hint" style="margin-top:8px">Görsele basılı tut → Kaydet/Paylaş (WhatsApp'tan gönder). Metin için:</p><div class="row"><a class="btn green" href="https://wa.me/${d}?text=${encodeURIComponent("İrsaliye " + s.belgeNo)}" target="_blank" rel="noopener">WhatsApp (metin)</a></div>`, { noFoot: true });
+}
 function openSaleForCustomer(id) {
   const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
 }
@@ -2283,7 +2335,7 @@ function ziyaretKartiWire(id) {
   kart.querySelector("[data-zkapat]").onclick = () => { if (servis.aktif) { servis.acik = null; render(); } else kart.innerHTML = ""; };
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
-  kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
+  kart.querySelector("[data-zkwa]").onclick = () => irsaliyePaylas(musterininSonSatisi(id));
   const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
   const pasbtn = kart.querySelector("[data-zkpas]"); if (pasbtn) pasbtn.onclick = () => { if (confirm("Bu müşteri pas geçilsin mi?")) durakPasGec(id); };
   const sonabtn = kart.querySelector("[data-zksona]"); if (sonabtn) sonabtn.onclick = () => durakSonaAt(id);
