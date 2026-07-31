@@ -463,29 +463,38 @@ function openYeniMusteri(onDone, item) {
     saveStore(); if (onDone) onDone(); else render();
   });
 }
-// Telefon rehberinden kişi seç (Contact Picker Web API; WebView desteklemezse elle).
+// Rehberden kişi seç — native getContacts + uygulama-içi liste (native picker'a bağımlı değil).
+function rehberSecModal(list) {
+  return new Promise((resolve) => {
+    const body = `<input id="rsAra" placeholder="Ara (isim/numara)..." style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:11px" /><div id="rsList" style="max-height:52vh;overflow:auto;margin-top:8px"></div>`;
+    const m = openModal("Rehberden Kişi Seç (" + list.length + ")", body, { noFoot: true, onMount: (ov) => {
+      const liste = ov.querySelector("#rsList"), ara = ov.querySelector("#rsAra");
+      const ciz = (q) => {
+        const f = q ? list.filter((x) => ((x.ad || "") + " " + (x.tel || "")).toLocaleLowerCase("tr").includes(q)) : list;
+        liste.innerHTML = f.slice(0, 400).map((x) => `<div class="rs-row" data-i="${list.indexOf(x)}"><b>${esc(x.ad || "(isimsiz)")}</b><span class="hint">${esc(x.tel || "-")}</span></div>`).join("") || `<p class="hint" style="padding:8px">Eşleşme yok.</p>`;
+        liste.querySelectorAll("[data-i]").forEach((r) => r.onclick = () => { resolve(list[Number(r.dataset.i)]); m.close(); });
+      };
+      ciz(""); ara.addEventListener("input", () => ciz(ara.value.trim().toLocaleLowerCase("tr")));
+      ov.querySelector(".x").addEventListener("click", () => resolve(null));
+      ov.addEventListener("click", (e) => { if (e.target === ov) resolve(null); });
+    } });
+  });
+}
 async function rehberdenSec() {
-  // 1) Native (Capacitor Contacts) — APK'da eklentiyle gelir.
   const CC = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Contacts;
-  if (CC && CC.pickContact) {
+  if (CC && CC.getContacts) {
     try {
       if (CC.requestPermissions) { try { await CC.requestPermissions(); } catch (e) {} }
-      const res = await CC.pickContact({ projection: { name: true, phones: true } });
-      const c = res && res.contact; if (!c) return null;
-      const ad = (c.name && (c.name.display || [c.name.given, c.name.family].filter(Boolean).join(" "))) || "";
-      const tel = (c.phones && c.phones[0] && c.phones[0].number) || "";
-      return { ad, tel };
-    } catch (e) { return null; }
+      const res = await CC.getContacts({ projection: { name: true, phones: true } });
+      const list = (res && res.contacts || []).map((c) => ({ ad: (c.name && c.name.display) || "", tel: (c.phones && c.phones[0] && c.phones[0].number) || "" })).filter((x) => x.ad || x.tel);
+      if (!list.length) { alert("Rehberde kişi bulunamadı (izin verildi mi?)."); return null; }
+      return await rehberSecModal(list);
+    } catch (e) { alert("Rehber hatası: " + ((e && e.message) || e)); return null; }
   }
-  // 2) Web Contact Picker (tarayıcı) — WebView'de genelde yok.
   if (navigator.contacts && navigator.contacts.select) {
-    try {
-      const r = await navigator.contacts.select(["name", "tel"], { multiple: false });
-      if (!r || !r.length) return null;
-      return { ad: (r[0].name && r[0].name[0]) || "", tel: (r[0].tel && r[0].tel[0]) || "" };
-    } catch (e) { return null; }
+    try { const r = await navigator.contacts.select(["name", "tel"], { multiple: false }); if (!r || !r.length) return null; return { ad: (r[0].name && r[0].name[0]) || "", tel: (r[0].tel && r[0].tel[0]) || "" }; } catch (e) { return null; }
   }
-  alert("Rehber bu sürümde desteklenmiyor. Yeni APK'yı kur (rehber izinli) — telefonu şimdilik elle gir.");
+  alert("Rehber bu sürümde desteklenmiyor. Yeni APK'yı kur (rehber izinli) — telefonu elle gir.");
   return null;
 }
 async function rehberdenMusteriEkle() {
