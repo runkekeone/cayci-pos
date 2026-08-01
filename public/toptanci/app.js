@@ -894,9 +894,9 @@ function finalizeSale(type, odemeAdi) {
     servis.adim = "kapanis";
     render();
   } else {
-    // Normal satış: müşterinin telefonu varsa adisyon otomatik WhatsApp; yoksa yazdırma sor.
+    // Normal satış: müşterinin telefonu varsa adisyon görseli otomatik paylaş; yoksa yazdırma sor.
     const musc = satilanMus && findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
     else if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
@@ -2090,7 +2090,7 @@ function ziyaretKapat(id) {
   // Tahsilat/iade tam işlendi → irsaliyede "Kalan Bakiye" doğru çıkar.
   if (satildi && c && (c.telefon || "").replace(/\D/g, "")) {
     const sale = store.sales.find((x) => x.id === servis.sonSatisId);
-    if (sale) irsaliyeWa(sale, { tah, iade: iadeTutar });
+    if (sale) irsaliyePaylas(sale, { tah, iade: iadeTutar });
   }
   durakTamamla(id);
 }
@@ -2286,7 +2286,7 @@ function irsaliyeGorsel(s, opts) {
   rows.push({ t: "Tarih: " + fmtDate(s.tarih) });
   if (c) rows.push({ t: "Müşteri: " + c.ad });
   rows.push({ sep: 1 });
-  s.items.forEach((it) => rows.push({ t: it.ad, r: money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0)), sub: num2.format(it.adet) + " × " + money.format(it.fiyat) }));
+  s.items.forEach((it) => rows.push({ t: it.ad, r: money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0)), sub: (it.barkod ? it.barkod + "  ·  " : "") + num2.format(it.adet) + " × " + money.format(it.fiyat) }));
   rows.push({ sep: 1 });
   if (s.iskonto) rows.push({ t: "İskonto", r: "-" + money.format(s.iskonto) });
   rows.push({ t: "TOPLAM", r: money.format(s.toplam), bold: true, size: 20 });
@@ -2324,18 +2324,26 @@ function dataURLtoFile(d, name) {
   let n = bstr.length; const u8 = new Uint8Array(n); while (n--) u8[n] = bstr.charCodeAt(n);
   return new File([u8], name, { type: mime });
 }
-async function irsaliyePaylas(s) {
+// Açıklama metni: fiş kodu + müşteri + kalan bakiye (görselin yanına gider).
+function irsaliyeAciklama(s, opts) {
+  const c = s.musteriId && findCustomer(s.musteriId);
+  const b = bakiyeHesap(s, opts);
+  return "İrsaliye " + s.belgeNo + (c ? " · " + c.ad : "") +
+    (b ? " · Kalan Bakiye: " + money.format(b.kalan) + b.etiket : "");
+}
+async function irsaliyePaylas(s, opts) {
   if (!s) { alert("Gönderilecek satış yok."); return; }
-  const url = irsaliyeGorsel(s), c = s.musteriId && findCustomer(s.musteriId);
+  const url = irsaliyeGorsel(s, opts), c = s.musteriId && findCustomer(s.musteriId);
+  const cap = irsaliyeAciklama(s, opts);
   try {
     const file = dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png");
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: (c ? c.ad + " – " : "") + "İrsaliye " + s.belgeNo });
+      await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: cap });
       return;
     }
   } catch (e) { if (e && e.name === "AbortError") return; }
   let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
-  openModal("İrsaliye " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="irsaliye" /><p class="hint" style="margin-top:8px">Görsele basılı tut → Kaydet/Paylaş (WhatsApp'tan gönder). Metin için:</p><div class="row"><a class="btn green" href="https://wa.me/${d}?text=${encodeURIComponent("İrsaliye " + s.belgeNo)}" target="_blank" rel="noopener">WhatsApp (metin)</a></div>`, { noFoot: true });
+  openModal("İrsaliye " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="irsaliye" /><p class="hint" style="margin-top:8px">Görsele basılı tut → Paylaş → WhatsApp (kişiyi seç). Açıklama:<br><b>${esc(cap)}</b></p><div class="row"><a class="btn green" href="https://wa.me/${d}?text=${encodeURIComponent(cap)}" target="_blank" rel="noopener">WhatsApp (metin)</a></div>`, { noFoot: true });
 }
 function openSaleForCustomer(id) {
   const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
