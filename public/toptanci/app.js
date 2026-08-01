@@ -2246,7 +2246,11 @@ function bakiyeHesap(s, opts) {
 }
 function saleIrsaliyeMetni(s, opts) {
   const c = s.musteriId && findCustomer(s.musteriId); const st = store.settings;
-  const kalem = s.items.map((it) => "• " + it.ad + " x" + num2.format(it.adet) + " = " + money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0))).join("\n");
+  const kalem = s.items.map((it) => {
+    const bk = it.barkod ? " - " + it.barkod : "";
+    const tutar = (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
+    return "• " + it.ad + bk + "\n   " + num2.format(it.adet) + " x " + money.format(it.fiyat) + " = " + money.format(tutar);
+  }).join("\n");
   let bak = "";
   const b = bakiyeHesap(s, opts);
   if (b) {
