@@ -889,9 +889,8 @@ function finalizeSale(type, odemeAdi) {
   if (inServis) {
     servis.satislar = servis.satislar || []; servis.satislar.push(yeniSale.id);
     servis.sonSatisId = yeniSale.id;
-    // Adisyon otomatik WhatsApp — müşterinin numarası varsa (kullanıcı jesti içinde, confirm'siz).
-    const musc = findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyeWa(yeniSale);
+    // WhatsApp'ı burada DEĞİL, ziyaret kapanışında gönderiyoruz (tahsilat/iade işlendikten
+    // sonra bakiye kesinleşsin — irsaliyede doğru "Kalan Bakiye" görünsün).
     servis.adim = "kapanis";
     render();
   } else {
@@ -2087,6 +2086,12 @@ function ziyaretKapat(id) {
   const sonraki = (document.getElementById("kpSonraki") || {}).value || null;
   store.ziyaretler.push({ id: genId(), musteriId: id, tarih: new Date().toISOString(), sonuc: satildi ? "satis" : "yok", sebep: satildi ? null : sebep, not, sonraki, satisId: servis.sonSatisId || null, tahsilat: tah, iadeTutar, servisGun: localDateStr(new Date()) });
   saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+  // Adisyon otomatik WhatsApp — bu ziyarette satış varsa ve numara kayıtlıysa (kullanıcı jesti içinde).
+  // Tahsilat/iade tam işlendi → irsaliyede "Kalan Bakiye" doğru çıkar.
+  if (satildi && c && (c.telefon || "").replace(/\D/g, "")) {
+    const sale = store.sales.find((x) => x.id === servis.sonSatisId);
+    if (sale) irsaliyeWa(sale, { tah, iade: iadeTutar });
+  }
   durakTamamla(id);
 }
 function servisRaporModal(r) {
@@ -2224,24 +2229,50 @@ function musterininSonSatisi(id) {
 function blobToBase64(blob) {
   return new Promise((res) => { const r = new FileReader(); r.onload = () => { const s = String(r.result); res(s.slice(s.indexOf(",") + 1)); }; r.readAsDataURL(blob); });
 }
-function saleIrsaliyeMetni(s) {
+// Bakiye takibi: önceki bakiye → bu alışveriş → ödeme/tahsilat/iade → kalan bakiye.
+// customerBorc(id) = kesin güncel bakiye (açılış + açık satışlar - ödemeler). Pozitif = müşteri borçlu.
+function bakiyeHesap(s, opts) {
+  opts = opts || {};
+  const c = s.musteriId && findCustomer(s.musteriId);
+  if (!c) return null;
+  const tah = Number(opts.tah) || 0, iade = Number(opts.iade) || 0;
+  const kalan = customerBorc(s.musteriId);
+  const pesin = (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0);
+  const T = Number(s.toplam) || 0;
+  // Önceki (bu satıştan/ziyaretten önceki bakiye): kalan - açık(bu satış) + tahsilat + iade.
+  const onceki = kalan - (Number(s.odeme.acik) || 0) + tah + iade;
+  const etiket = kalan > 0.005 ? " (BORÇ)" : (kalan < -0.005 ? " (ALACAK)" : " (kapandı ✓)");
+  return { onceki, T, pesin, tah, iade, kalan, etiket };
+}
+function saleIrsaliyeMetni(s, opts) {
   const c = s.musteriId && findCustomer(s.musteriId); const st = store.settings;
   const kalem = s.items.map((it) => "• " + it.ad + " x" + num2.format(it.adet) + " = " + money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0))).join("\n");
+  let bak = "";
+  const b = bakiyeHesap(s, opts);
+  if (b) {
+    bak = "\n————————————\n" +
+      "Önceki Bakiye: " + money.format(b.onceki) + "\n" +
+      "Bu Alışveriş: +" + money.format(b.T) + "\n" +
+      (b.pesin > 0.005 ? "Peşin Ödeme: -" + money.format(b.pesin) + "\n" : "") +
+      (b.tah > 0.005 ? "Tahsilat: -" + money.format(b.tah) + "\n" : "") +
+      (b.iade > 0.005 ? "İade: -" + money.format(b.iade) + "\n" : "") +
+      "KALAN BAKİYE: " + money.format(b.kalan) + b.etiket + "\n";
+  }
   return (st.fisBaslik || st.firmaAdi || "") + "\nİRSALİYE / SATIŞ FİŞİ\nBelge: " + s.belgeNo + "\nTarih: " + fmtDate(s.tarih) +
     (c ? "\nMüşteri: " + c.ad : "") + "\n\n" + kalem + "\n" +
     (s.iskonto ? "İskonto: -" + money.format(s.iskonto) + "\n" : "") +
-    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + "\n\n" + (st.fisAltbilgi || "Teşekkür ederiz");
+    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + bak + "\n" + (st.fisAltbilgi || "Teşekkür ederiz");
 }
-function irsaliyeWa(sale) {
+function irsaliyeWa(sale, opts) {
   if (!sale) { alert("Bu müşteride gönderilecek satış yok."); return; }
   const c = sale.musteriId && findCustomer(sale.musteriId);
   let d = ((c && c.telefon) || "").replace(/\D/g, "");
   if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
-  const metin = encodeURIComponent(saleIrsaliyeMetni(sale));
+  const metin = encodeURIComponent(saleIrsaliyeMetni(sale, opts));
   window.open((d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + metin, "_blank");
 }
 // İrsaliyeyi tam-boy PNG görsel olarak üret (canvas).
-function irsaliyeGorsel(s) {
+function irsaliyeGorsel(s, opts) {
   const c = s.musteriId && findCustomer(s.musteriId), st = store.settings;
   const rows = [];
   rows.push({ t: st.fisBaslik || st.firmaAdi || "", size: 22, bold: true, center: true });
@@ -2256,6 +2287,16 @@ function irsaliyeGorsel(s) {
   if (s.iskonto) rows.push({ t: "İskonto", r: "-" + money.format(s.iskonto) });
   rows.push({ t: "TOPLAM", r: money.format(s.toplam), bold: true, size: 20 });
   rows.push({ t: "Ödeme: " + saleOdeme(s), color: "#555" });
+  const b = bakiyeHesap(s, opts);
+  if (b) {
+    rows.push({ sep: 1 });
+    rows.push({ t: "Önceki Bakiye", r: money.format(b.onceki), color: "#555" });
+    rows.push({ t: "Bu Alışveriş", r: "+" + money.format(b.T), color: "#555" });
+    if (b.pesin > 0.005) rows.push({ t: "Peşin Ödeme", r: "-" + money.format(b.pesin), color: "#555" });
+    if (b.tah > 0.005) rows.push({ t: "Tahsilat", r: "-" + money.format(b.tah), color: "#555" });
+    if (b.iade > 0.005) rows.push({ t: "İade", r: "-" + money.format(b.iade), color: "#555" });
+    rows.push({ t: "KALAN BAKİYE" + b.etiket, r: money.format(b.kalan), bold: true, size: 18, color: b.kalan > 0.005 ? "#c0392b" : "#1e824c" });
+  }
   rows.push({ sep: 1 });
   rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
   const W = 520, pad = 28, lh = 30; let H = pad * 2;
