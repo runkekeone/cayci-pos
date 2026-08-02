@@ -141,11 +141,25 @@ function csvParse(text) {
   if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
   return rows.filter((r) => r.some((x) => (x || "").trim() !== ""));
 }
-function downloadFile(name, text, type) {
+async function downloadFile(name, text, type) {
   const blob = new Blob([text], { type: type || "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Android WebView <a download> (blob) çalışmaz → önce Web Share ile dosya paylaş (Dosyalar/Drive/WhatsApp).
+  try {
+    const file = new File([blob], name, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: name });
+      return;
+    }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  // Masaüstü / destekleyen tarayıcı: normal indirme
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (e) {
+    // Son çare: içeriği modalda göster (kopyala)
+    openModal(name, `<p class="hint">İndirme desteklenmedi. Aşağıdaki metni kopyalayıp .csv olarak kaydedin:</p><textarea style="width:100%;height:40vh;font-family:monospace;font-size:12px" readonly>${esc(text)}</textarea>`, { noFoot: true });
+  }
 }
 function openFileImport(accept, onText) {
   const inp = document.createElement("input"); inp.type = "file"; inp.accept = accept;
