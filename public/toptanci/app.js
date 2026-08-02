@@ -829,7 +829,7 @@ function renderSatis() {
 
           <!-- 4. Adisyon / sepet listesi (satıra tıkla → düzenleme penceresi) -->
           <div class="card ades-wrap">
-            <div class="ades-head"><span>Adisyon</span><span id="cartCount" class="sub">${cartCount()}</span></div>
+            <div class="ades-head"><span>Adisyon</span><button class="ades-tara" id="taraFab" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M4 12h16"/></svg> Tara</button><span id="cartCount" class="sub">${cartCount()}</span></div>
             <div class="ades-list" id="cartBody">${cartRowsHTML()}</div>
           </div>
 
@@ -881,11 +881,6 @@ function renderSatis() {
         </div>
       </div>
 
-      <!-- Yüzen Tara (kamera-barkod) butonu -->
-      <button class="tara-fab" id="taraFab" type="button">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M4 12h16"/></svg>
-        <span>Tara</span>
-      </button>
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
