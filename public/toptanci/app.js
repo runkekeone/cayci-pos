@@ -776,11 +776,13 @@ function cartRowsHTML() {
   if (!items.length) return `<div class="ades-empty">Sepet boş — üründen ekleyin.</div>`;
   return items.map((it, idx) => {
     const isk = Number(it.iskyuzde) || 0;
+    const p = it.urunId && findProduct(it.urunId);
+    const ozel = p && Number(it.fiyat) !== (Number(p.satis) || 0);
     return `<div class="ades-row" data-line="${idx}" role="button" tabindex="0">
     <div class="ades-qty">${num2.format(Number(it.adet) || 0)} ×</div>
     <div class="ades-mid">
       <div class="ades-name">${esc(it.ad)}</div>
-      <div class="ades-unit">${money.format(Number(it.fiyat) || 0)}${isk ? ` · %${num2.format(isk)} isk` : ""}</div>
+      <div class="ades-unit">${money.format(Number(it.fiyat) || 0)}${ozel ? ` <span class="ozel-tag">özel</span>` : ""}${isk ? ` · %${num2.format(isk)} isk` : ""}</div>
     </div>
     <div class="ades-tot" data-tut="${idx}">${money.format(netLine(it))}</div>
   </div>`;
@@ -837,7 +839,7 @@ function bundleUygula() {
   musteriSonSiparis(c.musteriId).forEach((i) => {
     if (c.items.some((x) => x.urunId === i.urunId)) return;
     const p = findProduct(i.urunId); if (!p) return;
-    c.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: Number(p.satis) || 0, adet: 1, iskyuzde: 0, not: "" });
+    c.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: musteriFiyat(p.id, Number(p.satis) || 0), adet: 1, iskyuzde: 0, not: "" });
   });
   refreshPOS();
 }
@@ -943,6 +945,7 @@ function openLineModal(idx) {
       <div class="field"><label>Birim Fiyat (₺)</label><input class="lm-in" data-price type="number" step="0.01" inputmode="decimal" value="${tmp.fiyat}" /></div>
       <div class="field"><label>İskonto (%)</label><input class="lm-in" data-isk type="number" step="0.01" inputmode="decimal" value="${tmp.iskyuzde || ""}" placeholder="0" /></div>
       <div class="lm-tot">Satır Toplamı <b data-tut>${money.format(satirTop())}</b></div>
+      ${(() => { const mid = activeCart().musteriId, mc = mid && findCustomer(mid); return (mc && it.urunId) ? `<label class="lm-ozel"><input type="checkbox" data-ozelkaydet /> <span>Bu fiyatı <b>${esc(mc.ad)}</b> için kaydet — sonraki satışlarda otomatik uygulanır</span></label>` : ""; })()}
       <div class="lm-actions">
         <button class="btn lm-del" data-rem type="button">🗑 Sil</button>
         <button class="btn ok lm-ok" data-ok type="button">✓ Onayla</button>
@@ -965,11 +968,35 @@ function wireLineModal(ov, idx, tmp, satirTop, close) {
     if (it) {
       if ((Number(tmp.adet) || 0) <= 0) activeCart().items.splice(idx, 1);
       else { it.adet = Number(tmp.adet) || 0; it.fiyat = Number(tmp.fiyat) || 0; it.iskyuzde = Number(tmp.iskyuzde) || 0; }
+      // Müşteriye özel fiyat kaydet (kutu işaretliyse)
+      const ozelEl = ov.querySelector("[data-ozelkaydet]"), mid = activeCart().musteriId;
+      if (ozelEl && ozelEl.checked && mid && it && it.urunId) {
+        const c = findCustomer(mid);
+        if (c) {
+          c.ozelFiyatlar = c.ozelFiyatlar || {};
+          const p = findProduct(it.urunId), def = p ? Number(p.satis) || 0 : null;
+          if (def != null && Number(tmp.fiyat) === def) delete c.ozelFiyatlar[it.urunId]; // normale döndü → özel fiyatı sil
+          else c.ozelFiyatlar[it.urunId] = Number(tmp.fiyat);
+          saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+        }
+      }
     }
     if (close) close(); refreshPOS();
   };
 }
-function addToCart(prodId) { const p = findProduct(prodId); if (!p) return; const c = activeCart(); const ex = c.items.find((i) => i.urunId === prodId); if (ex) ex.adet = (Number(ex.adet) || 0) + 1; else c.items.push({ urunId: prodId, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: Number(p.satis) || 0, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); }
+// Müşteriye özel fiyat (varsa) — yoksa ürünün normal satış fiyatı
+function musteriFiyat(urunId, fallback) {
+  const id = activeCart().musteriId;
+  if (id && urunId) { const c = findCustomer(id); const v = c && c.ozelFiyatlar && c.ozelFiyatlar[urunId]; if (v != null && v !== "") return Number(v); }
+  return fallback;
+}
+// Müşteri değişince sepetteki ürünleri o müşterinin özel fiyatına çek (özel fiyatı olanlar)
+function repriceCart() {
+  const c = activeCart(); const id = c.musteriId; if (!id) return;
+  const mc = findCustomer(id); const map = (mc && mc.ozelFiyatlar) || {};
+  c.items.forEach((it) => { if (it.urunId && map[it.urunId] != null && map[it.urunId] !== "") it.fiyat = Number(map[it.urunId]); });
+}
+function addToCart(prodId) { const p = findProduct(prodId); if (!p) return; const c = activeCart(); const ex = c.items.find((i) => i.urunId === prodId); if (ex) ex.adet = (Number(ex.adet) || 0) + 1; else c.items.push({ urunId: prodId, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: musteriFiyat(prodId, Number(p.satis) || 0), adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); }
 function finalizeCustom(tipId) { const tip = store.odemeTipleri.find((t) => t.id === tipId); if (!tip) return; finalizeSale(tip.kasa === "Nakit Kasa" ? "nakit" : "pos", tip.ad); }
 function finalizeSale(type, odemeAdi) {
   const c = activeCart();
@@ -1031,7 +1058,7 @@ function openCustPicker() {
   openModal("Müşteri Seç", `<input class="pick-search" id="pickSearch" placeholder="Müşteri ara..." />${listHTML}<div style="margin-top:10px"><button class="btn soft" id="pickYeni" type="button">＋ Yeni Müşteri</button></div>`, {
     noFoot: true,
     onMount: (ov) => {
-      ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; ov.remove(); render(); }));
+      ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; repriceCart(); ov.remove(); render(); }));
       const s = ov.querySelector("#pickSearch"); s.addEventListener("input", () => { const q = s.value.toLowerCase(); ov.querySelectorAll("[data-pick]").forEach((li) => { li.style.display = li.textContent.toLowerCase().includes(q) ? "" : "none"; }); });
       ov.querySelector("#pickYeni").addEventListener("click", () => { ov.remove(); openYeniMusteri(() => openCustPicker()); });
     },
