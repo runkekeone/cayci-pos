@@ -700,10 +700,10 @@ function renderSatis() {
 
           <!-- 6. Ödeme (tek satır 4 buton) -->
           <div class="pay-grid">
-            <button class="pay-btn nakit" data-pay="nakit" type="button">₺ (F8)<small>NAKİT</small></button>
-            <button class="pay-btn pos" data-pay="pos" type="button">▤ (F9)<small>POS</small></button>
-            <button class="pay-btn acik" data-pay="acik" type="button">📖 (F10)<small>AÇIK HESAP</small></button>
-            <button class="pay-btn parcali" data-pay="parcali" type="button">⇄<small>PARÇALI</small></button>
+            <button class="pay-btn nakit" data-pay="nakit" type="button">Nakit</button>
+            <button class="pay-btn pos" data-pay="pos" type="button">Pos</button>
+            <button class="pay-btn acik" data-pay="acik" type="button">Açık Hesap</button>
+            <button class="pay-btn parcali" data-pay="parcali" type="button">Parçalı</button>
           </div>
           ${store.odemeTipleri.length ? `<div class="pay-custom">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
           ${persSel}
@@ -764,7 +764,7 @@ function aileGetir(ad) {
   return null;
 }
 function posSoloCard(p) {
-  return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
+  return `<div class="prod-card" data-add="${p.id}"><span class="p-ph" aria-hidden="true">!</span><span class="p-name">${esc(p.ad)}</span><span class="p-price"><span class="pp-lbl">Fiyat</span>${money.format(Number(p.satis) || 0)}</span></div>`;
 }
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
@@ -788,7 +788,7 @@ function prodGridHTML() {
     if (f.members.length < 2) { cards.push(posSoloCard(f.members[0])); continue; }
     const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
     const min = fiyat.length ? Math.min(...fiyat) : 0;
-    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-name">${esc(f.title)}</span><span class="fam-badge">${f.members.length} marka</span><span class="p-price">${min ? money.format(min) + "+" : ""}</span></div>`);
+    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-ph fam-ph" aria-hidden="true">${f.members.length}</span><span class="p-name">${esc(f.title)}</span><span class="p-price"><span class="pp-lbl">${f.members.length} marka</span>${min ? money.format(min) + "+" : ""}</span></div>`);
   }
   return cards.join("");
 }
