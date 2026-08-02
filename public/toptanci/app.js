@@ -664,11 +664,13 @@ function renderSatis() {
         <div class="pos-tot brand"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
       </div>
 
-      <!-- 2. Arama satırı: 🔍 + barkod + fiyat seçici -->
+      <!-- 2. Arama satırı: 🔍 + barkod + fiyat seçici (altı çizili) -->
       <div class="pos-search">
-        <button class="bar-go" id="barAra" type="button" aria-label="Ara">&#128269;</button>
-        <input class="bar-input" id="barInput" placeholder="Ürün barkodunu okut..." />
-        <div class="pos-price-sel">Fiyat 1 &#9662;</div>
+        <div class="ps-field ps-search">
+          <button class="bar-go" id="barAra" type="button" aria-label="Ara">&#128269;</button>
+          <input class="bar-input" id="barInput" placeholder="Ürün barkodunu okut..." />
+        </div>
+        <div class="ps-field pos-price-sel" id="posPriceSel">Fiyat 1 &#9662;</div>
       </div>
 
       <div class="pos2-cols">
@@ -683,18 +685,24 @@ function renderSatis() {
             <div class="ades-list" id="cartBody">${cartRowsHTML()}</div>
           </div>
 
-          <!-- 5. Müşteri + tarih + satış notu + onay kutuları — TEK kart -->
-          <div class="card pos-meta">
-            <div class="cust-select"><input id="custSearch" readonly value="${cartCustName()}" placeholder="Müşterisiz satış (Borç/Limit)" /><button class="btn" id="custPick" type="button">＋</button></div>
-            <div class="pos-daterow"><span>${fmtDate(new Date().toISOString())}</span><span id="custLimit">${activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok"}</span></div>
-            <div class="pos-note-row">
-              <div class="field pos-note"><label>Satış Notu</label><input id="posNot" placeholder="Bu satışa not ekle..." /></div>
-              <span class="pos-ver">babu.co · v1</span>
+          <!-- 5. Müşteri satırı + satış notu + onay kutuları -->
+          <div class="pos-meta2">
+            <div class="cust-line">
+              <span class="cust-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#3a4250" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>
+              <div class="cust-txt">
+                <b id="custName">${cartCustName() || "Müşterisiz satış"}</b>
+                <span id="custLimit">${activeCart().musteriId ? "Borç : " + money.format(customerBorc(activeCart().musteriId)) : "(Borç : 0.00  Limit : 0.00)"}</span>
+              </div>
+              <button class="cust-add" id="custPick" type="button" aria-label="Müşteri seç"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#3a4250" stroke-width="1.7"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-3.5 3.2-5.5 7-5.5"/><path d="M18 9v6M15 12h6"/></svg></button>
             </div>
-            <div class="pos-onay">
-              <label><input type="checkbox" /> Fiyat gör</label>
-              <label><input type="checkbox" /> İade mod</label>
-              <label><input type="checkbox" /> POS komisyon</label>
+            <div class="note-line">
+              <input id="posNot" class="note-in" placeholder="Satış notu" />
+              <span class="app-ver">App V.1.7.7</span>
+            </div>
+            <div class="pos-checks">
+              <label class="pchk">Fiyat<input type="checkbox" /></label>
+              <label class="pchk">İade mod<input type="checkbox" /></label>
+              <label class="pchk">POS kom<input type="checkbox" /></label>
             </div>
           </div>
 
@@ -725,6 +733,11 @@ function renderSatis() {
         </div>
       </div>
 
+      <!-- Yüzen Tara (kamera-barkod) butonu -->
+      <button class="tara-fab" id="taraFab" type="button">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M4 12h16"/></svg>
+        <span>Tara</span>
+      </button>
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
@@ -764,7 +777,8 @@ function aileGetir(ad) {
   return null;
 }
 function posSoloCard(p) {
-  return `<div class="prod-card" data-add="${p.id}"><span class="p-ph" aria-hidden="true">!</span><span class="p-name">${esc(p.ad)}</span><span class="p-price"><span class="pp-lbl">Fiyat</span>${money.format(Number(p.satis) || 0)}</span></div>`;
+  const f1 = Number(p.satis) || 0, f2 = Number(p.alis) || 0;
+  return `<div class="prod-card" data-add="${p.id}"><span class="p-ph" aria-hidden="true">!</span><span class="p-name">${esc(p.ad)}</span><div class="p-prices"><div class="pp"><span class="pp-lbl">Fiyat 1</span><span class="pp-val">${num2.format(f1)}</span></div><div class="pp"><span class="pp-lbl">Fiyat 2</span><span class="pp-val">${f2 ? num2.format(f2) : "-"}</span></div></div></div>`;
 }
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
@@ -788,7 +802,7 @@ function prodGridHTML() {
     if (f.members.length < 2) { cards.push(posSoloCard(f.members[0])); continue; }
     const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
     const min = fiyat.length ? Math.min(...fiyat) : 0;
-    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-ph fam-ph" aria-hidden="true">${f.members.length}</span><span class="p-name">${esc(f.title)}</span><span class="p-price"><span class="pp-lbl">${f.members.length} marka</span>${min ? money.format(min) + "+" : ""}</span></div>`);
+    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-ph fam-ph" aria-hidden="true">${f.members.length}</span><span class="p-name">${esc(f.title)}</span><div class="p-prices"><div class="pp"><span class="pp-lbl">Fiyat 1</span><span class="pp-val">${min ? num2.format(min) + "+" : "-"}</span></div><div class="pp"><span class="pp-lbl">Marka</span><span class="pp-val">${f.members.length}</span></div></div></div>`);
   }
   return cards.join("");
 }
@@ -807,15 +821,20 @@ function cartTotals() { const c = activeCart(); const brut = c.items.reduce((s, 
 function rebuildCart() { const cb = document.getElementById("cartBody"); if (cb) cb.innerHTML = cartRowsHTML(); wireCartRow(); }
 function syncTotals() {
   const t = cartTotals(); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-  set("posTutar", num2.format(t.toplam)); set("posOdenen", num2.format(t.odenen)); set("posUstu", num2.format(t.ustu));
-  const cc0 = activeCart(); set("posMiktar", num2.format(cc0.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))); set("posBrut", num2.format(t.brut)); set("posIsk", num2.format(Number(cc0.iskonto) || 0));
+  set("posTutar", money.format(t.toplam)); set("posOdenen", num2.format(t.odenen)); set("posUstu", num2.format(t.ustu));
+  const cc0 = activeCart(); set("posMiktar", num2.format(cc0.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))); set("posBrut", money.format(t.brut)); set("posIsk", "%" + num2.format(Number(cc0.iskonto) || 0));
   const cc = document.getElementById("cartCount"); if (cc) cc.textContent = cartCount();
   const sbc = document.getElementById("sepetBarCount"); if (sbc) sbc.textContent = cartCount();
   const sbt = document.getElementById("sepetBarTotal"); if (sbt) sbt.textContent = money.format(t.toplam);
   document.querySelectorAll("[data-tab]").forEach((el) => { const n = Number(el.dataset.tab); el.textContent = `Müşteri ${n + 1} (${num2.format(pos.carts[n].items.reduce((s, i) => s + netLine(i), 0))})`; el.classList.toggle("on", n === pos.active); });
   const cl = document.getElementById("custLabel"); if (cl) cl.value = cartCustName();
   const cs = document.getElementById("custSearch"); if (cs) cs.value = cartCustName();
-  const lim = document.getElementById("custLimit"); if (lim) lim.textContent = activeCart().musteriId ? "Borç: " + money.format(customerBorc(activeCart().musteriId)) : "Müşteri yok";
+  const cn = document.getElementById("custName"); if (cn) cn.textContent = cartCustName() || "Müşterisiz satış";
+  const lim = document.getElementById("custLimit");
+  if (lim) {
+    const mid = activeCart().musteriId, mc = mid && findCustomer(mid);
+    lim.textContent = mc ? "Borç : " + money.format(customerBorc(mid)) + "   Limit : " + money.format(Number(mc.limit) || 0) : "(Borç : 0.00  Limit : 0.00)";
+  }
 }
 function syncRow(idx) { const it = activeCart().items[idx]; if (!it) return; const cell = document.querySelector(`[data-tut="${idx}"]`); if (cell) cell.textContent = money.format(netLine(it)); syncTotals(); }
 function refreshPOS() { rebuildCart(); syncTotals(); }
@@ -957,6 +976,7 @@ function mountSatis() {
   const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", openIskModal);
   const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
   const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
+  const taraBtn = document.getElementById("taraFab"); if (taraBtn) taraBtn.addEventListener("click", taraBaslat);
   const psearch = document.getElementById("prodSearch");
   const psx = document.getElementById("prodSearchX");
   const gridYenile = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); } if (psx) psx.style.display = pos.q ? "" : "none"; };
@@ -2347,6 +2367,47 @@ async function irsaliyePaylas(s, opts) {
 }
 function openSaleForCustomer(id) {
   const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
+}
+// Kamera-barkod tarama (BarcodeDetector). Desteklenmezse elle giriş için barkod alanına odaklanır.
+async function taraBaslat() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const bi = document.getElementById("barInput"); if (bi) bi.focus();
+    alert("Bu cihazda kamera erişimi yok — barkodu elle okutun."); return;
+  }
+  const hasBD = "BarcodeDetector" in window;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+  } catch (e) { alert("Kamera açılamadı: " + ((e && e.message) || e)); return; }
+  let stop = false;
+  const durdur = () => { stop = true; try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {} };
+  const body = `<div class="tara-modal">
+      <video id="taraVid" playsinline autoplay muted></video>
+      <div class="tara-cerceve"></div>
+      <div class="tara-hint" id="taraHint">${hasBD ? "Barkodu çerçeveye getir…" : "Kamera açık — okununca eşleşen ürün sepete eklenir."}</div>
+    </div>`;
+  const m = openModal("Barkod Tara", body, {
+    noFoot: true,
+    onMount: (ov) => {
+      const vid = ov.querySelector("#taraVid"); vid.srcObject = stream; try { vid.play(); } catch (e) {}
+      const kapatBtn = ov.querySelector(".x"); if (kapatBtn) kapatBtn.addEventListener("click", durdur);
+      ov.addEventListener("click", (e) => { if (e.target === ov) durdur(); });
+      if (!hasBD) return; // BarcodeDetector yok: kullanıcı görüntüden okuyup elle girer
+      let det; try { det = new window.BarcodeDetector(); } catch (e) { return; }
+      const bul = (code) => {
+        durdur(); m.close();
+        const p = store.products.find((x) => String(x.barkod || "") === String(code));
+        if (p) { addToCart(p.id); }
+        else { const bi = document.getElementById("barInput"); if (bi) bi.value = code; alert("Barkod: " + code + "\nEşleşen ürün yok — elle arayabilirsiniz."); }
+      };
+      const tick = async () => {
+        if (stop) return;
+        try { const codes = await det.detect(vid); if (codes && codes.length && codes[0].rawValue) { bul(codes[0].rawValue); return; } } catch (e) {}
+        if (!stop) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    },
+  });
 }
 function konumKaydet(id) {
   if (!rota.konum) { alert("Önce konumu al."); return; }
