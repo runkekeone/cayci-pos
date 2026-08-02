@@ -706,6 +706,9 @@ function renderSatis() {
           <!-- 3. Müşteri pill sekmeleri -->
           <div class="cust-tabs" id="custTabs">${custTabs}</div>
 
+          <!-- 3b. Bundle: seçili müşterinin geçen siparişi (tek dokunuş sepete) -->
+          ${bundleBarHTML()}
+
           <!-- 4. Adisyon / sepet listesi (satıra tıkla → düzenleme penceresi) -->
           <div class="card ades-wrap">
             <div class="ades-head"><span>Adisyon</span><span id="cartCount" class="sub">${cartCount()}</span></div>
@@ -755,8 +758,8 @@ function renderSatis() {
             </div>
             <div class="cat-tabs" id="catTabs">${catTabs}</div>
           </div>
-          <!-- 9. Ürün ızgarası / listesi -->
-          <div class="prod-grid ${pos.cat === "ANA" && !ocrNorm(pos.q || "") ? "" : "list-mode"}" id="prodGrid">${prodGridHTML()}</div>
+          <!-- 9. Ürün ızgarası (kart kart) -->
+          <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
         </div>
       </div>
 
@@ -806,6 +809,38 @@ function aileGetir(ad) {
 function posSoloCard(p) {
   return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
 }
+// Müşterinin son siparişindeki (hâlâ mevcut) ürünler — bundle önerisi
+function musteriSonSiparis(id) {
+  if (!id) return [];
+  const sales = store.sales.filter((s) => s.musteriId === id).sort((a, b) => b.tarih.localeCompare(a.tarih));
+  if (!sales.length) return [];
+  const seen = new Set(), out = [];
+  sales[0].items.forEach((it) => { if (it.urunId && !seen.has(it.urunId) && findProduct(it.urunId)) { seen.add(it.urunId); out.push({ urunId: it.urunId, ad: it.ad }); } });
+  return out;
+}
+// Seçili müşteri varsa "son sipariş" bundle çubuğu
+function bundleBarHTML() {
+  const id = activeCart().musteriId;
+  if (!id) return "";
+  const items = musteriSonSiparis(id);
+  if (!items.length) return "";
+  const c = findCustomer(id);
+  const adlar = items.slice(0, 4).map((i) => esc(i.ad)).join(", ") + (items.length > 4 ? " +" + (items.length - 4) : "");
+  return `<div class="bundle-bar">
+    <div class="bundle-txt"><b>🔁 ${esc(c ? c.ad : "Müşteri")} — geçen sipariş</b><span>${items.length} ürün · ${adlar}</span></div>
+    <button class="btn ok bundle-add" id="bundleAdd" type="button">＋ Sepete Ekle</button>
+  </div>`;
+}
+// Bundle'ı sepete uygula (her ürün adet 1; zaten varsa dokunma)
+function bundleUygula() {
+  const c = activeCart();
+  musteriSonSiparis(c.musteriId).forEach((i) => {
+    if (c.items.some((x) => x.urunId === i.urunId)) return;
+    const p = findProduct(i.urunId); if (!p) return;
+    c.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: Number(p.satis) || 0, adet: 1, iskyuzde: 0, not: "" });
+  });
+  refreshPOS();
+}
 // Kategori görseli: ada göre emoji + renk sınıfı
 function katGorsel(name) {
   const n = ocrNorm(name);
@@ -850,26 +885,8 @@ function prodGridHTML() {
     list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
   }
   if (!list.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">${q ? "Aramaya uyan ürün yok." : `Bu kategoride ürün yok. <a href="#/urun-ekle">Ürün ekleyin</a>.`}</div>`;
-  // Aileye göre grupla (sıra korunur)
-  const fams = new Map();
-  list.forEach((p) => {
-    const t = aileGetir(p.ad);
-    const key = t ? "aile:" + t : "solo:" + p.id;
-    if (!fams.has(key)) fams.set(key, { title: t, members: [] });
-    fams.get(key).members.push(p);
-  });
-  const rows = [];
-  for (const f of fams.values()) {
-    if (f.members.length < 2) { rows.push(posListRow(f.members[0])); continue; }
-    const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
-    const min = fiyat.length ? Math.min(...fiyat) : 0;
-    rows.push(`<button class="prod-row fam" data-fam="${esc(f.title)}" type="button"><span class="pr-name">${esc(f.title)}<em>${f.members.length} marka</em></span><span class="pr-price">${min ? money.format(min) + "+" : ""}</span></button>`);
-  }
-  return rows.join("");
-}
-// Ürün liste satırı (kategori/arama görünümü)
-function posListRow(p) {
-  return `<button class="prod-row" data-add="${p.id}" type="button"><span class="pr-name">${esc(p.ad)}</span><span class="pr-price">${money.format(Number(p.satis) || 0)}</span></button>`;
+  // Her ürün ayrı kart (marka/model gruplama YOK — her marka ayrı listelenir).
+  return list.map(posSoloCard).join("");
 }
 /* Aile kutusuna dokununca: marka seçim popup'ı */
 function openAilePopup(title) {
@@ -1005,8 +1022,7 @@ function wireProdCards() {
 // kategori kartları; aksi halde ürün LİSTESİ (list-mode).
 function posGridYenile() {
   const g = document.getElementById("prodGrid");
-  const listMode = !(pos.cat === "ANA" && !ocrNorm(pos.q || ""));
-  if (g) { g.classList.toggle("list-mode", listMode); g.innerHTML = prodGridHTML(); wireProdCards(); }
+  if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); }
   document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x.dataset.cat === pos.cat));
   const psx = document.getElementById("prodSearchX"); if (psx) psx.style.display = pos.q ? "" : "none";
 }
@@ -1015,7 +1031,7 @@ function openCustPicker() {
   openModal("Müşteri Seç", `<input class="pick-search" id="pickSearch" placeholder="Müşteri ara..." />${listHTML}<div style="margin-top:10px"><button class="btn soft" id="pickYeni" type="button">＋ Yeni Müşteri</button></div>`, {
     noFoot: true,
     onMount: (ov) => {
-      ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; ov.remove(); refreshPOS(); }));
+      ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; ov.remove(); render(); }));
       const s = ov.querySelector("#pickSearch"); s.addEventListener("input", () => { const q = s.value.toLowerCase(); ov.querySelectorAll("[data-pick]").forEach((li) => { li.style.display = li.textContent.toLowerCase().includes(q) ? "" : "none"; }); });
       ov.querySelector("#pickYeni").addEventListener("click", () => { ov.remove(); openYeniMusteri(() => openCustPicker()); });
     },
@@ -1050,6 +1066,7 @@ function mountSatis() {
   document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
   document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
   const pick = document.getElementById("custPick"); if (pick) pick.addEventListener("click", openCustPicker);
+  const bAdd = document.getElementById("bundleAdd"); if (bAdd) bAdd.addEventListener("click", bundleUygula);
   const pers = document.getElementById("posPersonel"); if (pers) pers.addEventListener("change", () => { pos.personelId = pers.value || null; });
   const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
   const doBar = () => { const code = bar.value.trim(); if (!code) return; const p = store.products.find((x) => x.barkod === code); if (p) { addToCart(p.id); bar.value = ""; } else alert("Bu barkodla ürün yok."); };

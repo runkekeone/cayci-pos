@@ -491,6 +491,13 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .cust-tabs::-webkit-scrollbar { display: none; }
 .cust-tab { flex: 0 0 auto; white-space: nowrap; padding: 8px 14px; border: 1px solid #d6e6f7; background: var(--brand-soft); cursor: pointer; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; color: var(--brand-dark); }
 .cust-tab.on { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 2px 6px rgba(30, 64, 175, 0.28); }
+/* Bundle çubuğu: seçili müşterinin geçen siparişi (tek dokunuş sepete) */
+.bundle-bar { display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #eef6ff, #e2f0ff); border: 1px solid #bcd8f5; border-radius: 12px; padding: 9px 11px; }
+.bundle-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.bundle-txt b { font-size: 12.5px; color: var(--brand-dark); }
+.bundle-txt span { font-size: 11px; color: #5a6470; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.bundle-add { flex: 0 0 auto; min-height: 40px; background: var(--brand); color: #fff; border: 0; font-weight: 700; white-space: nowrap; font-size: 13px; }
+.btn.bundle-add:active { transform: scale(0.97); }
 .cart-row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .cart-row2 .field { min-width: 130px; }
 
