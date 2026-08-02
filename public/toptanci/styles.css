@@ -385,10 +385,10 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .ps-field { border-bottom: 2px solid #d7dfe8; padding: 4px 2px 6px; display: flex; align-items: center; }
 .ps-search { flex: 1; min-width: 0; gap: 6px; }
 .pos-price-sel {
-  flex: 0 0 auto; white-space: nowrap; color: #1b2029; font-weight: 700; font-size: 15px;
+  flex: 0 0 auto; white-space: nowrap; color: #1b2029; font-weight: 700; font-size: 14px;
   cursor: pointer; background: transparent; border-radius: 0;
 }
-.pos-search .bar-input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 4px 2px; font-size: 15px; outline: none; }
+.pos-search .bar-input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 4px 2px; font-size: 14px; outline: none; }
 .pos-btn {
   border: 0; border-radius: var(--radius); color: #fff; font-weight: 600; padding: 8px 14px;
   cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.2; min-width: 78px;
@@ -400,7 +400,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .pos-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pos-tot { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; box-shadow: var(--shadow-soft); text-align: center; }
 .pos-tot .l { font-size: 11px; color: var(--muted); font-weight: 600; }
-.pos-tot .v { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); white-space: nowrap; }
+.pos-tot .v { font-size: 17px; font-weight: 800; letter-spacing: -0.5px; color: var(--value); white-space: nowrap; }
 .pos-tot.red .v { color: var(--red); } .pos-tot.green .v { color: var(--green-d); } .pos-tot.brand .v { color: var(--brand); }
 
 /* Satış app-bar (mavi gradyan, BenimPOS) — masaüstünde gizli, mobilde tek bar */
@@ -413,16 +413,16 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .cust-line { display: flex; align-items: center; gap: 12px; }
 .cust-ico { flex: 0 0 auto; display: inline-flex; }
 .cust-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.cust-txt b { font-size: 17px; font-weight: 700; color: #1b2029; line-height: 1.2; }
-.cust-txt span { font-size: 14px; color: #5a6470; }
+.cust-txt b { font-size: 15px; font-weight: 700; color: #1b2029; line-height: 1.2; }
+.cust-txt span { font-size: 12.5px; color: #5a6470; }
 .cust-add { flex: 0 0 auto; background: none; border: 0; padding: 6px; cursor: pointer; border-radius: 10px; display: inline-flex; }
 .cust-add:active { background: #eef2f7; }
 .note-line { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.note-in { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 15px; padding: 6px 2px; color: #1b2029; }
-.app-ver { flex: 0 0 auto; font-size: 12px; color: #9aa2ad; white-space: nowrap; }
+.note-in { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 13.5px; padding: 6px 2px; color: #1b2029; }
+.app-ver { flex: 0 0 auto; font-size: 11px; color: #9aa2ad; white-space: nowrap; }
 .pos-checks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.pchk { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; color: #3a4250; font-weight: 500; cursor: pointer; }
-.pchk input { width: 20px; height: 20px; accent-color: var(--brand); flex: 0 0 auto; }
+.pchk { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; color: #3a4250; font-weight: 500; cursor: pointer; }
+.pchk input { width: 18px; height: 18px; accent-color: var(--brand); flex: 0 0 auto; }
 
 /* Yüzen "Tara" (kamera-barkod) butonu */
 .pos-tara { display: none; }
@@ -475,7 +475,10 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .lm-in { width: 100%; height: 46px; font-size: 16px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; }
 .lm-tot { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; color: var(--muted); font-weight: 600; }
 .lm-tot b { color: var(--value); font-size: 18px; font-weight: 800; }
-.btn.lm-del { width: 100%; justify-content: center; background: #fdeceb; color: var(--red); border: 1px solid #f6cfcc; min-height: 46px; }
+.lm-actions { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; }
+.btn.lm-del { justify-content: center; background: #fdeceb; color: var(--red); border: 1px solid #f6cfcc; min-height: 48px; }
+.btn.lm-ok { justify-content: center; background: var(--green); color: #fff; border: 0; min-height: 48px; font-weight: 800; font-size: 16px; }
+.btn.lm-ok:active { transform: scale(0.98); }
 .pos-note label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .pos-note input { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
 .pay-custom { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -523,20 +526,15 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .prod-search-ic { flex: 0 0 auto; font-size: 14px; color: var(--muted); }
 .prod-search-in { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 11px 4px; font-size: 14px; color: var(--text); }
 .prod-search-x { flex: 0 0 auto; border: 0; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px; }
-.prod-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 2px; max-height: 360px; overflow-y: auto; padding: 2px; }
-.prod-card { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; min-height: 128px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 14px 10px; text-align: center; cursor: pointer; box-shadow: var(--shadow-soft); transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease; }
+.prod-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 2px; max-height: 360px; overflow-y: auto; padding: 2px; }
+.prod-card { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; min-height: 76px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 11px 9px; text-align: center; cursor: pointer; box-shadow: var(--shadow-soft); transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease; }
 .prod-card:hover { border-color: var(--brand); box-shadow: 0 6px 16px rgba(30, 64, 175, 0.16); }
 .prod-card:active { transform: scale(0.98); }
-.prod-card .p-ph { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; background: #1b2029; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; line-height: 1; }
-.prod-card .p-name { font-size: 13px; font-weight: 700; line-height: 1.25; color: var(--text); text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 33px; }
-.prod-card .p-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px; width: 100%; margin-top: auto; }
-.prod-card .pp { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; }
-.prod-card .pp-lbl { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-.prod-card .pp-val { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; white-space: nowrap; }
+.prod-card .p-name { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--text); text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 30px; }
+.prod-card .p-price { color: var(--green-d); font-weight: 800; font-size: 14px; letter-spacing: -0.2px; margin-top: auto; }
 /* Ürün ailesi (marka çeşitli) kutusu + marka seçim popup'ı */
 .prod-card.fam { border-color: var(--brand-ring); }
-.prod-card.fam .p-ph { background: var(--brand); font-size: 17px; }
-.fam-badge { align-self: flex-start; font-size: 9px; font-weight: 800; color: var(--brand-dark); background: var(--brand-soft); border-radius: var(--radius-pill); padding: 2px 7px; letter-spacing: .2px; white-space: nowrap; }
+.fam-badge { font-size: 9px; font-weight: 800; color: var(--brand-dark); background: var(--brand-soft); border-radius: var(--radius-pill); padding: 2px 7px; letter-spacing: .2px; white-space: nowrap; }
 .aile-pop { display: flex; flex-direction: column; gap: 8px; }
 .aile-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 1px solid var(--line); background: #fff; border-radius: var(--radius); padding: 13px 14px; cursor: pointer; text-align: left; transition: border-color .15s ease, background .15s ease; }
 .aile-opt:active { background: var(--brand-soft); border-color: var(--brand); }
@@ -1108,8 +1106,8 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .pos-topbar { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
   /* Aksiyon şeridi: tek satır, kompakt, gerekirse yatay kaydırma (dikey yer kazan) */
   .pos-search { padding: 2px 2px 0; gap: 14px; flex-wrap: nowrap; align-items: flex-end; overflow: visible; }
-  .pos-search .bar-input { min-width: 0; padding: 6px 2px; }
-  .pos-price-sel { flex: 0 0 auto; white-space: nowrap; font-size: 15px; padding: 4px 2px 6px; min-height: 0; }
+  .pos-search .bar-input { min-width: 0; padding: 6px 2px; font-size: 14px; }
+  .pos-price-sel { flex: 0 0 auto; white-space: nowrap; font-size: 14px; padding: 4px 2px 6px; min-height: 0; }
   .pos-btn { min-width: auto; padding: 8px 12px; min-height: 44px; flex: 0 0 auto; }
   /* Yer tutan / az kullanılan aksiyonları mobilde gizle (Fiyat Gör, Ödeme Ekle, Yazdır) */
   .pos-search .pos-btn.green, .pos-search .pos-btn.teal, .pos-search #posYazdir { display: none; }
@@ -1128,11 +1126,9 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   .ades-tot { min-width: 54px; font-size: 13.5px; }
   /* Ürün kartları mobilde 3 sütun: ! ikon + ortalı isim (2 satır clamp) + fiyat */
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .prod-card { min-height: 122px; padding: 12px 8px; gap: 7px; }
-  .prod-card .p-ph { width: 38px; height: 38px; font-size: 18px; }
-  .prod-card .p-name { font-size: 12px; min-height: 30px; }
-  .prod-card .pp-val { font-size: 13.5px; }
-  .prod-card .pp-lbl { font-size: 10px; }
+  .prod-card { min-height: 72px; padding: 10px 7px; gap: 5px; }
+  .prod-card .p-name { font-size: 11.5px; min-height: 28px; }
+  .prod-card .p-price { font-size: 13px; }
   /* Kategori pill'leri: tek satır kaydırılabilir şerit, dokunma hedefi 44px */
   .cat-tab, .cat-tab.on { padding: 10px 16px; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; }
 

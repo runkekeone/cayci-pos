@@ -777,8 +777,7 @@ function aileGetir(ad) {
   return null;
 }
 function posSoloCard(p) {
-  const f1 = Number(p.satis) || 0, f2 = Number(p.alis) || 0;
-  return `<div class="prod-card" data-add="${p.id}"><span class="p-ph" aria-hidden="true">!</span><span class="p-name">${esc(p.ad)}</span><div class="p-prices"><div class="pp"><span class="pp-lbl">Fiyat 1</span><span class="pp-val">${num2.format(f1)}</span></div><div class="pp"><span class="pp-lbl">Fiyat 2</span><span class="pp-val">${f2 ? num2.format(f2) : "-"}</span></div></div></div>`;
+  return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
 }
 function prodGridHTML() {
   let list = store.products.filter((p) => p.gorunur !== false);
@@ -802,7 +801,7 @@ function prodGridHTML() {
     if (f.members.length < 2) { cards.push(posSoloCard(f.members[0])); continue; }
     const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
     const min = fiyat.length ? Math.min(...fiyat) : 0;
-    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="p-ph fam-ph" aria-hidden="true">${f.members.length}</span><span class="p-name">${esc(f.title)}</span><div class="p-prices"><div class="pp"><span class="pp-lbl">Fiyat 1</span><span class="pp-val">${min ? num2.format(min) + "+" : "-"}</span></div><div class="pp"><span class="pp-lbl">Marka</span><span class="pp-val">${f.members.length}</span></div></div></div>`);
+    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="fam-badge">${f.members.length} marka</span><span class="p-name">${esc(f.title)}</span><span class="p-price">${min ? money.format(min) + "+" : ""}</span></div>`);
   }
   return cards.join("");
 }
@@ -849,31 +848,43 @@ function wireCartRow() {
 function openLineModal(idx) {
   const it = activeCart().items[idx];
   if (!it) return;
+  // Yerel taslak — Onayla'ya basılmadan sepete işlenmez (X / dışarı tıkla = iptal).
+  const tmp = { adet: Number(it.adet) || 0, fiyat: Number(it.fiyat) || 0, iskyuzde: Number(it.iskyuzde) || 0 };
+  const satirTop = () => { const t = tmp.fiyat * tmp.adet; return t * (1 - (Number(tmp.iskyuzde) || 0) / 100); };
   const body = `<div class="line-modal">
       <div class="lm-qtyrow">
-        <button class="lm-step" data-dec="${idx}" type="button" aria-label="Azalt">−</button>
-        <input class="lm-qty" data-qty="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.adet}" />
-        <button class="lm-step" data-inc="${idx}" type="button" aria-label="Arttır">+</button>
+        <button class="lm-step" data-dec type="button" aria-label="Azalt">−</button>
+        <input class="lm-qty" data-qty type="number" step="0.01" inputmode="decimal" value="${tmp.adet}" />
+        <button class="lm-step" data-inc type="button" aria-label="Arttır">+</button>
       </div>
-      <div class="field"><label>Birim Fiyat (₺)</label><input class="lm-in" data-price="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.fiyat}" /></div>
-      <div class="field"><label>İskonto (%)</label><input class="lm-in" data-isk="${idx}" type="number" step="0.01" inputmode="decimal" value="${it.iskyuzde || ""}" placeholder="0" /></div>
-      <div class="lm-tot">Satır Toplamı <b data-tut="${idx}">${money.format(netLine(it))}</b></div>
-      <button class="btn lm-del" data-rem="${idx}" type="button">🗑 Ürünü Sil</button>
+      <div class="field"><label>Birim Fiyat (₺)</label><input class="lm-in" data-price type="number" step="0.01" inputmode="decimal" value="${tmp.fiyat}" /></div>
+      <div class="field"><label>İskonto (%)</label><input class="lm-in" data-isk type="number" step="0.01" inputmode="decimal" value="${tmp.iskyuzde || ""}" placeholder="0" /></div>
+      <div class="lm-tot">Satır Toplamı <b data-tut>${money.format(satirTop())}</b></div>
+      <div class="lm-actions">
+        <button class="btn lm-del" data-rem type="button">🗑 Sil</button>
+        <button class="btn ok lm-ok" data-ok type="button">✓ Onayla</button>
+      </div>
     </div>`;
-  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => wireLineModal(ov, idx, () => m.close()) });
+  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => wireLineModal(ov, idx, tmp, satirTop, () => m.close()) });
 }
-function wireLineModal(ov, idx, close) {
-  const c = activeCart();
+function wireLineModal(ov, idx, tmp, satirTop, close) {
   const qtyEl = ov.querySelector("[data-qty]");
   const totEl = ov.querySelector("[data-tut]");
-  const apply = () => { rebuildCart(); syncTotals(); const it = c.items[idx]; if (it && totEl) totEl.textContent = money.format(netLine(it)); };
-  const drop = () => { c.items.splice(idx, 1); if (close) close(); rebuildCart(); syncTotals(); };
-  ov.querySelector("[data-rem]").onclick = drop;
-  ov.querySelector("[data-inc]").onclick = () => { const it = c.items[idx]; if (!it) return; it.adet = (Number(it.adet) || 0) + 1; qtyEl.value = it.adet; apply(); };
-  ov.querySelector("[data-dec]").onclick = () => { const it = c.items[idx]; if (!it) return; it.adet = (Number(it.adet) || 0) - 1; if (it.adet <= 0) { drop(); return; } qtyEl.value = it.adet; apply(); };
-  qtyEl.oninput = () => { const it = c.items[idx]; if (!it) return; it.adet = qtyEl.value === "" ? 0 : Number(qtyEl.value); apply(); };
-  ov.querySelector("[data-price]").oninput = (e) => { const it = c.items[idx]; if (!it) return; it.fiyat = e.target.value === "" ? 0 : Number(e.target.value); apply(); };
-  ov.querySelector("[data-isk]").oninput = (e) => { const it = c.items[idx]; if (!it) return; it.iskyuzde = e.target.value === "" ? 0 : Number(e.target.value); apply(); };
+  const refreshTot = () => { if (totEl) totEl.textContent = money.format(satirTop()); };
+  ov.querySelector("[data-inc]").onclick = () => { tmp.adet = (Number(tmp.adet) || 0) + 1; qtyEl.value = tmp.adet; refreshTot(); };
+  ov.querySelector("[data-dec]").onclick = () => { tmp.adet = Math.max(0, (Number(tmp.adet) || 0) - 1); qtyEl.value = tmp.adet; refreshTot(); };
+  qtyEl.oninput = () => { tmp.adet = qtyEl.value === "" ? 0 : Number(qtyEl.value); refreshTot(); };
+  ov.querySelector("[data-price]").oninput = (e) => { tmp.fiyat = e.target.value === "" ? 0 : Number(e.target.value); refreshTot(); };
+  ov.querySelector("[data-isk]").oninput = (e) => { tmp.iskyuzde = e.target.value === "" ? 0 : Number(e.target.value); refreshTot(); };
+  ov.querySelector("[data-rem]").onclick = () => { activeCart().items.splice(idx, 1); if (close) close(); refreshPOS(); };
+  ov.querySelector("[data-ok]").onclick = () => {
+    const it = activeCart().items[idx];
+    if (it) {
+      if ((Number(tmp.adet) || 0) <= 0) activeCart().items.splice(idx, 1);
+      else { it.adet = Number(tmp.adet) || 0; it.fiyat = Number(tmp.fiyat) || 0; it.iskyuzde = Number(tmp.iskyuzde) || 0; }
+    }
+    if (close) close(); refreshPOS();
+  };
 }
 function addToCart(prodId) { const p = findProduct(prodId); if (!p) return; const c = activeCart(); const ex = c.items.find((i) => i.urunId === prodId); if (ex) ex.adet = (Number(ex.adet) || 0) + 1; else c.items.push({ urunId: prodId, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: Number(p.satis) || 0, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); }
 function finalizeCustom(tipId) { const tip = store.odemeTipleri.find((t) => t.id === tipId); if (!tip) return; finalizeSale(tip.kasa === "Nakit Kasa" ? "nakit" : "pos", tip.ad); }
