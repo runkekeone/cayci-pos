@@ -809,13 +809,18 @@ function posSoloCard(p) {
 // Kategori görseli: ada göre emoji + renk sınıfı
 function katGorsel(name) {
   const n = ocrNorm(name);
-  if (/temizlik|deterjan|sabun|camasir|bulasik|hijyen|pecete|mendil/.test(n)) return { ic: "🧽", cls: "k-clean" };
-  if (/mesrubat|icecek|soda|kola|gazoz|meyve suyu|ayran|enerji|maden|\bsu\b/.test(n)) return { ic: "🥤", cls: "k-drink" };
-  if (/\bcay\b|kahve/.test(n)) return { ic: "🍵", cls: "k-tea" };
-  if (/seker|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "🍬", cls: "k-sweet" };
+  if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "🧽", cls: "k-clean" };
+  if (/sicak icecek|\bcay\b|kahve|toz icecek|sahlep|salep|granul/.test(n)) return { ic: "🍵", cls: "k-tea" };
+  if (/soguk icecek|mesrubat|icecek|soda|kola|gazoz|meyve suyu|ayran|enerji|maden|\bsu\b/.test(n)) return { ic: "🥤", cls: "k-drink" };
+  if (/oyun|eglence/.test(n)) return { ic: "🃏", cls: "k-game" };
+  if (/servis|bardak|fincan|tabak/.test(n)) return { ic: "🍽️", cls: "k-serve" };
+  if (/seker|gida|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "🍬", cls: "k-sweet" };
   if (/sut|yogurt|peynir|kahvalt|tereyag/.test(n)) return { ic: "🥛", cls: "k-milk" };
-  if (/kagit|oyun|kirtasiye/.test(n)) return { ic: "🧻", cls: "k-paper" };
-  if (/sigara|tutun/.test(n)) return { ic: "🚬", cls: "k-misc" };
+  if (/kagit|hijyen|pecete|mendil/.test(n)) return { ic: "🧻", cls: "k-paper" };
+  if (/kirtasiye/.test(n)) return { ic: "✏️", cls: "k-paper" };
+  if (/mobilya|dis mekan|bahce/.test(n)) return { ic: "🪑", cls: "k-misc" };
+  if (/teknik|guvenlik/.test(n)) return { ic: "🔧", cls: "k-misc" };
+  if (/mutfak|ekipman/.test(n)) return { ic: "🍳", cls: "k-misc" };
   return { ic: "📦", cls: "k-misc" };
 }
 // Kategori-önce görünüm: kategori kartları (tıkla → o kategorinin ürünleri)

@@ -550,6 +550,8 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .cat-card.k-sweet { background: #fdeef4; border-color: #f6cfe0; }
 .cat-card.k-milk { background: #f3f6fb; border-color: #dbe4ef; }
 .cat-card.k-paper { background: #f5f3fb; border-color: #ddd6ef; }
+.cat-card.k-game { background: #fef2e7; border-color: #f6d6b0; }
+.cat-card.k-serve { background: #eef7f4; border-color: #cfe6dd; }
 .cat-card.k-misc { background: #fff; border-color: var(--line); }
 /* Ürün LİSTE görünümü (kategori seçilince alt alta satırlar) */
 .prod-grid.list-mode { display: flex; flex-direction: column; gap: 6px; }
