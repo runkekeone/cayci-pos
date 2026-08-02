@@ -641,7 +641,7 @@ function renderSatis() {
   const usedSet = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
   const cats = ["ANA"].concat(allGroupNames().filter((g) => usedSet.has(g)));
   const custTabs = pos.carts.map((c, n) => `<div class="cust-tab ${n === pos.active ? "on" : ""}" data-tab="${n}">Müşteri ${n + 1} (${num2.format(c.items.reduce((s, i) => s + i.fiyat * i.adet, 0))})</div>`).join("");
-  const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c}</span>`).join("");
+  const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c === "ANA" ? "☰ Kategoriler" : esc(c)}</span>`).join("");
   const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
   return `<div class="pos2">
       <!-- 0. Satış app-bar (mavi gradyan) — BenimPOS başlığı -->
@@ -779,10 +779,35 @@ function aileGetir(ad) {
 function posSoloCard(p) {
   return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
 }
+// Kategori görseli: ada göre emoji + renk sınıfı
+function katGorsel(name) {
+  const n = ocrNorm(name);
+  if (/temizlik|deterjan|sabun|camasir|bulasik|hijyen|pecete|mendil/.test(n)) return { ic: "🧽", cls: "k-clean" };
+  if (/mesrubat|icecek|soda|kola|gazoz|meyve suyu|ayran|enerji|maden|\bsu\b/.test(n)) return { ic: "🥤", cls: "k-drink" };
+  if (/\bcay\b|kahve/.test(n)) return { ic: "🍵", cls: "k-tea" };
+  if (/seker|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "🍬", cls: "k-sweet" };
+  if (/sut|yogurt|peynir|kahvalt|tereyag/.test(n)) return { ic: "🥛", cls: "k-milk" };
+  if (/kagit|oyun|kirtasiye/.test(n)) return { ic: "🧻", cls: "k-paper" };
+  if (/sigara|tutun/.test(n)) return { ic: "🚬", cls: "k-misc" };
+  return { ic: "📦", cls: "k-misc" };
+}
+// Kategori-önce görünüm: kategori kartları (tıkla → o kategorinin ürünleri)
+function catGridHTML() {
+  const used = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
+  const cats = allGroupNames().filter((g) => used.has(g));
+  if (!cats.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Kategori yok. <a href="#/urun-ekle">Ürün ekleyin</a>.</div>`;
+  return cats.map((c) => {
+    const n = store.products.filter((p) => p.gorunur !== false && (p.grup || "GRUPSUZ ÜRÜN") === c).length;
+    const g = katGorsel(c);
+    return `<button class="cat-card ${g.cls}" data-catopen="${esc(c)}" type="button"><span class="cc-ic" aria-hidden="true">${g.ic}</span><span class="cc-name">${esc(c)}</span><span class="cc-count">${n} ürün</span></button>`;
+  }).join("");
+}
 function prodGridHTML() {
+  const q = ocrNorm(pos.q || "");
+  // Arama yoksa ve ANA'daysak: önce kategori kartları
+  if (pos.cat === "ANA" && !q) return catGridHTML();
   let list = store.products.filter((p) => p.gorunur !== false);
   if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
-  const q = ocrNorm(pos.q || "");
   if (q) {
     const qr = (pos.q || "").trim().toLocaleLowerCase("tr");
     list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
@@ -933,6 +958,7 @@ function finalizeSale(type, odemeAdi) {
 function wireProdCards() {
   document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add));
   document.querySelectorAll("[data-fam]").forEach((el) => el.onclick = () => openAilePopup(el.dataset.fam));
+  document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; render(); });
 }
 function openCustPicker() {
   const listHTML = store.customers.length ? `<ul class="pick-list">${store.customers.map((c) => `<li data-pick="${c.id}">${esc(c.ad)} <small>· borç ${money.format(customerBorc(c.id))}</small></li>`).join("")}</ul>` : `<p class="sub">Kayıtlı müşteri yok.</p>`;
@@ -969,7 +995,7 @@ function openIskModal() {
 function mountSatis() {
   wireProdCards(); wireCartRow();
   document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
-  document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x === el)); const g = document.getElementById("prodGrid"); g.innerHTML = prodGridHTML(); wireProdCards(); }));
+  document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; render(); }));
   /* Tek-akışlı düzen: mobil bottom-sheet kaldırıldı (fiş akış içinde) */
   document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
   document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
