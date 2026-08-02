@@ -1276,7 +1276,7 @@ function renderAnasayfa() {
   const tahsilat = store.payments.filter((p) => isToday(p.tarih)).reduce((a, p) => a + p.tutar, 0);
   const toplamBorc = store.customers.reduce((a, c) => a + customerBorc(c.id), 0);
   const kritik = store.products.filter((p) => (Number(p.stok) || 0) <= (Number(p.kritik) || 0) && p.kritik !== "" && p.kritik != null);
-  const son = [...store.sales].sort((a, b) => b.tarih.localeCompare(a.tarih)).slice(0, 10);
+  const son = [...today].sort((a, b) => b.tarih.localeCompare(a.tarih)); // sadece bugünün satışları
   const rows = son.map((s) => { const c = s.musteriId && findCustomer(s.musteriId); return `<tr><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${c ? esc(c.ad) : "-"}</td><td>${money.format(s.toplam)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`; }).join("");
   const kritikRows = kritik.slice(0, 10).map((p) => `<tr><td>${esc(p.ad)}</td><td class="stok-low">${num2.format(Number(p.stok) || 0)}</td><td>${Number(p.kritik) || 0}</td></tr>`).join("");
   const dun = localDateStr(new Date(Date.now() - 86400000));
@@ -1285,7 +1285,7 @@ function renderAnasayfa() {
     grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
     `<div style="height:14px"></div>` +
     grid([["Nakit Kasa", money.format(nakit + tahsilat + gelir - gider), "green"], ["Gider (bugün)", money.format(gider)], ["Kâr (bugün)", money.format(ciro - maliyet), "green"], ["Toplam Alacak", money.format(toplamBorc)]]) +
-    `<h1 style="font-size:16px;margin:18px 0 10px">Son Satışlar</h1>` + sonSatisListesi(son) +
+    `<h1 style="font-size:16px;margin:18px 0 10px">Bugünün Satışları (${today.length})</h1>` + (son.length ? sonSatisListesi(son) : `<div class="card"><p class="sub">Bugün henüz satış yok.</p></div>`) +
     `<h1 style="font-size:16px;margin:18px 0 10px">Kritik Stok (${kritik.length})</h1>` + tableCard(["Ürün", "Kalan Stok", "Kritik"], kritikRows, infoLine(kritik.length));
 }
 /* Son satışlar — kompakt tek satır liste (kutucuk değil) */
