@@ -45,6 +45,13 @@ function seedStore(st) {
 }
 function saveStore() { localStorage.setItem(STORE_KEY, JSON.stringify(store)); bulutaYaz(); }
 function genId() { store.counters.seq = (store.counters.seq || 0) + 1; return "id" + store.counters.seq + Date.now().toString(36); }
+// ISO hafta numarası: "2026-H31"
+function haftaNo(d) {
+  d = new Date(d); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day + 3);
+  const firstThu = new Date(d.getFullYear(), 0, 4);
+  const week = 1 + Math.round(((d - firstThu) / 86400000 - 3 + ((firstThu.getDay() + 6) % 7)) / 7);
+  return d.getFullYear() + "-H" + String(week).padStart(2, "0");
+}
 function findProduct(id) { return store.products.find((p) => p.id === id); }
 function findCustomer(id) { return store.customers.find((c) => c.id === id); }
 function findFirma(id) { return store.firmalar.find((f) => f.id === id); }
@@ -294,6 +301,7 @@ const MENU = [
       { label: "Ürünsel Rapor", route: "rapor-urunsel" }, { label: "Grupsal Rapor", route: "rapor-grupsal" },
       { label: "Ürün Korelasyon Raporu", route: "rapor-korelasyon" }, { label: "Stok Hareket Rapor", route: "rapor-stokhareket" },
       { label: "Personel Hareket Raporu", route: "rapor-personelhareket" },
+      { label: "📊 Müşteri Analizi", route: "musteri-analiz" }, { label: "📊 Ürün Analizi", route: "urun-analiz" },
   ] },
   { ico: "👤", label: "Müşteriler", route: "musteriler" },
   { ico: "🧑‍🔧", label: "Servisçiler (Bayiler)", route: "servisciler" },
@@ -490,6 +498,11 @@ function renderUrunEkle() {
         <div class="field"><label>Ürün Birimi (koli/paketse seç — satış o birimden)</label><select name="birim">${["Adet", "Koli", "Paket", "Çuval", "Kg", "Litre"].map((u) => `<option ${p && p.birim === u ? "selected" : ""}>${u}</option>`).join("")}</select></div>
         <div class="field"><label>Satış Sayfasında Göster</label><select name="gorunur"><option value="1" ${!gorunurSel ? "selected" : ""}>Göster</option><option value="0" ${gorunurSel ? "selected" : ""}>Gösterme</option></select></div>
         <div class="field"><label>Ön Ekranda Göster (Ana Ürün)</label><select name="anaUrun"><option value="1" ${p && p.anaUrun ? "selected" : ""}>Evet — ön ekranda</option><option value="0" ${!(p && p.anaUrun) ? "selected" : ""}>Hayır — sadece kategoriden</option></select></div>
+        <div class="field"><label>Ürün Kodu</label><input name="urunKodu" value="${v("urunKodu")}" placeholder="opsiyonel" /></div>
+        <div class="field"><label>Depo Min Stok</label><input name="depoMin" type="number" step="0.01" value="${v("depoMin")}" placeholder="0" /></div>
+        <div class="field"><label>Araçta Bulunsun mu</label><select name="aractaBulunsun"><option value="1" ${!(p && p.aractaBulunsun === false) ? "selected" : ""}>Evet</option><option value="0" ${p && p.aractaBulunsun === false ? "selected" : ""}>Hayır</option></select></div>
+        <div class="field"><label>Bozulabilir mi (SKT'li)</label><select name="bozulabilir"><option value="0" ${!(p && p.bozulabilir) ? "selected" : ""}>Hayır</option><option value="1" ${p && p.bozulabilir ? "selected" : ""}>Evet</option></select></div>
+        <div class="field"><label>Analiz Notu</label><input name="analizNotu" value="${v("analizNotu")}" placeholder="opsiyonel" /></div>
       </div>
       <div style="margin-top:16px"><button class="btn green lg" type="submit">💾 ${p ? "Güncelle" : "Ürünü Kaydet"}</button></div>
     </form>`;
@@ -498,7 +511,7 @@ function mountUrunEkle() {
   document.getElementById("urunForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const data = { ad: (f.get("ad") || "").trim(), barkod: (f.get("barkod") || "").trim(), satis: f.get("satis"), alis: f.get("alis"), stok: f.get("stok"), kritik: f.get("kritik"), kdv: f.get("kdv"), grup: f.get("grup"), birim: f.get("birim"), gorunur: f.get("gorunur") === "1", anaUrun: f.get("anaUrun") === "1" };
+    const data = { ad: (f.get("ad") || "").trim(), barkod: (f.get("barkod") || "").trim(), satis: f.get("satis"), alis: f.get("alis"), stok: f.get("stok"), kritik: f.get("kritik"), kdv: f.get("kdv"), grup: f.get("grup"), birim: f.get("birim"), gorunur: f.get("gorunur") === "1", anaUrun: f.get("anaUrun") === "1", urunKodu: (f.get("urunKodu") || "").trim(), depoMin: f.get("depoMin"), aractaBulunsun: f.get("aractaBulunsun") === "1", bozulabilir: f.get("bozulabilir") === "1", analizNotu: (f.get("analizNotu") || "").trim() };
     if (!data.ad) { alert("Ürün adı zorunlu."); return; }
     if (editProductId) Object.assign(findProduct(editProductId), data);
     else store.products.push(Object.assign({ id: genId() }, data));
@@ -582,6 +595,68 @@ function mountAracYukleme() {
     render();
   });
 }
+/* ============ ANALİZ (metrikler + raporlar) ============ */
+function musteriMetrik(id) {
+  const sales = store.sales.filter((s) => s.musteriId === id);
+  const ciro = sales.reduce((a, s) => a + (Number(s.toplam) || 0), 0);
+  const kar = sales.reduce((a, s) => a + ((Number(s.toplam) || 0) - (Number(s.maliyet) || 0)), 0);
+  const tarihler = sales.map((s) => s.tarih).sort();
+  const ilk = tarihler[0], son = tarihler[tarihler.length - 1];
+  const hafta = ilk ? Math.max(1, (Date.now() - new Date(ilk).getTime()) / (7 * 86400000)) : 1;
+  const urunAdet = {};
+  sales.forEach((s) => s.items.forEach((it) => { urunAdet[it.ad] = (urunAdet[it.ad] || 0) + (Number(it.adet) || 0); }));
+  const top = Object.entries(urunAdet).sort((a, b) => b[1] - a[1]).slice(0, 3).map((e) => e[0]);
+  return { siparis: sales.length, ciro, kar, ortHaftaCiro: ciro / hafta, ortHaftaKar: kar / hafta, sonSiparis: son, borc: customerBorc(id), top };
+}
+function urunMetrik(urunId, gunler) {
+  const sinir = gunler ? Date.now() - gunler * 86400000 : 0;
+  const pr = findProduct(urunId); const al = pr ? Number(pr.alis) || 0 : 0;
+  let adet = 0, ciro = 0, kar = 0, sonSatis = "";
+  store.sales.forEach((s) => {
+    if (sinir && new Date(s.tarih).getTime() < sinir) return;
+    s.items.forEach((it) => {
+      if (it.urunId !== urunId) return;
+      const q = Number(it.adet) || 0, f = Number(it.fiyat) || 0;
+      adet += q; ciro += q * f; kar += q * (f - al);
+      if (s.tarih > sonSatis) sonSatis = s.tarih;
+    });
+  });
+  const donusHaftalik = gunler ? adet / Math.max(1, gunler / 7) : adet;
+  return { adet, ciro, kar, sonSatis, donusHaftalik };
+}
+function riskRozet(r) { if (!r) return "-"; const cls = r === "Yüksek" ? "risk-yuksek" : (r === "Orta" ? "risk-orta" : "risk-dusuk"); return `<span class="${cls}">${esc(r)}</span>`; }
+function renderMusteriAnaliz() {
+  const liste = store.customers.map((c) => ({ c, m: musteriMetrik(c.id) })).sort((a, b) => b.m.ciro - a.m.ciro);
+  const topCiro = liste.reduce((a, x) => a + x.m.ciro, 0), topKar = liste.reduce((a, x) => a + x.m.kar, 0);
+  const rows = liste.map(({ c, m }, i) => `<tr>
+    <td>${i + 1}</td>
+    <td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button>${c.bayi ? ' <span class="badge">servisçi</span>' : ""}</td>
+    <td>${esc(c.isletmeTipi || "-")}</td><td>${esc(c.bolge || c.mahalle || "-")}</td><td>${esc(c.servisGunu || "-")}</td>
+    <td>${m.siparis}</td><td>${money.format(m.ciro)}</td><td>${money.format(m.kar)}</td><td>${money.format(m.ortHaftaCiro)}</td>
+    <td class="${m.borc > 0 ? "borc-red" : ""}">${money.format(m.borc)}</td><td>${riskRozet(c.riskDurumu)}</td>
+    <td>${m.sonSiparis ? fmtDate(m.sonSiparis) : "-"}</td><td class="hint">${m.top.map(esc).join(", ") || "-"}</td>
+  </tr>`).join("");
+  return pageHead("Müşteri Analizi", `${store.customers.length} müşteri · Ciro ${money.format(topCiro)} · Kâr ${money.format(topKar)}`) +
+    `<p class="hint" style="margin:0 2px 8px">Ciroya göre sıralı. Veri biriktikçe (2-3 ay) ortalama haftalık ciro/kâr, en çok aldığı ürün ve risk daha isabetli olur.</p>` +
+    tableCard(["#", "Müşteri", "Tip", "Bölge", "Servis", "Sip.", "Ciro", "Kâr", "Ort/Hafta", "Borç", "Risk", "Son Sip.", "En Çok Aldığı"], rows, infoLine(store.customers.length));
+}
+function mountMusteriAnaliz() {
+  document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
+  wireTableSearch();
+}
+function renderUrunAnaliz() {
+  const gun = 90;
+  const liste = store.products.filter((p) => p.gorunur !== false).map((p) => ({ p, m: urunMetrik(p.id, gun) })).sort((a, b) => b.m.ciro - a.m.ciro);
+  const rows = liste.map(({ p, m }, i) => `<tr>
+    <td>${i + 1}</td><td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "-")}</span></td>
+    <td>${num2.format(m.adet)}</td><td>${money.format(m.ciro)}</td><td>${money.format(m.kar)}</td>
+    <td>${num2.format(Math.round(m.donusHaftalik * 10) / 10)}/hf</td>
+    <td>${num2.format(Number(p.stok) || 0)}</td><td class="arac-stok">${num2.format(Number(p.aracStok) || 0)}</td>
+    <td>${m.sonSatis ? fmtDate(m.sonSatis) : "-"}</td>
+  </tr>`).join("");
+  return pageHead("Ürün Analizi", "Son 90 gün · ciroya göre · dönüş hızı = haftalık satış adedi") +
+    tableCard(["#", "Ürün", "Adet(90g)", "Ciro", "Kâr", "Dönüş", "Dükkan", "Araç", "Son Satış"], rows, infoLine(store.products.length));
+}
 function openYeniMusteri(onDone, item, preset) {
   const seed = item || preset || null; // preset: yeni kayıt için varsayılan değerler (ör. bayi:true)
   formModal(item ? "Müşteri Düzenle" : (preset && preset.bayi ? "Yeni Servisçi (Bayi)" : "Yeni Müşteri Oluştur"), [
@@ -594,6 +669,17 @@ function openYeniMusteri(onDone, item, preset) {
     { key: "vergiDairesi", label: "Vergi Dairesi" },
     { key: "vergiNo", label: "Vergi No / TCKN" },
     { key: "acilis", label: "Açılış Borcu (₺)", type: "number", step: "0.01", def: 0 },
+    { key: "isletmeTipi", label: "İşletme Tipi", type: "select", options: [{ v: "", t: "— seç —" }, "Kıraathane", "Kafe", "Büfe", "Bakkal", "Market", "Restoran", "Ofis", "Berber", "Diğer"] },
+    { key: "bolge", label: "Bölge" },
+    { key: "mahalle", label: "Mahalle" },
+    { key: "servisGunu", label: "Servis Günü", type: "select", options: [{ v: "", t: "— seç —" }, "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"] },
+    { key: "rotaSira", label: "Rota Sırası", type: "number" },
+    { key: "cayTuketim", label: "Çay Tüketim Seviyesi", type: "select", options: [{ v: "", t: "— seç —" }, "Düşük", "Orta", "Yüksek"] },
+    { key: "sogukPotansiyel", label: "Soğuk İçecek Potansiyeli", type: "select", options: [{ v: "", t: "— seç —" }, "Düşük", "Orta", "Yüksek"] },
+    { key: "riskDurumu", label: "Risk Durumu", type: "select", options: [{ v: "", t: "— seç —" }, "Düşük", "Orta", "Yüksek"] },
+    { key: "oyunVar", label: "Oyun ürünü kullanır (okey/kağıt/yazboz)", type: "checkbox" },
+    { key: "sogukDolap", label: "Soğuk dolabı var", type: "checkbox" },
+    { key: "depozitoKullanir", label: "Depozitolu ürün kullanır (kasa/şişe)", type: "checkbox" },
     { key: "bayi", label: "Servisçi (senden toptan/düşük fiyata alan bayi)", type: "checkbox" },
   ], seed, (data) => {
     if (item) Object.assign(item, data);
@@ -1141,7 +1227,7 @@ function finalizeSale(type, odemeAdi) {
   const maliyet = c.items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? (Number(pr.alis) || 0) : 0) * i.adet; }, 0);
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
-  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString() });
+  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString(), servisGun: localDateStr(new Date()), hafta: haftaNo(new Date()), stokKaynak: stokModu });
   c.items.forEach((i) => stokDus(i.urunId, i.adet)); // aktif moda göre (araç/dükkan) stok düş
   saveStore();
   pos.carts[pos.active] = newCart();
@@ -2082,6 +2168,8 @@ const PAGES = {
   "rapor-korelasyon": { render: renderRaporKorelasyon, mount: () => mountReport("rapor-korelasyon") },
   "rapor-stokhareket": { render: renderRaporStokHareket, mount: mountRaporStokHareket },
   "rapor-personelhareket": { render: renderRaporPersonel, mount: () => mountReport("rapor-personelhareket") },
+  "musteri-analiz": { render: renderMusteriAnaliz, mount: mountMusteriAnaliz },
+  "urun-analiz": { render: renderUrunAnaliz },
 
   musteriler: { render: renderMusteriler, mount: mountMusteriler },
   "musteri-detay": { render: renderMusteriDetay, mount: mountMusteriDetay },
