@@ -141,25 +141,38 @@ function csvParse(text) {
   if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
   return rows.filter((r) => r.some((x) => (x || "").trim() !== ""));
 }
+function csvModalGoster(name, text) {
+  openModal(name, `<p class="hint">Dosya paylaşımı bu cihazda açılmadı. Aşağıdaki metni <b>Tümünü Kopyala</b> ile alıp Not Defteri'ne yapıştır → <b>${esc(name)}</b> olarak kaydet (Excel açar). Ya da WhatsApp'tan kendine gönder.</p>
+    <textarea id="csvOut" style="width:100%;height:38vh;font-family:monospace;font-size:12px;white-space:pre" readonly>${esc(text)}</textarea>
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="btn ok" id="csvKopyala" type="button">📋 Tümünü Kopyala</button>
+      <button class="btn soft" id="csvWa" type="button">📲 WhatsApp'a Gönder</button>
+    </div>`, {
+    noFoot: true,
+    onMount: (ov) => {
+      const ta = ov.querySelector("#csvOut");
+      ov.querySelector("#csvKopyala").onclick = async () => {
+        try { await navigator.clipboard.writeText(text); alert("Kopyalandı ✔"); }
+        catch (e) { ta.focus(); ta.select(); try { document.execCommand("copy"); alert("Kopyalandı ✔"); } catch (e2) { alert("Kopyalanamadı — metni elle seçip kopyalayın."); } }
+      };
+      ov.querySelector("#csvWa").onclick = () => window.open("https://wa.me/?text=" + encodeURIComponent(text.slice(0, 30000)), "_blank");
+    },
+  });
+}
 async function downloadFile(name, text, type) {
   const blob = new Blob([text], { type: type || "text/csv;charset=utf-8" });
-  // Android WebView <a download> (blob) çalışmaz → önce Web Share ile dosya paylaş (Dosyalar/Drive/WhatsApp).
-  try {
-    const file = new File([blob], name, { type: blob.type });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: name });
-      return;
-    }
-  } catch (e) { if (e && e.name === "AbortError") return; }
-  // Masaüstü / destekleyen tarayıcı: normal indirme
+  const file = new File([blob], name, { type: "text/csv" });
+  // 1) Web Share — canShare bazı cihazlarda csv'yi reddediyor; koşulsuz dene.
+  if (navigator.share) {
+    try { await navigator.share({ files: [file], title: name }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; return csvModalGoster(name, text); }
+  }
+  // 2) Masaüstü: normal indirme; olmazsa modal
   try {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-  } catch (e) {
-    // Son çare: içeriği modalda göster (kopyala)
-    openModal(name, `<p class="hint">İndirme desteklenmedi. Aşağıdaki metni kopyalayıp .csv olarak kaydedin:</p><textarea style="width:100%;height:40vh;font-family:monospace;font-size:12px" readonly>${esc(text)}</textarea>`, { noFoot: true });
-  }
+  } catch (e) { csvModalGoster(name, text); }
 }
 function openFileImport(accept, onText) {
   const inp = document.createElement("input"); inp.type = "file"; inp.accept = accept;
