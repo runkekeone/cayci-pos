@@ -502,6 +502,25 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .bundle-txt span { font-size: 11px; color: #5a6470; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.bundle-add { flex: 0 0 auto; min-height: 40px; background: var(--brand); color: #fff; border: 0; font-weight: 700; white-space: nowrap; font-size: 13px; }
 .btn.bundle-add:active { transform: scale(0.97); }
+/* Stok kaynağı mod çubuğu (Dükkan / Araç) */
+.stok-mod-bar { display: flex; align-items: center; gap: 10px; padding: 2px 2px 0; }
+.smb-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.smb-toggle { display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid; border-radius: var(--radius-pill); padding: 6px 14px; font-size: 13px; font-weight: 800; cursor: pointer; }
+.smb-toggle.dukkan { background: #f1f7fe; border-color: #bcd8f5; color: var(--brand-dark); }
+.smb-toggle.arac { background: #fdf3e8; border-color: #f3ddb4; color: var(--accent-ink); }
+.smb-toggle .smb-swap { font-size: 10px; font-weight: 600; opacity: .7; }
+.smb-toggle:active { transform: scale(0.97); }
+/* Servisçi (bayi) onay kutusu — formModal checkbox alanı */
+.field-chk { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 6px 2px; font-size: 14px; color: #3a4250; }
+.field-chk input { width: 20px; height: 20px; accent-color: var(--brand); flex: 0 0 auto; }
+/* Ürün listesi araç stok kolonu */
+td.arac-stok { color: var(--accent-ink); font-weight: 700; }
+/* Sabah Araç Yükleme tablosu */
+.ay-tools { display: flex; gap: 10px; margin: 2px 2px 10px; }
+.ay-tools .btn { flex: 1; justify-content: center; min-height: 46px; }
+.ay-in { width: 100%; max-width: 90px; min-height: 40px; text-align: center; font-size: 15px; font-weight: 700; border: 1px solid var(--line); border-radius: 10px; padding: 4px 6px; }
+.ay-in.ay-yuk { border-color: var(--accent); background: #fffdf8; }
+td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .cart-row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .cart-row2 .field { min-width: 130px; }
 

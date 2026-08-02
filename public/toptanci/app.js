@@ -12,7 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
-    duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [],
+    duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [], aracHareket: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -48,6 +48,15 @@ function genId() { store.counters.seq = (store.counters.seq || 0) + 1; return "i
 function findProduct(id) { return store.products.find((p) => p.id === id); }
 function findCustomer(id) { return store.customers.find((c) => c.id === id); }
 function findFirma(id) { return store.firmalar.find((f) => f.id === id); }
+
+/* ---- Stok havuzu: Dükkan (p.stok) vs Araç (p.aracStok) ---- */
+/* stokModu: "dukkan" | "arac". Servise girince otomatik "arac", çıkınca "dukkan". POS'ta düğmeyle override. */
+let stokModu = "dukkan";
+try { const m = localStorage.getItem("stok-modu-v1"); if (m === "arac" || m === "dukkan") stokModu = m; } catch (e) {}
+function stokModuAyarla(m) { stokModu = (m === "arac") ? "arac" : "dukkan"; try { localStorage.setItem("stok-modu-v1", stokModu); } catch (e) {} }
+function aktifStok(p) { return stokModu === "arac" ? (Number(p.aracStok) || 0) : (Number(p.stok) || 0); }
+function stokDus(urunId, adet) { const p = findProduct(urunId); if (!p) return; if (stokModu === "arac") p.aracStok = (Number(p.aracStok) || 0) - adet; else p.stok = (Number(p.stok) || 0) - adet; }
+function stokEkle(urunId, adet) { const p = findProduct(urunId); if (!p) return; if (stokModu === "arac") p.aracStok = (Number(p.aracStok) || 0) + adet; else p.stok = (Number(p.stok) || 0) + adet; }
 
 function customerBorc(id) {
   const c = findCustomer(id); if (!c) return 0;
@@ -197,8 +206,8 @@ function headerIndex(head, names) { for (const n of names) { const i = head.inde
 
 /* Ürün dışa/içe */
 function exportProducts() {
-  const head = ["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Kritik Stok", "KDV", "Birim"];
-  const rows = [head].concat(store.products.map((p) => [p.barkod || "", p.ad, p.grup || "", p.alis || 0, p.satis || 0, p.stok || 0, p.kritik === "" || p.kritik == null ? "" : p.kritik, p.kdv || 0, p.birim || "Adet"]));
+  const head = ["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"];
+  const rows = [head].concat(store.products.map((p) => [p.barkod || "", p.ad, p.grup || "", p.alis || 0, p.satis || 0, p.stok || 0, p.aracStok || 0, p.kritik === "" || p.kritik == null ? "" : p.kritik, p.kdv || 0, p.birim || "Adet"]));
   downloadFile("babuco-urunler.csv", csvBuild(rows));
 }
 function importProducts(text) {
@@ -207,7 +216,8 @@ function importProducts(text) {
   const iBar = headerIndex(head, ["barkod", "barcode"]), iAd = headerIndex(head, ["ürün adı", "urun adi", "ürün adı ", "ad", "ürün", "urun", "name"]),
     iGrup = headerIndex(head, ["grup", "kategori", "group"]), iAlis = headerIndex(head, ["alış fiyatı", "alis fiyati", "alış", "alis", "alış fiyat"]),
     iSatis = headerIndex(head, ["fiyat 1", "fiyat1", "fiyat", "satış fiyatı", "satis fiyati", "satış", "satis", "price"]),
-    iStok = headerIndex(head, ["kalan stok", "stok", "stock", "miktar"]), iKritik = headerIndex(head, ["kritik stok", "kritik", "kritik stok miktarı"]),
+    iStok = headerIndex(head, ["kalan stok", "dükkan stok", "dukkan stok", "stok", "stock", "miktar"]), iKritik = headerIndex(head, ["kritik stok", "kritik", "kritik stok miktarı"]),
+    iArac = headerIndex(head, ["araç stok", "arac stok", "araç", "arac"]),
     iKdv = headerIndex(head, ["kdv", "kdv %", "vat"]), iBirim = headerIndex(head, ["birim", "unit"]);
   if (iAd < 0) { alert("'Ürün Adı' sütunu bulunamadı."); return; }
   let add = 0, upd = 0, err = 0;
@@ -215,6 +225,7 @@ function importProducts(text) {
     const c = rows[r]; const ad = (c[iAd] || "").trim(); if (!ad) { err++; continue; }
     const bar = iBar >= 0 ? (c[iBar] || "").trim() : "";
     const data = { ad, barkod: bar, grup: iGrup >= 0 ? (c[iGrup] || "").trim() : "", alis: num(c[iAlis]), satis: num(c[iSatis]), stok: num(c[iStok]), kritik: iKritik >= 0 && c[iKritik] !== "" ? num(c[iKritik]) : "", kdv: num(c[iKdv]), birim: iBirim >= 0 && c[iBirim] ? c[iBirim] : "Adet", gorunur: true };
+    if (iArac >= 0) data.aracStok = num(c[iArac]); // araç kolonu yoksa mevcut aracStok korunur (Object.assign dokunmaz)
     let ex = bar ? store.products.find((p) => p.barkod === bar) : store.products.find((p) => p.ad === ad);
     if (ex) { Object.assign(ex, data); upd++; } else { store.products.push(Object.assign({ id: genId() }, data)); add++; }
   }
@@ -258,6 +269,8 @@ const MENU = [
       { label: "Personel Hareket Raporu", route: "rapor-personelhareket" },
   ] },
   { ico: "👤", label: "Müşteriler", route: "musteriler" },
+  { ico: "🧑‍🔧", label: "Servisçiler (Bayiler)", route: "servisciler" },
+  { ico: "🚚", label: "Sabah Araç Yükleme", route: "arac-yukleme" },
   { ico: "🗂", label: "Ürünler", children: [
       { label: "Ürünler", route: "urunler" }, { label: "Ürün Ekle & Güncelle", route: "urun-ekle" },
       { label: "Varyantlı Ürün Ekle", route: "urun-varyantli" }, { label: "Ürün Grupları", route: "urun-gruplari" },
@@ -344,6 +357,7 @@ function formModal(title, fields, item, onSave) {
     const val = item && item[f.key] != null ? item[f.key] : (f.def != null ? f.def : "");
     if (f.type === "select") return `<div class="field"><label>${f.label}</label><select data-k="${f.key}">${f.options.map((o) => { const v = typeof o === "object" ? o.v : o; const t = typeof o === "object" ? o.t : o; return `<option value="${esc(v)}" ${String(val) === String(v) ? "selected" : ""}>${esc(t)}</option>`; }).join("")}</select></div>`;
     if (f.type === "textarea") return `<div class="field"><label>${f.label}</label><textarea data-k="${f.key}" rows="3">${esc(val)}</textarea></div>`;
+    if (f.type === "checkbox") return `<label class="field field-chk"><input data-k="${f.key}" type="checkbox" ${val ? "checked" : ""} /> <span>${f.label}</span></label>`;
     if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">📇 Rehber</button></div></div>`;
     return `<div class="field"><label>${f.label}${f.req ? " *" : ""}</label><input data-k="${f.key}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""} value="${esc(val)}" placeholder="${f.ph || ""}" /></div>`;
   }).join("");
@@ -360,7 +374,7 @@ function formModal(title, fields, item, onSave) {
       let ok = true;
       fields.forEach((f) => {
         const el = ov.querySelector(`[data-k="${f.key}"]`);
-        let v = el.value;
+        let v = f.type === "checkbox" ? el.checked : el.value;
         if (f.type === "number") v = v === "" ? "" : Number(v);
         if (f.req && (v === "" || v == null)) ok = false;
         data[f.key] = v;
@@ -411,20 +425,21 @@ function renderUrunler() {
       <td>${i + 1}</td><td>📦</td><td>${esc(p.barkod) || "-"}</td>
       <td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "GRUPSUZ ÜRÜN")}</span></td>
       <td class="${low ? "stok-low" : ""}">${num2.format(Number(p.stok) || 0)}</td>
+      <td class="arac-stok">${num2.format(Number(p.aracStok) || 0)}</td>
       <td>${Number(p.kdv) || 0}</td><td>${p.kritik === "" || p.kritik == null ? 0 : Number(p.kritik)}</td>
       <td>${money.format(Number(p.alis) || 0)}</td><td>${money.format(Number(p.satis) || 0)}</td>
       <td><div class="act-btns"><button class="edit" data-edit="${p.id}">Düzenle</button><button class="del" data-del="${p.id}">Sil</button></div></td>
     </tr>`;
   }).join("");
-  return pageHead("Ürünler", store.products.length + " ürün", [{ label: "＋ Ürün Ekle", route: "urun-ekle" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
-    tableCard(["Sıra", "Görsel", "Ürün Barkodu", "Ürün Adı", "Stok", "KDV", "Kritik Stok", "Alış Fiyatı", "Fiyat 1", "İşlem"], rows, infoLine(store.products.length));
+  return pageHead("Ürünler", store.products.length + " ürün", [{ label: "🚚 Sabah Araç Yükleme", route: "arac-yukleme" }, { label: "＋ Ürün Ekle", route: "urun-ekle" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
+    tableCard(["Sıra", "Görsel", "Ürün Barkodu", "Ürün Adı", "Dükkan", "Araç", "KDV", "Kritik Stok", "Alış Fiyatı", "Fiyat 1", "İşlem"], rows, infoLine(store.products.length));
 }
 function mountUrunler() {
   document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { editProductId = b.dataset.edit; navigate("urun-ekle"); }));
   document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => { const p = findProduct(b.dataset.del); if (p && confirm(`"${p.ad}" silinsin mi?`)) { store.products = store.products.filter((x) => x.id !== p.id); saveStore(); render(); } }));
   const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportProducts);
   const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importProducts));
-  const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Kritik Stok", "KDV", "Birim"]])));
+  const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"]])));
   wireTableSearch();
 }
 let editProductId = null;
@@ -465,16 +480,83 @@ function mountUrunEkle() {
 
 /* ============ MÜŞTERİLER ============ */
 function renderMusteriler() {
-  const toplamBorc = store.customers.reduce((s, c) => s + customerBorc(c.id), 0);
-  const rows = store.customers.map((c, i) => {
+  const liste = store.customers.filter((c) => !c.bayi); // servisçiler (bayi) ayrı sayfada
+  const toplamBorc = liste.reduce((s, c) => s + customerBorc(c.id), 0);
+  const rows = liste.map((c, i) => {
     const borc = customerBorc(c.id);
     return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
-  return pageHead("Müşteriler", `${store.customers.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
-    tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(store.customers.length));
+  return pageHead("Müşteriler", `${liste.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
+    tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
 }
-function openYeniMusteri(onDone, item) {
-  formModal(item ? "Müşteri Düzenle" : "Yeni Müşteri Oluştur", [
+// Servisçiler (bayi) — normal müşterilerden ayrı; mekanik olarak müşteri (aynı borç/tahsilat/özel fiyat).
+function renderServisciler() {
+  const liste = store.customers.filter((c) => c.bayi);
+  const toplamBorc = liste.reduce((s, c) => s + customerBorc(c.id), 0);
+  const rows = liste.map((c, i) => {
+    const borc = customerBorc(c.id);
+    const ozelSay = c.ozelFiyatlar ? Object.keys(c.ozelFiyatlar).length : 0;
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td>${ozelSay ? ozelSay + " ürün" : "-"}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+  }).join("");
+  return pageHead("Servisçiler (Bayiler)", `${liste.length} servisçi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Servisçi", act: "yeni-servisci" }]) +
+    `<p class="hint" style="margin:0 2px 10px">Servisçiler senden toptan/düşük fiyata alan bayiler. Özel fiyatları satış ekranından ürün satırına dokunup "bu fiyatı … için kaydet" ile tanımlanır; dükkan modunda satış onların stoğundan (dükkan) düşer.</p>` +
+    tableCard(["Sıra", "Servisçi", "Alışveriş", "Özel Fiyat", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
+}
+function mountServisciler() {
+  const y = document.querySelector('[data-act="yeni-servisci"]'); if (y) y.addEventListener("click", () => openYeniMusteri(null, null, { bayi: true }));
+  document.querySelectorAll("[data-duzenlec]").forEach((b) => b.addEventListener("click", () => openYeniMusteri(null, findCustomer(b.dataset.duzenlec))));
+  document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
+  document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
+  document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
+  wireTableSearch();
+}
+/* ---- Sabah Araç Yükleme: dükkandan araca aktarım ---- */
+const ARAC_STD_ONERI = { "sırma sade soda": 5, "beypazarı sade soda": 8, "kızılay sade soda": 4, "sırma limonlu soda": 6 };
+function aracStdVal(p) { if (p.aracStandart != null && p.aracStandart !== "") return p.aracStandart; const k = (p.ad || "").toLocaleLowerCase("tr"); return ARAC_STD_ONERI[k] != null ? ARAC_STD_ONERI[k] : ""; }
+function renderAracYukleme() {
+  const liste = store.products.filter((p) => p.gorunur !== false).slice().sort((a, b) => (a.grup || "").localeCompare(b.grup || "", "tr") || (a.ad || "").localeCompare(b.ad || "", "tr"));
+  const toplamArac = liste.reduce((s, p) => s + (Number(p.aracStok) || 0), 0);
+  const toplamDukkan = liste.reduce((s, p) => s + (Number(p.stok) || 0), 0);
+  const rows = liste.map((p) => `<tr>
+      <td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "-")} · ${esc(p.birim || "Adet")}</span></td>
+      <td><input class="ay-in" data-std="${p.id}" type="number" inputmode="numeric" value="${aracStdVal(p)}" placeholder="0" /></td>
+      <td class="ay-num">${num2.format(Number(p.aracStok) || 0)}</td>
+      <td class="ay-num">${num2.format(Number(p.stok) || 0)}</td>
+      <td><input class="ay-in ay-yuk" data-yuk="${p.id}" type="number" inputmode="numeric" placeholder="0" /></td>
+    </tr>`).join("");
+  return pageHead("Sabah Araç Yükleme", `Araç toplam: ${num2.format(toplamArac)} · Dükkan toplam: ${num2.format(toplamDukkan)}`, [{ label: "↩ Ürünler", route: "urunler" }]) +
+    `<div class="ay-tools"><button class="btn soft" data-act="stdDoldur" type="button">⤵ Standarda Göre Doldur</button><button class="btn ok" data-act="ayUygula" type="button">✓ Yüklemeyi Uygula</button></div>
+     <p class="hint" style="margin:0 2px 8px">Standart = araçta olması gereken hedef. "Standarda Göre Doldur" eksik kadar Yükle sütununu doldurur. Uygula → dükkandan araca aktarılır (Yükle negatifse araçtan dükkana boşaltılır). Standart değerleri de kaydedilir.</p>` +
+    tableCard(["Ürün", "Standart", "Araç", "Dükkan", "Yükle (±)"], rows, "");
+}
+function mountAracYukleme() {
+  const doldur = document.querySelector('[data-act="stdDoldur"]');
+  if (doldur) doldur.addEventListener("click", () => {
+    store.products.forEach((p) => {
+      const stdEl = document.querySelector(`[data-std="${p.id}"]`), yukEl = document.querySelector(`[data-yuk="${p.id}"]`);
+      if (!stdEl || !yukEl) return;
+      const std = stdEl.value === "" ? 0 : Number(stdEl.value) || 0;
+      const eksik = Math.max(0, std - (Number(p.aracStok) || 0));
+      yukEl.value = eksik > 0 ? eksik : "";
+    });
+  });
+  const uygula = document.querySelector('[data-act="ayUygula"]');
+  if (uygula) uygula.addEventListener("click", () => {
+    let n = 0, adet = 0;
+    store.products.forEach((p) => {
+      const stdEl = document.querySelector(`[data-std="${p.id}"]`), yukEl = document.querySelector(`[data-yuk="${p.id}"]`);
+      if (stdEl) p.aracStandart = stdEl.value === "" ? "" : Number(stdEl.value) || 0;
+      const v = yukEl ? (yukEl.value === "" ? 0 : Number(yukEl.value) || 0) : 0;
+      if (v !== 0) { p.aracStok = (Number(p.aracStok) || 0) + v; p.stok = (Number(p.stok) || 0) - v; store.aracHareket.push({ id: genId(), urunId: p.id, ad: p.ad, adet: v, yon: v > 0 ? "yukle" : "bosalt", tarih: new Date().toISOString() }); n++; adet += Math.abs(v); }
+    });
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+    alert(`Araç yükleme uygulandı ✔\n${n} üründe toplam ${num2.format(adet)} birim hareket. Dükkandan düştü, araca eklendi.`);
+    render();
+  });
+}
+function openYeniMusteri(onDone, item, preset) {
+  const seed = item || preset || null; // preset: yeni kayıt için varsayılan değerler (ör. bayi:true)
+  formModal(item ? "Müşteri Düzenle" : (preset && preset.bayi ? "Yeni Servisçi (Bayi)" : "Yeni Müşteri Oluştur"), [
     { key: "ad", label: "Müşteri Tanımı", req: true, ph: "Ad Soyad / Ünvan" },
     { key: "vade", label: "Vade Süresi (gün)", type: "number", ph: "opsiyonel" },
     { key: "telefon", label: "Telefon", ph: "05xx", rehber: true },
@@ -484,7 +566,8 @@ function openYeniMusteri(onDone, item) {
     { key: "vergiDairesi", label: "Vergi Dairesi" },
     { key: "vergiNo", label: "Vergi No / TCKN" },
     { key: "acilis", label: "Açılış Borcu (₺)", type: "number", step: "0.01", def: 0 },
-  ], item, (data) => {
+    { key: "bayi", label: "Servisçi (senden toptan/düşük fiyata alan bayi)", type: "checkbox" },
+  ], seed, (data) => {
     if (item) Object.assign(item, data);
     else store.customers.push(Object.assign({ id: genId() }, data));
     saveStore(); if (onDone) onDone(); else render();
@@ -681,6 +764,12 @@ function renderSatis() {
           <button class="sab-ico" id="sabMuh" type="button" title="Muhtelif tutar ekle"><span class="sab-num">100</span></button>
           <button class="sab-ico" id="posYazdir" type="button" title="Yazdır">&#128424;</button>
         </div>
+      </div>
+
+      <!-- 0b. Stok kaynağı modu: Dükkan / Araç -->
+      <div class="stok-mod-bar">
+        <span class="smb-label">Stok kaynağı</span>
+        <button class="smb-toggle ${stokModu}" id="stokModBtn" type="button">${stokModu === "arac" ? "🚗 Araç" : "🏪 Dükkan"}<span class="smb-swap">↔ değiştir</span></button>
       </div>
 
       <!-- 1. Özet çubuğu: Miktar | Brüt | İskonto | Tutar -->
@@ -1018,7 +1107,7 @@ function finalizeSale(type, odemeAdi) {
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
   store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString() });
-  c.items.forEach((i) => { const pr = findProduct(i.urunId); if (pr) pr.stok = (Number(pr.stok) || 0) - i.adet; });
+  c.items.forEach((i) => stokDus(i.urunId, i.adet)); // aktif moda göre (araç/dükkan) stok düş
   saveStore();
   pos.carts[pos.active] = newCart();
   refreshPOS();
@@ -1094,6 +1183,7 @@ function mountSatis() {
   document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
   const pick = document.getElementById("custPick"); if (pick) pick.addEventListener("click", openCustPicker);
   const bAdd = document.getElementById("bundleAdd"); if (bAdd) bAdd.addEventListener("click", bundleUygula);
+  const smBtn = document.getElementById("stokModBtn"); if (smBtn) smBtn.addEventListener("click", () => { stokModuAyarla(stokModu === "arac" ? "dukkan" : "arac"); render(); });
   const pers = document.getElementById("posPersonel"); if (pers) pers.addEventListener("change", () => { pos.personelId = pers.value || null; });
   const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
   const doBar = () => { const code = bar.value.trim(); if (!code) return; const p = store.products.find((x) => x.barkod === code); if (p) { addToCart(p.id); bar.value = ""; } else alert("Bu barkodla ürün yok."); };
@@ -1956,8 +2046,10 @@ const PAGES = {
 
   musteriler: { render: renderMusteriler, mount: mountMusteriler },
   "musteri-detay": { render: renderMusteriDetay, mount: mountMusteriDetay },
+  servisciler: { render: renderServisciler, mount: mountServisciler },
 
   urunler: { render: renderUrunler, mount: mountUrunler },
+  "arac-yukleme": { render: renderAracYukleme, mount: mountAracYukleme },
   "urun-ekle": { render: renderUrunEkle, mount: mountUrunEkle },
   "urun-varyantli": { render: () => renderUrunEkle(), mount: mountUrunEkle },
   "urun-gruplari": { render: () => crudPage({ title: "Ürün Grupları", key: "groups", newLabel: "Yeni Grup", columns: ["Sıra", "Grup Adı"], row: (g, i) => [i + 1, esc(g.ad)], fields: [{ key: "ad", label: "Grup Adı", req: true }] }) + `<div class="card" style="margin-top:12px"><button class="btn green lg" id="autoKat" type="button">🏷️ Ürünleri Otomatik Kategorile</button><p class="hint" style="margin-top:8px">Tüm ürünlerini Sıcak/Soğuk İçecekler, Temizlik, Servis vb. temiz kategorilere dağıtır. Zaten kategorili ürünlere ve elle seçtiklerine dokunmaz.</p></div>`, mount: () => { mountCrud({ key: "groups", fields: [{ key: "ad", label: "Grup Adı", req: true }] }); const b = document.getElementById("autoKat"); if (b) b.addEventListener("click", () => { if (confirm("Tüm ürünler otomatik kategorilere dağıtılsın mı?")) otomatikKategorile(); }); } },
@@ -2200,6 +2292,7 @@ function rotaKaydet(ad, musteriIds) {
 function servisBaslat(musteriIds) {
   servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.satislar = [];
   servis.acik = servis.musteriIds[0] || null; servis.adim = "onay";
+  stokModuAyarla("arac"); // servis = araçtan satış
   navigate("rota"); servisKonumIzle();
 }
 function servisSonrakiAc() {
@@ -2229,7 +2322,7 @@ function ziyaretKapat(id) {
   const iadeUrun = (document.getElementById("kpIadeUrun") || {}).value;
   const iadeAdet = Number((document.getElementById("kpIadeAdet") || {}).value) || 0;
   let iadeTutar = 0;
-  if (iadeUrun && iadeAdet > 0) { const pr = findProduct(iadeUrun); if (pr) { iadeTutar = (Number(pr.satis) || 0) * iadeAdet; store.iadeler.push({ id: genId(), urunId: pr.id, ad: pr.ad, adet: iadeAdet, tutar: iadeTutar, musteriId: id, tarih: new Date().toISOString() }); pr.stok = (Number(pr.stok) || 0) + iadeAdet; if (id) store.payments.push({ id: genId(), musteriId: id, tutar: iadeTutar, not: "Ürün iadesi: " + pr.ad, tarih: new Date().toISOString() }); } }
+  if (iadeUrun && iadeAdet > 0) { const pr = findProduct(iadeUrun); if (pr) { iadeTutar = (Number(pr.satis) || 0) * iadeAdet; store.iadeler.push({ id: genId(), urunId: pr.id, ad: pr.ad, adet: iadeAdet, tutar: iadeTutar, musteriId: id, tarih: new Date().toISOString() }); stokEkle(pr.id, iadeAdet); if (id) store.payments.push({ id: genId(), musteriId: id, tutar: iadeTutar, not: "Ürün iadesi: " + pr.ad, tarih: new Date().toISOString() }); } }
   const talep = ((document.getElementById("kpTalep") || {}).value || "").trim();
   if (talep) store.talepler.push({ id: genId(), musteriId: id, metin: talep, tarih: new Date().toISOString(), durum: "acik" });
   const not = ((document.getElementById("kpNot") || {}).value || "").trim();
@@ -2293,6 +2386,7 @@ function servisBitir() {
     yok: zys.filter((z) => z.sonuc === "yok").length,
   };
   servis.aktif = false; servis.acik = null;
+  stokModuAyarla("dukkan"); // servis bitti = dükkana dön
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
   servis.musteriIds = []; servis.edilen = []; servis.paslar = []; servis.satislar = []; servis.sonSatisId = null;
   try { localStorage.removeItem("servis-v1"); } catch (e) {}
