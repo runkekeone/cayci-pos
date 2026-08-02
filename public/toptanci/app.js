@@ -72,7 +72,7 @@ function fmtDate(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${
 function fmtDateShort(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`; }
 function isToday(iso) { return localDateStr(new Date(iso)) === todayStr(); }
 function inRange(iso, from, to) { const d = localDateStr(new Date(iso)); return (!from || d >= from) && (!to || d <= to); }
-const KATEGORILER = ["Sıcak İçecekler", "Soğuk İçecekler", "Atıştırmalık", "Şeker & Gıda", "Servis & Bardak", "Temizlik", "Kağıt & Hijyen", "Mutfak & Ekipman", "Mobilya & Dış Mekan", "Oyun & Eğlence", "Kırtasiye", "Teknik & Güvenlik"];
+const KATEGORILER = ["Su", "Sodalar", "Toz İçecekler", "Çaylar", "Kahve & Yan Ürünler", "Oyun Kağıtları", "Sıcak İçecekler", "Soğuk İçecekler", "Atıştırmalık", "Şeker & Gıda", "Servis & Bardak", "Temizlik", "Kağıt & Hijyen", "Mutfak & Ekipman", "Mobilya & Dış Mekan", "Oyun & Eğlence", "Kırtasiye", "Teknik & Güvenlik"];
 function allGroupNames() {
   const extra = store.groups.map((g) => g.ad);
   return [...new Set(KATEGORILER.concat(extra).concat(["GRUPSUZ ÜRÜN"]))];
@@ -809,10 +809,15 @@ function posSoloCard(p) {
 // Kategori görseli: ada göre emoji + renk sınıfı
 function katGorsel(name) {
   const n = ocrNorm(name);
-  if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "🧽", cls: "k-clean" };
-  if (/sicak icecek|\bcay\b|kahve|toz icecek|sahlep|salep|granul/.test(n)) return { ic: "🍵", cls: "k-tea" };
-  if (/soguk icecek|mesrubat|icecek|soda|kola|gazoz|meyve suyu|ayran|enerji|maden|\bsu\b/.test(n)) return { ic: "🥤", cls: "k-drink" };
   if (/oyun|eglence/.test(n)) return { ic: "🃏", cls: "k-game" };
+  if (/caylar|\bcay\b/.test(n)) return { ic: "🍵", cls: "k-tea" };
+  if (/kahve|yan urun|granul|3u1|3ü1/.test(n)) return { ic: "☕", cls: "k-tea" };
+  if (/toz icecek/.test(n)) return { ic: "🧃", cls: "k-drink" };
+  if (/soda/.test(n)) return { ic: "🥤", cls: "k-drink" };
+  if (/\bsu\b/.test(n)) return { ic: "💧", cls: "k-drink" };
+  if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "🧽", cls: "k-clean" };
+  if (/sicak icecek|sahlep|salep/.test(n)) return { ic: "🍵", cls: "k-tea" };
+  if (/soguk icecek|mesrubat|icecek|kola|gazoz|meyve suyu|ayran|enerji|maden/.test(n)) return { ic: "🥤", cls: "k-drink" };
   if (/servis|bardak|fincan|tabak/.test(n)) return { ic: "🍽️", cls: "k-serve" };
   if (/seker|gida|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "🍬", cls: "k-sweet" };
   if (/sut|yogurt|peynir|kahvalt|tereyag/.test(n)) return { ic: "🥛", cls: "k-milk" };
