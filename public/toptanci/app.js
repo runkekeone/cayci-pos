@@ -728,8 +728,8 @@ function renderSatis() {
             </div>
             <div class="cat-tabs" id="catTabs">${catTabs}</div>
           </div>
-          <!-- 9. Ürün ızgarası -->
-          <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
+          <!-- 9. Ürün ızgarası / listesi -->
+          <div class="prod-grid ${pos.cat === "ANA" && !ocrNorm(pos.q || "") ? "" : "list-mode"}" id="prodGrid">${prodGridHTML()}</div>
         </div>
       </div>
 
@@ -821,14 +821,18 @@ function prodGridHTML() {
     if (!fams.has(key)) fams.set(key, { title: t, members: [] });
     fams.get(key).members.push(p);
   });
-  const cards = [];
+  const rows = [];
   for (const f of fams.values()) {
-    if (f.members.length < 2) { cards.push(posSoloCard(f.members[0])); continue; }
+    if (f.members.length < 2) { rows.push(posListRow(f.members[0])); continue; }
     const fiyat = f.members.map((m) => Number(m.satis) || 0).filter((x) => x > 0);
     const min = fiyat.length ? Math.min(...fiyat) : 0;
-    cards.push(`<div class="prod-card fam" data-fam="${esc(f.title)}"><span class="fam-badge">${f.members.length} marka</span><span class="p-name">${esc(f.title)}</span><span class="p-price">${min ? money.format(min) + "+" : ""}</span></div>`);
+    rows.push(`<button class="prod-row fam" data-fam="${esc(f.title)}" type="button"><span class="pr-name">${esc(f.title)}<em>${f.members.length} marka</em></span><span class="pr-price">${min ? money.format(min) + "+" : ""}</span></button>`);
   }
-  return cards.join("");
+  return rows.join("");
+}
+// Ürün liste satırı (kategori/arama görünümü)
+function posListRow(p) {
+  return `<button class="prod-row" data-add="${p.id}" type="button"><span class="pr-name">${esc(p.ad)}</span><span class="pr-price">${money.format(Number(p.satis) || 0)}</span></button>`;
 }
 /* Aile kutusuna dokununca: marka seçim popup'ı */
 function openAilePopup(title) {
@@ -958,7 +962,16 @@ function finalizeSale(type, odemeAdi) {
 function wireProdCards() {
   document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add));
   document.querySelectorAll("[data-fam]").forEach((el) => el.onclick = () => openAilePopup(el.dataset.fam));
-  document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; render(); });
+  document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; posGridYenile(); });
+}
+// Ürün/kategori ızgarasını sayfayı en üste atmadan tazele (partial). Kategori seçili + arama yoksa
+// kategori kartları; aksi halde ürün LİSTESİ (list-mode).
+function posGridYenile() {
+  const g = document.getElementById("prodGrid");
+  const listMode = !(pos.cat === "ANA" && !ocrNorm(pos.q || ""));
+  if (g) { g.classList.toggle("list-mode", listMode); g.innerHTML = prodGridHTML(); wireProdCards(); }
+  document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x.dataset.cat === pos.cat));
+  const psx = document.getElementById("prodSearchX"); if (psx) psx.style.display = pos.q ? "" : "none";
 }
 function openCustPicker() {
   const listHTML = store.customers.length ? `<ul class="pick-list">${store.customers.map((c) => `<li data-pick="${c.id}">${esc(c.ad)} <small>· borç ${money.format(customerBorc(c.id))}</small></li>`).join("")}</ul>` : `<p class="sub">Kayıtlı müşteri yok.</p>`;
@@ -995,7 +1008,7 @@ function openIskModal() {
 function mountSatis() {
   wireProdCards(); wireCartRow();
   document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
-  document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; render(); }));
+  document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; posGridYenile(); }));
   /* Tek-akışlı düzen: mobil bottom-sheet kaldırıldı (fiş akış içinde) */
   document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
   document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
@@ -1016,9 +1029,8 @@ function mountSatis() {
   const taraBtn = document.getElementById("taraFab"); if (taraBtn) taraBtn.addEventListener("click", taraBaslat);
   const psearch = document.getElementById("prodSearch");
   const psx = document.getElementById("prodSearchX");
-  const gridYenile = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); } if (psx) psx.style.display = pos.q ? "" : "none"; };
-  if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; gridYenile(); });
-  if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } gridYenile(); });
+  if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; posGridYenile(); });
+  if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } posGridYenile(); });
   syncTotals();
 }
 

@@ -548,6 +548,15 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .cat-card.k-milk { background: #f3f6fb; border-color: #dbe4ef; }
 .cat-card.k-paper { background: #f5f3fb; border-color: #ddd6ef; }
 .cat-card.k-misc { background: #fff; border-color: var(--line); }
+/* Ürün LİSTE görünümü (kategori seçilince alt alta satırlar) */
+.prod-grid.list-mode { display: flex; flex-direction: column; gap: 6px; }
+.prod-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 12px 14px; cursor: pointer; text-align: left; box-shadow: var(--shadow-soft); transition: background .12s ease, transform .06s ease; }
+.prod-row:hover { border-color: var(--brand); }
+.prod-row:active { transform: scale(0.995); background: var(--brand-soft); }
+.prod-row .pr-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prod-row .pr-name em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--brand-dark); background: var(--brand-soft); padding: 1px 7px; border-radius: var(--radius-pill); margin-left: 8px; }
+.prod-row .pr-price { flex: 0 0 auto; font-size: 15px; font-weight: 800; color: var(--green-d); letter-spacing: -0.2px; }
+.prod-row.fam { border-color: var(--brand-ring); }
 .aile-pop { display: flex; flex-direction: column; gap: 8px; }
 .aile-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 1px solid var(--line); background: #fff; border-radius: var(--radius); padding: 13px 14px; cursor: pointer; text-align: left; transition: border-color .15s ease, background .15s ease; }
 .aile-opt:active { background: var(--brand-soft); border-color: var(--brand); }
