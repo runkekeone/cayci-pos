@@ -510,6 +510,12 @@ table.grid tbody tr:hover { background: #f7f9fc; }
 .smb-toggle.arac { background: #fdf3e8; border-color: #f3ddb4; color: var(--accent-ink); }
 .smb-toggle .smb-swap { font-size: 10px; font-weight: 600; opacity: .7; }
 .smb-toggle:active { transform: scale(0.97); }
+.smb-gelismis { margin-left: auto; border: 1.5px solid var(--line); background: #fff; color: var(--muted); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.smb-gelismis.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); }
+.smb-gelismis:active { transform: scale(0.97); }
+/* Varyasyonu olan kart (gelişmiş mod) */
+.prod-card.has-var { position: relative; border-color: var(--brand-ring); }
+.prod-card .var-badge { position: absolute; top: 5px; right: 5px; font-size: 8.5px; font-weight: 800; color: var(--brand-dark); background: var(--brand-soft); border-radius: var(--radius-pill); padding: 1px 6px; letter-spacing: .2px; }
 /* Servisçi (bayi) onay kutusu — formModal checkbox alanı */
 .field-chk { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 6px 2px; font-size: 14px; color: #3a4250; }
 .field-chk input { width: 20px; height: 20px; accent-color: var(--brand); flex: 0 0 auto; }

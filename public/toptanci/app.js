@@ -58,6 +58,33 @@ function aktifStok(p) { return stokModu === "arac" ? (Number(p.aracStok) || 0) :
 function stokDus(urunId, adet) { const p = findProduct(urunId); if (!p) return; if (stokModu === "arac") p.aracStok = (Number(p.aracStok) || 0) - adet; else p.stok = (Number(p.stok) || 0) - adet; }
 function stokEkle(urunId, adet) { const p = findProduct(urunId); if (!p) return; if (stokModu === "arac") p.aracStok = (Number(p.aracStok) || 0) + adet; else p.stok = (Number(p.stok) || 0) + adet; }
 
+/* ---- Gelişmiş mod: karta basılı tut → aynı çeşidin (altKategori) varyasyonları açılır ---- */
+let gelismisMod = false;
+try { gelismisMod = localStorage.getItem("gelismis-mod-v1") === "1"; } catch (e) {}
+function gelismisModAyarla(on) { gelismisMod = !!on; try { localStorage.setItem("gelismis-mod-v1", on ? "1" : "0"); } catch (e) {} }
+// Bir ürünün varyasyon kardeşleri = aynı altKategori'deki görünür ürünler
+function varyantKardesler(p) {
+  const alt = (p.altKategori || "").trim();
+  if (!alt) return [p];
+  return store.products.filter((x) => x.gorunur !== false && (x.altKategori || "").trim() === alt);
+}
+function varyantPopup(urunId) {
+  const p = findProduct(urunId); if (!p) return;
+  const kardes = varyantKardesler(p);
+  if (kardes.length < 2) { addToCart(urunId); return; }
+  const body = `<div class="aile-pop">${kardes.map((m) => `<button class="aile-opt" data-vadd="${m.id}" type="button"><span class="ao-ad">${esc(m.ad)}</span><span class="ao-fiyat">${money.format(Number(m.satis) || 0)}</span></button>`).join("")}</div>`;
+  const mo = openModal((p.altKategori || "Çeşitler") + " — çeşit seç", body, { noFoot: true, onMount: (ov) => { ov.querySelectorAll("[data-vadd]").forEach((b) => b.onclick = () => { addToCart(b.dataset.vadd); mo.close(); }); } });
+}
+// Uzun basma (dokunma/fare) — long-press olunca cb; sonraki tap engellenir (el._lpFired)
+function longPress(el, cb) {
+  let t = null;
+  const s = () => { el._lpFired = false; t = setTimeout(() => { el._lpFired = true; cb(); }, 450); };
+  const c = () => { if (t) { clearTimeout(t); t = null; } };
+  el.addEventListener("touchstart", s, { passive: true });
+  el.addEventListener("touchend", c); el.addEventListener("touchmove", c);
+  el.addEventListener("mousedown", s); el.addEventListener("mouseup", c); el.addEventListener("mouseleave", c);
+}
+
 function customerBorc(id) {
   const c = findCustomer(id); if (!c) return 0;
   let b = Number(c.acilis) || 0;
@@ -462,6 +489,7 @@ function renderUrunEkle() {
         <div class="field"><label>Ürün Grubu</label><select name="grup">${grupOpts}</select></div>
         <div class="field"><label>Ürün Birimi (koli/paketse seç — satış o birimden)</label><select name="birim">${["Adet", "Koli", "Paket", "Çuval", "Kg", "Litre"].map((u) => `<option ${p && p.birim === u ? "selected" : ""}>${u}</option>`).join("")}</select></div>
         <div class="field"><label>Satış Sayfasında Göster</label><select name="gorunur"><option value="1" ${!gorunurSel ? "selected" : ""}>Göster</option><option value="0" ${gorunurSel ? "selected" : ""}>Gösterme</option></select></div>
+        <div class="field"><label>Ön Ekranda Göster (Ana Ürün)</label><select name="anaUrun"><option value="1" ${p && p.anaUrun ? "selected" : ""}>Evet — ön ekranda</option><option value="0" ${!(p && p.anaUrun) ? "selected" : ""}>Hayır — sadece kategoriden</option></select></div>
       </div>
       <div style="margin-top:16px"><button class="btn green lg" type="submit">💾 ${p ? "Güncelle" : "Ürünü Kaydet"}</button></div>
     </form>`;
@@ -470,7 +498,7 @@ function mountUrunEkle() {
   document.getElementById("urunForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const data = { ad: (f.get("ad") || "").trim(), barkod: (f.get("barkod") || "").trim(), satis: f.get("satis"), alis: f.get("alis"), stok: f.get("stok"), kritik: f.get("kritik"), kdv: f.get("kdv"), grup: f.get("grup"), birim: f.get("birim"), gorunur: f.get("gorunur") === "1" };
+    const data = { ad: (f.get("ad") || "").trim(), barkod: (f.get("barkod") || "").trim(), satis: f.get("satis"), alis: f.get("alis"), stok: f.get("stok"), kritik: f.get("kritik"), kdv: f.get("kdv"), grup: f.get("grup"), birim: f.get("birim"), gorunur: f.get("gorunur") === "1", anaUrun: f.get("anaUrun") === "1" };
     if (!data.ad) { alert("Ürün adı zorunlu."); return; }
     if (editProductId) Object.assign(findProduct(editProductId), data);
     else store.products.push(Object.assign({ id: genId() }, data));
@@ -766,10 +794,11 @@ function renderSatis() {
         </div>
       </div>
 
-      <!-- 0b. Stok kaynağı modu: Dükkan / Araç -->
+      <!-- 0b. Stok kaynağı modu + Gelişmiş çeşit modu -->
       <div class="stok-mod-bar">
         <span class="smb-label">Stok kaynağı</span>
         <button class="smb-toggle ${stokModu}" id="stokModBtn" type="button">${stokModu === "arac" ? "🚗 Araç" : "🏪 Dükkan"}<span class="smb-swap">↔ değiştir</span></button>
+        <button class="smb-gelismis ${gelismisMod ? "on" : ""}" id="gelismisBtn" type="button" title="Açıkken: karta basılı tut → çeşitleri seç">⚙ Gelişmiş${gelismisMod ? " ✓" : ""}</button>
       </div>
 
       <!-- 1. Özet çubuğu: Miktar | Brüt | İskonto | Tutar -->
@@ -898,7 +927,8 @@ function aileGetir(ad) {
   return null;
 }
 function posSoloCard(p) {
-  return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
+  const cesit = gelismisMod && varyantKardesler(p).length > 1;
+  return `<div class="prod-card${cesit ? " has-var" : ""}" data-add="${p.id}">${cesit ? `<span class="var-badge">⋮ çeşit</span>` : ""}<span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
 }
 // Müşterinin son siparişindeki (hâlâ mevcut) ürünler — bundle önerisi
 function musteriSonSiparis(id) {
@@ -967,8 +997,12 @@ function catGridHTML() {
 }
 function prodGridHTML() {
   const q = ocrNorm(pos.q || "");
-  // Arama yoksa ve ANA'daysak: önce kategori kartları
-  if (pos.cat === "ANA" && !q) return catGridHTML();
+  // Arama yoksa ve ANA'daysak: ön ekran = ana ürünler; yoksa kategori kartları
+  if (pos.cat === "ANA" && !q) {
+    const ana = store.products.filter((p) => p.gorunur !== false && p.anaUrun);
+    if (ana.length) return ana.map(posSoloCard).join("");
+    return catGridHTML();
+  }
   let list = store.products.filter((p) => p.gorunur !== false);
   if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
   if (q) {
@@ -1130,7 +1164,10 @@ function finalizeSale(type, odemeAdi) {
   }
 }
 function wireProdCards() {
-  document.querySelectorAll("[data-add]").forEach((el) => el.onclick = () => addToCart(el.dataset.add));
+  document.querySelectorAll("[data-add]").forEach((el) => {
+    el.onclick = () => { if (el._lpFired) { el._lpFired = false; return; } addToCart(el.dataset.add); };
+    if (gelismisMod) longPress(el, () => varyantPopup(el.dataset.add)); // basılı tut → çeşit seç
+  });
   document.querySelectorAll("[data-fam]").forEach((el) => el.onclick = () => openAilePopup(el.dataset.fam));
   document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; posGridYenile(); });
 }
@@ -1184,6 +1221,7 @@ function mountSatis() {
   const pick = document.getElementById("custPick"); if (pick) pick.addEventListener("click", openCustPicker);
   const bAdd = document.getElementById("bundleAdd"); if (bAdd) bAdd.addEventListener("click", bundleUygula);
   const smBtn = document.getElementById("stokModBtn"); if (smBtn) smBtn.addEventListener("click", () => { stokModuAyarla(stokModu === "arac" ? "dukkan" : "arac"); render(); });
+  const gmBtn = document.getElementById("gelismisBtn"); if (gmBtn) gmBtn.addEventListener("click", () => { gelismisModAyarla(!gelismisMod); if (gelismisMod) alert("Gelişmiş mod açık: bir ürüne BASILI TUT → aynı çeşidin diğer markaları/varyasyonları açılır. Normal dokunma = ürünü ekler."); render(); });
   const pers = document.getElementById("posPersonel"); if (pers) pers.addEventListener("change", () => { pos.personelId = pers.value || null; });
   const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
   const doBar = () => { const code = bar.value.trim(); if (!code) return; const p = store.products.find((x) => x.barkod === code); if (p) { addToCart(p.id); bar.value = ""; } else alert("Bu barkodla ürün yok."); };
