@@ -108,7 +108,7 @@ function fmtDate(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${
 function fmtDateShort(iso) { const d = new Date(iso); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`; }
 function isToday(iso) { return localDateStr(new Date(iso)) === todayStr(); }
 function inRange(iso, from, to) { const d = localDateStr(new Date(iso)); return (!from || d >= from) && (!to || d <= to); }
-const KATEGORILER = ["Su", "Sodalar", "Toz İçecekler", "Çaylar", "Kahve & Yan Ürünler", "Oyun Kağıtları", "Sıcak İçecekler", "Soğuk İçecekler", "Atıştırmalık", "Şeker & Gıda", "Servis & Bardak", "Temizlik", "Kağıt & Hijyen", "Mutfak & Ekipman", "Mobilya & Dış Mekan", "Oyun & Eğlence", "Kırtasiye", "Teknik & Güvenlik"];
+const KATEGORILER = ["Su", "Sodalar", "Meyve Suyu", "Gazlı İçecek", "Ayran", "Gazoz", "Toz İçecekler", "Çaylar", "Kahve & Yan Ürünler", "Oyun Kağıtları", "Okey & Oyun", "Servis Ekipmanı", "Sıcak İçecekler", "Soğuk İçecekler", "Atıştırmalık", "Şeker & Gıda", "Servis & Bardak", "Temizlik", "Kağıt & Hijyen", "Mutfak & Ekipman", "Mobilya & Dış Mekan", "Oyun & Eğlence", "Kırtasiye", "Teknik & Güvenlik"];
 function allGroupNames() {
   const extra = store.groups.map((g) => g.ad);
   return [...new Set(KATEGORILER.concat(extra).concat(["GRUPSUZ ÜRÜN"]))];
@@ -965,10 +965,16 @@ function bundleUygula() {
 // Kategori görseli: ada göre emoji + renk sınıfı
 function katGorsel(name) {
   const n = ocrNorm(name);
+  if (/okey/.test(n)) return { ic: "🀄", cls: "k-game" };
   if (/oyun|eglence/.test(n)) return { ic: "🃏", cls: "k-game" };
+  if (/servis ekip|bardak|tabak|kasik/.test(n)) return { ic: "🍽️", cls: "k-serve" };
   if (/caylar|\bcay\b/.test(n)) return { ic: "🍵", cls: "k-tea" };
   if (/kahve|yan urun|granul|3u1|3ü1/.test(n)) return { ic: "☕", cls: "k-tea" };
   if (/toz icecek/.test(n)) return { ic: "🧃", cls: "k-drink" };
+  if (/meyve suyu/.test(n)) return { ic: "🧃", cls: "k-drink" };
+  if (/gazoz/.test(n)) return { ic: "🥤", cls: "k-drink" };
+  if (/gazli|kola|cola|fanta/.test(n)) return { ic: "🥤", cls: "k-drink" };
+  if (/ayran/.test(n)) return { ic: "🥛", cls: "k-milk" };
   if (/soda/.test(n)) return { ic: "🥤", cls: "k-drink" };
   if (/\bsu\b/.test(n)) return { ic: "💧", cls: "k-drink" };
   if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "🧽", cls: "k-clean" };
