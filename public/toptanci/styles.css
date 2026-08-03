@@ -726,6 +726,17 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .zn-bas { font-size: 12px; font-weight: 800; color: #8a6d1e; margin-bottom: 4px; }
 .zn-not { font-size: 13px; color: #4a4335; line-height: 1.35; padding: 2px 0; }
 .zn-not .hint { margin-right: 4px; }
+/* Araç stok kontrol (rota başı) */
+.sk-tools { display: flex; align-items: center; gap: 10px; margin: 2px 2px 8px; }
+.sk-tools .hint { margin-left: auto; }
+.sk-list { padding: 4px 8px; max-height: 60vh; overflow-y: auto; }
+.sk-row { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.sk-row:last-child { border-bottom: 0; }
+.sk-row.done { background: #eef7f0; border-radius: 8px; }
+.sk-chk { width: 22px; height: 22px; accent-color: var(--green); flex: 0 0 auto; }
+.sk-ad { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.sk-ad .hint { font-weight: 500; }
+.sk-adet { flex: 0 0 auto; width: 64px; min-height: 38px; text-align: center; font-size: 15px; font-weight: 700; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
 .rota-secim { max-height: 46vh; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); }
 .rota-sec-satir { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
 .rota-sec-satir:last-child { border-bottom: 0; }

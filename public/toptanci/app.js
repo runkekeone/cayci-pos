@@ -2446,7 +2446,7 @@ function mountSahaKocu() {
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
-const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null };
+const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null, stokBitti: false };
 
 function rotaKaydet(ad, musteriIds) {
   const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
@@ -2455,7 +2455,7 @@ function rotaKaydet(ad, musteriIds) {
 }
 function servisBaslat(musteriIds) {
   servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.satislar = [];
-  servis.acik = servis.musteriIds[0] || null; servis.adim = "onay";
+  servis.acik = servis.musteriIds[0] || null; servis.adim = "onay"; servis.stokBitti = false; // önce araç stok kontrol
   stokModuAyarla("arac"); // servis = araçtan satış
   // Zaten rota sayfasındaysak hash değişmez → render tetiklenmez; elle render et (otomatik geçiş).
   if ((location.hash || "").replace(/^#\/?/, "") === "rota") render(); else navigate("rota");
@@ -2527,14 +2527,14 @@ function mountTalepler() {
   if (typeof wireTableSearch === "function") wireTableSearch();
 }
 function servisKaydet() {
-  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, sonSatisId: servis.sonSatisId, carts: pos.carts, active: pos.active })); } catch (e) {}
+  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, sonSatisId: servis.sonSatisId, stokBitti: servis.stokBitti, carts: pos.carts, active: pos.active })); } catch (e) {}
 }
 function servisYukle() {
   try {
     const s = JSON.parse(localStorage.getItem("servis-v1") || "null");
     if (s && s.aktif) {
       servis.aktif = true; servis.musteriIds = s.musteriIds || []; servis.edilen = s.edilen || []; servis.paslar = s.paslar || [];
-      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.sonSatisId = s.sonSatisId || null; servis.watchId = null;
+      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.sonSatisId = s.sonSatisId || null; servis.watchId = null; servis.stokBitti = !!s.stokBitti;
       if (s.carts && s.carts.length) { pos.carts = s.carts; pos.active = s.active || 0; }
     }
   } catch (e) {}
@@ -3140,7 +3140,19 @@ function servisSihirbaz(id) {
     <button class="btn soft sm" data-sgeri="urun" type="button" style="margin-top:10px">← Ürünlere Dön</button>
   </div>`;
 }
+// Rota başında araç stok kontrol adımı — tek tek say/işaretle, sonra rota başlar
+function aracStokKontrolHTML() {
+  let src = store.products.filter((p) => p.gorunur !== false && p.aractaBulunsun !== false && (Number(p.aracStok) > 0 || Number(p.aracStandart) > 0 || (store.aracHareket || []).some((h) => h.urunId === p.id)));
+  if (!src.length) src = store.products.filter((p) => p.gorunur !== false && p.aractaBulunsun !== false);
+  src = src.slice().sort((a, b) => (a.grup || "").localeCompare(b.grup || "", "tr") || (a.ad || "").localeCompare(b.ad || "", "tr"));
+  const rows = src.map((p) => `<label class="sk-row"><input type="checkbox" class="sk-chk" data-skchk="${p.id}" /><span class="sk-ad">${esc(p.ad)}<span class="hint"> · ${esc(p.grup || "")}</span></span><input class="sk-adet" data-skadet="${p.id}" type="number" inputmode="numeric" value="${Number(p.aracStok) || 0}" /></label>`).join("") || `<p class="hint" style="padding:10px">Araçta ürün yok. Önce "🛒 Araca Al" ile yükle.</p>`;
+  return pageHead("🚚 Araç Stok Kontrol", "Her ürünü say, doğrula, işaretle → sonra rota başlar", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ İptal", cls: "softred", act: "servisbitir" }]) +
+    `<div class="sk-tools"><button class="btn soft sm" id="skHepsi" type="button">✓ Hepsini işaretle</button><span class="hint" id="skDurum">0 / ${src.length} işaretlendi</span></div>
+     <div class="card sk-list">${rows}</div>
+     <button class="btn primary lg" id="skBitir" type="button" style="width:100%;margin-top:12px">✓ Stok Tamam → Rotayı Başlat</button>`;
+}
 function renderServisAktif() {
+  if (!servis.stokBitti) return aracStokKontrolHTML();
   const total = servis.musteriIds.length, done = servis.edilen.length, pas = servis.paslar.length;
   const o = servisGunOzet();
   const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>📋 ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
@@ -3242,6 +3254,22 @@ function mountRotaOlustur() {
 function mountRota() {
   document.querySelectorAll('[data-act="aracalim"]').forEach((aa) => aa.addEventListener("click", aracAlimModal));
   document.querySelectorAll('[data-act="ekstrasatis"]').forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); pos.cat = "ANA"; pos.q = ""; navigate("satis"); }));
+  if (servis.aktif && !servis.stokBitti) {
+    // Araç stok kontrol adımı
+    const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Rota iptal edilsin mi?")) servisBitir(); });
+    const durumGuncelle = () => { const t = document.querySelectorAll(".sk-chk").length, c = document.querySelectorAll(".sk-chk:checked").length; const d = document.getElementById("skDurum"); if (d) d.textContent = c + " / " + t + " işaretlendi"; };
+    document.querySelectorAll(".sk-chk").forEach((ch) => ch.addEventListener("change", () => { const row = ch.closest(".sk-row"); if (row) row.classList.toggle("done", ch.checked); durumGuncelle(); }));
+    const hepsi = document.getElementById("skHepsi"); if (hepsi) hepsi.addEventListener("click", () => { document.querySelectorAll(".sk-chk").forEach((ch) => { ch.checked = true; const r = ch.closest(".sk-row"); if (r) r.classList.add("done"); }); durumGuncelle(); });
+    const bit = document.getElementById("skBitir"); if (bit) bit.addEventListener("click", () => {
+      const t = document.querySelectorAll(".sk-chk").length, c = document.querySelectorAll(".sk-chk:checked").length;
+      if (c < t && !confirm((t - c) + " ürün işaretlenmedi. Yine de rotayı başlat?")) return;
+      document.querySelectorAll("[data-skadet]").forEach((el) => { const p = findProduct(el.dataset.skadet); if (p) { const v = el.value === "" ? 0 : Number(el.value) || 0; if ((Number(p.aracStok) || 0) !== v) { p.aracStok = v; store.aracHareket.push({ id: genId(), urunId: p.id, ad: p.ad, adet: v, yon: "sayim", tarih: new Date().toISOString() }); } } });
+      servis.stokBitti = true; saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); servisKaydet();
+      render();
+    });
+    servisKonumIzle(); servisKaydet();
+    return;
+  }
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
     const fab = document.getElementById("servisOzetFab"); if (fab) fab.addEventListener("click", servisOzetAc);
