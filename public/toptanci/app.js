@@ -2908,6 +2908,36 @@ function rotaListeDoldur() {
     kart.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
 }
+// Rotada araca ürün alımı: seçilen ürünün adedini ARAÇ stoğuna ekler (aracHareket: alim)
+function aracAlimModal() {
+  let q = "";
+  const liste = () => {
+    let list = store.products.filter((p) => p.gorunur !== false);
+    if (q) { const n = ocrNorm(q); list = list.filter((p) => ocrNorm(p.ad).includes(n)); }
+    return list.slice(0, 300).map((p) => `<div class="aa-row"><div class="aa-ad">${esc(p.ad)}<span class="hint" data-aastok="${p.id}"> · araç ${num2.format(Number(p.aracStok) || 0)}</span></div><input class="aa-in" data-aa="${p.id}" type="number" inputmode="numeric" placeholder="0" /><button class="btn ok aa-btn" data-aaadd="${p.id}" type="button">＋</button></div>`).join("") || `<p class="hint" style="padding:8px">Ürün yok.</p>`;
+  };
+  const body = `<input id="aaAra" placeholder="Ürün ara..." style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:11px" /><p class="hint" style="margin:8px 0 4px">Aldığın ürünün adetini yaz → ＋ ile araca ekle.</p><div id="aaList" style="max-height:56vh;overflow:auto">${liste()}</div>`;
+  const m = openModal("🛒 Araca Ürün Al", body, {
+    noFoot: true,
+    onMount: (ov) => {
+      const l = ov.querySelector("#aaList"), ara = ov.querySelector("#aaAra");
+      const wire = () => l.querySelectorAll("[data-aaadd]").forEach((b) => b.onclick = () => {
+        const inp = l.querySelector(`[data-aa="${b.dataset.aaadd}"]`); const n = inp ? Number(inp.value) || 0 : 0;
+        if (n <= 0) { alert("Adet gir."); return; }
+        const p = findProduct(b.dataset.aaadd); if (!p) return;
+        p.aracStok = (Number(p.aracStok) || 0) + n;
+        store.aracHareket.push({ id: genId(), urunId: p.id, ad: p.ad, adet: n, yon: "alim", tarih: new Date().toISOString() });
+        saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+        if (inp) inp.value = "";
+        const st = l.querySelector(`[data-aastok="${p.id}"]`); if (st) st.textContent = " · araç " + num2.format(p.aracStok);
+        b.textContent = "✓"; setTimeout(() => { b.textContent = "＋"; }, 700);
+      });
+      wire();
+      ara.addEventListener("input", () => { q = ara.value.trim(); l.innerHTML = liste(); wire(); });
+      const x = ov.querySelector(".x"); if (x) x.addEventListener("click", () => render());
+    },
+  });
+}
 function renderRota() {
   return servis.aktif ? renderServisAktif() : renderServisBaslat();
 }
@@ -2916,7 +2946,7 @@ function renderServisBaslat() {
   const rlist = rotalar.length
     ? rotalar.map((r) => `<div class="rota-kayit-satir"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri</span></div><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button><button class="rm" data-rsil="${r.id}" type="button">✕</button></div>`).join("")
     : `<p class="hint" style="padding:6px">Kayıtlı rota yok. "Yeni Rota Oluştur" ile başla.</p>`;
-  return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir") +
+  return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }]) +
     `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">＋ Yeni Rota Oluştur & Servisi Başlat</button></div>
     <div class="section-title" style="margin-top:14px">Kayıtlı Rotalar</div>
     <div class="card">${rlist}</div>
@@ -3022,7 +3052,7 @@ function renderServisAktif() {
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
     : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
-  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
     fab + `<div id="servisBanner"></div>` + govde +
     `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
 }
@@ -3115,6 +3145,7 @@ function mountRotaOlustur() {
   };
 }
 function mountRota() {
+  const aa = document.querySelector('[data-act="aracalim"]'); if (aa) aa.addEventListener("click", aracAlimModal);
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
     const fab = document.getElementById("servisOzetFab"); if (fab) fab.addEventListener("click", servisOzetAc);

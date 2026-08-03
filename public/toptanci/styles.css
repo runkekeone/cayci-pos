@@ -529,6 +529,12 @@ td.arac-stok { color: var(--accent-ink); font-weight: 700; }
 .risk-yuksek { color: #fff; background: var(--red); }
 .risk-orta { color: #7a4a06; background: #fdeecb; }
 .risk-dusuk { color: var(--green-d); background: #e6f6ec; }
+/* Araca ürün alımı modalı satırları */
+.aa-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--line-soft); }
+.aa-row .aa-ad { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.aa-row .aa-ad .hint { font-weight: 500; }
+.aa-in { flex: 0 0 auto; width: 66px; min-height: 40px; text-align: center; font-size: 15px; font-weight: 700; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
+.btn.aa-btn { flex: 0 0 auto; min-height: 40px; min-width: 44px; justify-content: center; background: var(--green); border: 0; font-size: 18px; padding: 0 12px; }
 /* Sabah Araç Yükleme tablosu */
 .ay-tools { display: flex; gap: 10px; margin: 2px 2px 10px; }
 .ay-tools .btn { flex: 1; justify-content: center; min-height: 46px; }
