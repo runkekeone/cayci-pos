@@ -542,6 +542,11 @@ td.arac-stok { color: var(--accent-ink); font-weight: 700; }
 .ri-row .ri-no { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-dark); font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center; }
 .ri-row .ri-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ri-row .ri-mid b { font-size: 14px; color: var(--text); }
+/* Sidebar logo */
+.b-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; flex: 0 0 auto; }
+/* Fiş gönder modalı aksiyonları */
+.fg-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.fg-actions .btn { justify-content: center; }
 /* Sabah Araç Yükleme tablosu */
 .ay-tools { display: flex; gap: 10px; margin: 2px 2px 10px; }
 .ay-tools .btn { flex: 1; justify-content: center; min-height: 46px; }

@@ -55,6 +55,9 @@ function haftaNo(d) {
 function findProduct(id) { return store.products.find((p) => p.id === id); }
 function findCustomer(id) { return store.customers.find((c) => c.id === id); }
 function findFirma(id) { return store.firmalar.find((f) => f.id === id); }
+// ÖZGÜR TİCARET logosu (fiş görselinde + önden yüklenir)
+let OZGUR_LOGO = null;
+try { OZGUR_LOGO = new Image(); OZGUR_LOGO.src = "logo.png?v=1"; } catch (e) {}
 
 /* ---- Stok havuzu: Dükkan (p.stok) vs Araç (p.aracStok) ---- */
 /* stokModu: "dukkan" | "arac". Servise girince otomatik "arac", çıkınca "dukkan". POS'ta düğmeyle override. */
@@ -1237,7 +1240,7 @@ function finalizeSale(type, odemeAdi) {
   } else {
     // Normal satış: müşterinin telefonu varsa adisyon görseli otomatik paylaş; yoksa yazdırma sor.
     const musc = satilanMus && findCustomer(satilanMus);
-    if (musc && (musc.telefon || "").replace(/\D/g, "")) irsaliyePaylas(yeniSale);
+    if (musc && (musc.telefon || "").replace(/\D/g, "")) fisGonderModal(yeniSale);
     else if (confirm(`Satış kaydedildi ✔\nBelge No: ${belgeNo} · Toplam: ${money.format(toplam)}\n\nİrsaliye yazdırılsın mı?`)) printSale(yeniSale);
   }
 }
@@ -2470,7 +2473,7 @@ function ziyaretKapat(id) {
   // Tahsilat/iade tam işlendi → irsaliyede "Kalan Bakiye" doğru çıkar.
   if (satildi && c && (c.telefon || "").replace(/\D/g, "")) {
     const sale = store.sales.find((x) => x.id === servis.sonSatisId);
-    if (sale) irsaliyePaylas(sale, { tah, iade: iadeTutar });
+    if (sale) fisGonderModal(sale, { tah, iade: iadeTutar });
   }
   durakTamamla(id);
 }
@@ -2684,12 +2687,16 @@ function irsaliyeGorsel(s, opts) {
   }
   rows.push({ sep: 1 });
   rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
-  const W = 520, pad = 28, lh = 30; let H = pad * 2;
+  const W = 520, pad = 28, lh = 30;
+  const logoOk = OZGUR_LOGO && OZGUR_LOGO.complete && OZGUR_LOGO.naturalWidth > 0;
+  const logoH = logoOk ? 100 : 0;
+  let H = pad * 2 + logoH;
   rows.forEach((r) => H += r.sep ? 16 : (r.sub ? lh + 14 : lh));
   const dpr = 2, cv = document.createElement("canvas"); cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext("2d"); g.scale(dpr, dpr);
   g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.textBaseline = "top";
   let y = pad;
+  if (logoOk) { try { g.drawImage(OZGUR_LOGO, (W - logoH) / 2, y, logoH, logoH); } catch (e) {} y += logoH + 4; }
   rows.forEach((r) => {
     if (r.sep) { g.strokeStyle = "#ccc"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(pad, y + 8); g.lineTo(W - pad, y + 8); g.stroke(); g.setLineDash([]); y += 16; return; }
     g.fillStyle = r.color || "#111"; g.font = (r.bold ? "700 " : "400 ") + (r.size || 16) + "px system-ui,sans-serif";
@@ -2725,6 +2732,20 @@ async function irsaliyePaylas(s, opts) {
   } catch (e) { if (e && e.name === "AbortError") return; }
   let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
   openModal("İrsaliye " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="irsaliye" /><p class="hint" style="margin-top:8px">Görsele basılı tut → Paylaş → WhatsApp (kişiyi seç). Açıklama:<br><b>${esc(cap)}</b></p><div class="row"><a class="btn green" href="https://wa.me/${d}?text=${encodeURIComponent(cap)}" target="_blank" rel="noopener">WhatsApp (metin)</a></div>`, { noFoot: true });
+}
+// Fiş kesildikten sonra: görsel + fiş metni bir arada; bağlı numaraya metin gönder / görseli paylaş
+function fisGonderModal(s, opts) {
+  if (!s) return;
+  const url = irsaliyeGorsel(s, opts), c = s.musteriId && findCustomer(s.musteriId);
+  const metin = saleIrsaliyeMetni(s, opts);
+  let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  const body = `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="fiş" />
+    <div class="fg-actions">
+      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">📲 ${esc(c ? c.ad : "Numaraya")} — Fiş Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
+      <button class="btn primary lg" id="fgResim" type="button">🖼 Fiş Görselini Paylaş</button>
+    </div>
+    <p class="hint" style="margin-top:6px">Metin doğrudan bağlı numaraya gider (tek dokunuş gönder). Görsel için Paylaş → WhatsApp → kişi seç.</p>`;
+  const m = openModal("Fiş / İrsaliye " + s.belgeNo, body, { noFoot: true, onMount: (ov) => { const r = ov.querySelector("#fgResim"); if (r) r.onclick = () => irsaliyePaylas(s, opts); } });
 }
 function openSaleForCustomer(id) {
   const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
