@@ -2723,6 +2723,12 @@ async function irsaliyePaylas(s, opts) {
   if (!s) { alert("Gönderilecek satış yok."); return; }
   const url = irsaliyeGorsel(s, opts);
   const cap = irsaliyeAciklama(s, opts);
+  const c = s.musteriId && findCustomer(s.musteriId);
+  let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  // 0) Numara kayıtlıysa native köprü ile DOĞRUDAN o WhatsApp sohbetine görsel aç (jid intent)
+  if (d && window.AndroidWa && window.AndroidWa.sendImage) {
+    try { window.AndroidWa.sendImage(url.split(",")[1], d, cap); return; } catch (e) {}
+  }
   const P = window.Capacitor && window.Capacitor.Plugins;
   // 1) Native: Filesystem'e yaz → Share ile görsel dosyayı paylaş (WebView'de en güvenilir)
   if (P && P.Filesystem && P.Share) {
