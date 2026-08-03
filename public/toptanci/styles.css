@@ -547,6 +547,21 @@ td.arac-stok { color: var(--accent-ink); font-weight: 700; }
 /* Fiş gönder modalı aksiyonları */
 .fg-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .fg-actions .btn { justify-content: center; }
+/* 🤖 Araç Stok Ajanı paneli */
+.ajan { border-radius: 12px; padding: 10px 12px; margin: 0 2px 12px; border: 1.5px solid; }
+.ajan.ok { display: flex; align-items: center; gap: 10px; background: #eef7f0; border-color: #cde7d5; }
+.ajan.ok .ajan-txt { display: flex; flex-direction: column; }
+.ajan.ok .ajan-txt b { font-size: 13px; color: var(--green-d); }
+.ajan.uyari { background: #fff6ed; border-color: #f6d9b0; }
+.ajan-bas { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #9a5406; }
+.ajan-bas b { flex: 1; min-width: 0; }
+.ajan-ic { font-size: 18px; flex: 0 0 auto; }
+.btn.ajan-al.sm { flex: 0 0 auto; min-height: 32px; padding: 5px 10px; font-size: 11.5px; }
+.ajan-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ajan-chip { font-size: 11.5px; font-weight: 600; border-radius: var(--radius-pill); padding: 3px 10px; white-space: nowrap; }
+.ajan-chip.az { background: #fdeecb; color: #7a4a06; }
+.ajan-chip.bitti { background: #fdeceb; color: var(--red); }
+.ajan-chip b { font-weight: 800; }
 /* Sabah Araç Yükleme tablosu */
 .ay-tools { display: flex; gap: 10px; margin: 2px 2px 10px; }
 .ay-tools .btn { flex: 1; justify-content: center; min-height: 46px; }

@@ -2970,6 +2970,24 @@ function rotaIncele(rotaId) {
     },
   });
 }
+// 🤖 Araç Stok Ajanı: araçta olması gereken ama azalan/biten ürünleri izler
+const ARAC_AJAN_ESIK = 5; // aracStandart yoksa varsayılan alt sınır
+function aracDusukListe() {
+  return store.products.filter((p) => {
+    if (p.gorunur === false || p.aractaBulunsun === false) return false;
+    const arac = Number(p.aracStok) || 0;
+    const min = Number(p.aracStandart) > 0 ? Number(p.aracStandart) : ARAC_AJAN_ESIK;
+    const araçta = arac > 0 || Number(p.aracStandart) > 0 || (store.aracHareket || []).some((h) => h.urunId === p.id);
+    return araçta && arac <= min;
+  }).map((p) => ({ p, arac: Number(p.aracStok) || 0 })).sort((a, b) => a.arac - b.arac);
+}
+function aracStokAjaniHTML() {
+  const list = aracDusukListe();
+  if (!list.length) return `<div class="ajan ok"><span class="ajan-ic">🤖</span><div class="ajan-txt"><b>Araç Stok Ajanı</b><span class="hint">Azalan/biten ürün yok — araç dolu 👍</span></div></div>`;
+  const bitti = list.filter((x) => x.arac <= 0).length;
+  const chips = list.map(({ p, arac }) => `<span class="ajan-chip ${arac <= 0 ? "bitti" : "az"}">${esc(p.ad)}: <b>${num2.format(arac)}</b></span>`).join("");
+  return `<div class="ajan uyari"><div class="ajan-bas"><span class="ajan-ic">🤖</span><b>Araç Stok Ajanı — ${list.length} ürün azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><button class="ajan-al btn ok sm" data-act="aracalim" type="button">🛒 Araca Al</button></div><div class="ajan-chips">${chips}</div></div>`;
+}
 function renderRota() {
   return servis.aktif ? renderServisAktif() : renderServisBaslat();
 }
@@ -2979,6 +2997,7 @@ function renderServisBaslat() {
     ? rotalar.map((r) => `<div class="rota-kayit-satir"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri</span></div><button class="btn soft sm" data-rincele="${r.id}" type="button">👁 İncele</button><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button><button class="rm" data-rsil="${r.id}" type="button">✕</button></div>`).join("")
     : `<p class="hint" style="padding:6px">Kayıtlı rota yok. "Yeni Rota Oluştur" ile başla.</p>`;
   return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }]) +
+    aracStokAjaniHTML() +
     `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">＋ Yeni Rota Oluştur & Servisi Başlat</button></div>
     <div class="section-title" style="margin-top:14px">Kayıtlı Rotalar</div>
     <div class="card">${rlist}</div>
@@ -3085,7 +3104,7 @@ function renderServisAktif() {
     ? servisSihirbaz(servis.acik)
     : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
   return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
-    fab + `<div id="servisBanner"></div>` + govde +
+    fab + aracStokAjaniHTML() + `<div id="servisBanner"></div>` + govde +
     `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
 }
 function servisSepetGuncelle() {
@@ -3177,7 +3196,7 @@ function mountRotaOlustur() {
   };
 }
 function mountRota() {
-  const aa = document.querySelector('[data-act="aracalim"]'); if (aa) aa.addEventListener("click", aracAlimModal);
+  document.querySelectorAll('[data-act="aracalim"]').forEach((aa) => aa.addEventListener("click", aracAlimModal));
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
     const fab = document.getElementById("servisOzetFab"); if (fab) fab.addEventListener("click", servisOzetAc);
