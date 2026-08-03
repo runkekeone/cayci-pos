@@ -753,6 +753,9 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .dk-not:last-child { border-bottom: 0; }
 .dk-not-txt { flex: 1; min-width: 0; font-size: 13px; color: var(--text); }
 .dk-not-txt .hint { margin-right: 4px; }
+.dk-talep { border-left: 3px solid var(--accent); padding-left: 8px; background: #fdf6ea; border-radius: 6px; margin-bottom: 4px; }
+.dk-not .edit { flex: 0 0 auto; min-height: 30px; padding: 4px 10px; font-size: 12px; }
+.dk-not-alt { font-size: 11.5px; font-weight: 700; color: var(--muted); margin: 12px 2px 2px; text-transform: uppercase; letter-spacing: .3px; }
 .zk-metrik { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .zkm { background: var(--brand-soft); border-radius: var(--radius); padding: 9px 8px; text-align: center; }
 .zkm span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }

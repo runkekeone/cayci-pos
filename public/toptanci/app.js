@@ -1383,7 +1383,8 @@ function renderDukkan() {
   const nakitKasa = nakit + tahsilat + gelir - gider;
   const dusuk = store.products.filter((p) => { if (p.gorunur === false) return false; const stok = Number(p.stok) || 0; const min = (p.kritik !== "" && p.kritik != null) ? Number(p.kritik) || 0 : (Number(p.depoMin) || 0); return min > 0 ? stok <= min : stok <= 0; }).sort((a, b) => (Number(a.stok) || 0) - (Number(b.stok) || 0));
   const stokRows = dusuk.slice(0, 10).map((p) => `<div class="dk-stok-row"><span class="dk-ad">${esc(p.ad)}</span><b class="${(Number(p.stok) || 0) <= 0 ? "sl-neg" : "stok-low"}">${num2.format(Number(p.stok) || 0)}</b></div>`).join("") || `<p class="hint" style="padding:6px">Azalan dükkan stoğu yok 👍</p>`;
-  const talepAcik = (store.talepler || []).filter((t) => t.durum !== "kapali").length;
+  const talepler = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
+  const talepRows = talepler.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<div class="dk-not dk-talep"><div class="dk-not-txt"><span class="hint">${fmtDate(t.tarih)}${c ? " · " + esc(c.ad) : ""}</span> ${esc(t.metin)}</div><button class="edit" data-dtok="${t.id}" type="button" title="Karşılandı">✓</button></div>`; }).join("");
   const notlar = (store.dukkanNotlari || []).slice().reverse();
   const notRows = notlar.map((n) => `<div class="dk-not"><div class="dk-not-txt"><span class="hint">${fmtDate(n.tarih)}</span> ${esc(n.metin)}</div><button class="rm" data-dnsil="${n.id}" type="button">✕</button></div>`).join("") || `<p class="hint" style="padding:6px">Not yok. Aşağıdan ekle.</p>`;
   return pageHead("Dükkan", null) +
@@ -1396,8 +1397,10 @@ function renderDukkan() {
      <div class="card"><div class="dk-kasa"><div class="dk-kbox green"><span>Nakit Kasa (bugün)</span><b>${money.format(nakitKasa)}</b></div><div class="dk-kbox"><span>Gelir</span><b>${money.format(gelir)}</b></div><div class="dk-kbox"><span>Gider</span><b>${money.format(gider)}</b></div></div><div class="dk-evrak" style="margin-top:8px"><button class="btn soft" data-goto="gelirler" type="button">＋ Gelirler</button><button class="btn soft" data-goto="giderler" type="button">＋ Giderler</button></div></div>
      <div class="section-title">Sipariş / İstek Notları</div>
      <div class="card">
-       <div class="dk-ozet"><span>İstenen ürünler (Talepler): <b>${talepAcik}</b> açık</span><button class="link-btn" data-goto="talepler" type="button">Talepler →</button></div>
-       <div class="zk-hizli-row" style="margin:8px 0"><input id="dkNotIn" placeholder="Dükkan sipariş/karar notu ekle..." /><button class="btn green" id="dkNotEkle" type="button">Ekle</button></div>
+       <div class="dk-ozet"><span>🚚 Rotadan gelen istek/talepler (${talepler.length})</span><button class="link-btn" data-goto="talepler" type="button">Tümü →</button></div>
+       ${talepler.length ? `<div class="dk-not-list">${talepRows}</div>` : `<p class="hint" style="padding:6px">Açık istek/talep yok.</p>`}
+       <div class="dk-not-alt">Serbest dükkan notu</div>
+       <div class="zk-hizli-row" style="margin:4px 0 0"><input id="dkNotIn" placeholder="Dükkan sipariş/karar notu ekle..." /><button class="btn green" id="dkNotEkle" type="button">Ekle</button></div>
        <div class="dk-not-list">${notRows}</div>
      </div>`;
 }
@@ -1405,6 +1408,7 @@ function mountDukkan() {
   const s = document.querySelector('[data-act="dsatis"]'); if (s) s.addEventListener("click", () => { stokModuAyarla("dukkan"); pos.carts[pos.active] = newCart(); pos.cat = "ANA"; pos.q = ""; navigate("satis"); });
   const ek = document.getElementById("dkNotEkle"); if (ek) ek.addEventListener("click", () => { const inp = document.getElementById("dkNotIn"); const v = (inp.value || "").trim(); if (!v) { inp.focus(); return; } store.dukkanNotlari = store.dukkanNotlari || []; store.dukkanNotlari.push({ id: genId(), metin: v, tarih: new Date().toISOString() }); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render(); });
   document.querySelectorAll("[data-dnsil]").forEach((b) => b.addEventListener("click", () => { store.dukkanNotlari = (store.dukkanNotlari || []).filter((x) => x.id !== b.dataset.dnsil); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render(); }));
+  document.querySelectorAll("[data-dtok]").forEach((b) => b.addEventListener("click", () => { const t = (store.talepler || []).find((x) => x.id === b.dataset.dtok); if (t) t.durum = "kapali"; saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render(); }));
 }
 /* Son satışlar — kompakt tek satır liste (kutucuk değil) */
 // Rapor satış tablosu: satır satır (Excel gibi), ödeme tipine göre renkli, tıklanabilir, çoklu-seç + toplu sil
