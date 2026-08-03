@@ -1365,18 +1365,11 @@ function raporSatisTablo(sales) {
     const c = s.musteriId && findCustomer(s.musteriId);
     const ad = c ? esc(c.ad) : "Müşterisiz";
     const cls = (Number(s.odeme.acik) > 0) ? "sat-borc" : (Number(s.odeme.pos) > 0 ? "sat-pos" : "sat-nakit");
-    return `<tr class="sat-row ${cls}" data-saleview="${s.id}">
-      <td class="sat-chk"><input type="checkbox" class="sat-sel" data-sel="${s.id}" /></td>
-      <td>${esc(s.belgeNo)}</td><td>${ad}</td>
-      <td class="r">${money.format(s.toplam)}</td><td>${saleOdeme(s)}</td>
-      <td class="r ${Number(s.odeme.acik) > 0 ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</td>
-      <td>${fmtDate(s.tarih)}</td>
-    </tr>`;
+    return `<div class="satr ${cls}" data-saleview="${s.id}"><input type="checkbox" class="sat-sel" data-sel="${s.id}" /><span class="satr-ad">${ad}</span><span class="satr-ode">${saleOdeme(s)}</span><span class="satr-tut">${money.format(s.toplam)}</span></div>`;
   }).join("");
   return `<div class="card sat-card">
-    <div class="sat-tools"><label class="sat-all"><input type="checkbox" id="satAll" /> Tümü</label><span class="hint" id="satSecim">0 seçili</span><button class="btn softred sm" id="satSil" type="button" disabled>🗑 Seçilenleri Sil</button></div>
-    <div class="table-wrap"><table class="grid sat-tbl"><thead><tr><th></th><th>Belge</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>Kalan</th><th>Tarih</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="hint" style="margin:8px 2px 0">🟢 Nakit · 🔵 POS · 🔴 Bakiyeli (açık). Satıra dokun → detay. Kutucuklarla seç → toplu sil.</p>
+    <div class="sat-tools"><label class="sat-all"><input type="checkbox" id="satAll" /> Tümü</label><span class="hint" id="satSecim">0 seçili</span><button class="btn softred sm" id="satSil" type="button" disabled>🗑 Sil</button></div>
+    <div class="sat-liste">${rows}</div>
   </div>`;
 }
 function raporSatisWire() {
