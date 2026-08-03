@@ -1357,6 +1357,42 @@ function renderAnasayfa() {
     `<h1 style="font-size:16px;margin:18px 0 10px">Kritik Stok (${kritik.length})</h1>` + tableCard(["Ürün", "Kalan Stok", "Kritik"], kritikRows, infoLine(kritik.length));
 }
 /* Son satışlar — kompakt tek satır liste (kutucuk değil) */
+// Rapor satış tablosu: satır satır (Excel gibi), ödeme tipine göre renkli, tıklanabilir, çoklu-seç + toplu sil
+function raporSatisTablo(sales) {
+  if (!sales.length) return `<div class="card"><div class="sl-empty">Satış yok.</div></div>`;
+  const rows = sales.slice().sort((a, b) => b.tarih.localeCompare(a.tarih)).map((s) => {
+    const c = s.musteriId && findCustomer(s.musteriId);
+    const ad = c ? esc(c.ad) : "Müşterisiz";
+    const cls = (Number(s.odeme.acik) > 0) ? "sat-borc" : (Number(s.odeme.pos) > 0 ? "sat-pos" : "sat-nakit");
+    return `<tr class="sat-row ${cls}" data-saleview="${s.id}">
+      <td class="sat-chk"><input type="checkbox" class="sat-sel" data-sel="${s.id}" /></td>
+      <td>${esc(s.belgeNo)}</td><td>${ad}</td>
+      <td class="r">${money.format(s.toplam)}</td><td>${saleOdeme(s)}</td>
+      <td class="r ${Number(s.odeme.acik) > 0 ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</td>
+      <td>${fmtDate(s.tarih)}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="card sat-card">
+    <div class="sat-tools"><label class="sat-all"><input type="checkbox" id="satAll" /> Tümü</label><span class="hint" id="satSecim">0 seçili</span><button class="btn softred sm" id="satSil" type="button" disabled>🗑 Seçilenleri Sil</button></div>
+    <div class="table-wrap"><table class="grid sat-tbl"><thead><tr><th></th><th>Belge</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>Kalan</th><th>Tarih</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="hint" style="margin:8px 2px 0">🟢 Nakit · 🔵 POS · 🔴 Bakiyeli (açık). Satıra dokun → detay. Kutucuklarla seç → toplu sil.</p>
+  </div>`;
+}
+function raporSatisWire() {
+  const guncelle = () => { const sel = document.querySelectorAll(".sat-sel:checked").length; const d = document.getElementById("satSecim"); if (d) d.textContent = sel + " seçili"; const btn = document.getElementById("satSil"); if (btn) btn.disabled = sel === 0; const all = document.getElementById("satAll"); if (all) all.checked = sel > 0 && sel === document.querySelectorAll(".sat-sel").length; };
+  document.querySelectorAll(".sat-sel").forEach((ch) => { ch.addEventListener("click", (e) => e.stopPropagation()); ch.addEventListener("change", guncelle); });
+  document.querySelectorAll(".sat-chk").forEach((td) => td.addEventListener("click", (e) => e.stopPropagation()));
+  const all = document.getElementById("satAll"); if (all) all.addEventListener("change", () => { document.querySelectorAll(".sat-sel").forEach((ch) => ch.checked = all.checked); guncelle(); });
+  const sil = document.getElementById("satSil"); if (sil) sil.addEventListener("click", () => {
+    const ids = [...document.querySelectorAll(".sat-sel:checked")].map((ch) => ch.dataset.sel);
+    if (!ids.length) return;
+    if (!confirm(ids.length + " satış silinsin mi? (stok geri yüklenir, geri alınamaz)")) return;
+    const set = new Set(ids);
+    store.sales.forEach((s) => { if (set.has(s.id)) s.items.forEach((it) => { const p = findProduct(it.urunId); if (!p) return; if (s.stokKaynak === "arac") p.aracStok = (Number(p.aracStok) || 0) + it.adet; else p.stok = (Number(p.stok) || 0) + it.adet; }); });
+    store.sales = store.sales.filter((s) => !set.has(s.id));
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
+  });
+}
 function sonSatisListesi(son) {
   if (!son.length) return `<div class="card"><div class="sl-empty">Henüz satış yok.</div></div>`;
   const rows = son.map((s) => {
@@ -1413,6 +1449,7 @@ function mountReport(route) {
   wireTableSearch();
   wireSaleLinks();
   document.querySelectorAll("[data-saleview]").forEach((b) => b.addEventListener("click", () => openSaleView(b.dataset.saleview)));
+  raporSatisWire();
   const pr = document.querySelector('[data-act="rprint"]'); if (pr) pr.addEventListener("click", () => window.print());
 }
 function salesInRange(route, def) { const f = reportFilters[route] || def; return store.sales.filter((s) => inRange(s.tarih, f.from, f.to)); }
@@ -1428,7 +1465,7 @@ function renderRaporGunluk() {
   const firmaOde = store.firmaPayments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
   return pageHead("Günlük Rapor", null, [{ label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
-    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + sonSatisListesi(sales) +
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) +
     grid([["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"]]) +
     `<div style="height:14px"></div>` +
     grid([["Alınan Ödemeler", money.format(tahsilat)], ["Firma Ödemeleri", money.format(firmaOde)], ["Giderler", money.format(gider)], ["Gelirler", money.format(gelir)]]) +
@@ -1439,7 +1476,7 @@ function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
   const sales = salesInRange(route, def);
   return pageHead("Tarihsel Rapor") + reportDateBar(route, def) +
-    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + sonSatisListesi(sales);
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales);
 }
 function renderRaporUrunsel() {
   const route = "rapor-urunsel", def = { from: monthStartStr(), to: todayStr() };
