@@ -2506,14 +2506,14 @@ function ziyaretKapat(id) {
 function servisRaporModal(r) {
   openModal("Gün Sonu — Servis Raporu", `<div class="rapor-grid">
     <div class="rk"><span>Ziyaret</span><b>${r.ziyaret}</b></div>
-    <div class="rk"><span>Satış</span><b>${r.satisAdet}</b></div>
-    <div class="rk"><span>Satış ₺</span><b>${money.format(r.satisTop)}</b></div>
-    <div class="rk"><span>Tahsilat ₺</span><b>${money.format(r.tahsilat)}</b></div>
-    <div class="rk"><span>İade ₺</span><b>${money.format(r.iade)}</b></div>
-    <div class="rk"><span>Satış yok</span><b>${r.yok}</b></div>
-    <div class="rk"><span>Pas</span><b>${r.pas}</b></div>
-    <div class="rk"><span>Talep</span><b>${r.talep}</b></div>
-  </div><p class="hint" style="margin-top:10px">Detay için Menü → Raporlar · İstenen ürünler için Ürünler → Talepler.</p>`, { noFoot: true });
+    <div class="rk"><span>Ciro</span><b>${money.format(r.ciro)}</b></div>
+    <div class="rk"><span>Ürün Maliyeti</span><b>${money.format(r.maliyet)}</b></div>
+    <div class="rk"><span>Kâr</span><b class="rk-kar">${money.format(r.kar)}</b></div>
+    <div class="rk"><span>Giderler</span><b>${money.format(r.gider)}</b></div>
+    <div class="rk"><span>Nakit</span><b>${money.format(r.nakit)}</b></div>
+    <div class="rk"><span>Pos</span><b>${money.format(r.pos)}</b></div>
+    <div class="rk"><span>Bakiye</span><b class="${r.bakiye > 0 ? "rk-borc" : ""}">${money.format(r.bakiye)}</b></div>
+  </div><p class="hint" style="margin-top:10px">Bakiye = bugün açık hesaba yazılan (tahsil edilmeyen). Detay için Menü → Raporlar.</p>`, { noFoot: true });
 }
 function renderTalepler() {
   const acik = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
@@ -2542,15 +2542,14 @@ function servisYukle() {
 function servisBitir() {
   const gun = localDateStr(new Date());
   const zys = store.ziyaretler.filter((z) => z.servisGun === gun);
-  const sat = zys.filter((z) => z.sonuc === "satis").map((z) => store.sales.find((s) => s.id === z.satisId)).filter(Boolean);
-  const rapor = {
-    ziyaret: zys.length, pas: servis.paslar.length,
-    satisAdet: sat.length, satisTop: sat.reduce((a, s) => a + (Number(s.toplam) || 0), 0),
-    tahsilat: zys.reduce((a, z) => a + (Number(z.tahsilat) || 0), 0),
-    iade: zys.reduce((a, z) => a + (Number(z.iadeTutar) || 0), 0),
-    talep: store.talepler.filter((t) => localDateStr(new Date(t.tarih)) === gun).length,
-    yok: zys.filter((z) => z.sonuc === "yok").length,
-  };
+  const satlar = store.sales.filter((s) => s.servisGun === gun); // servis + ekstra satışlar
+  const ciro = satlar.reduce((a, s) => a + (Number(s.toplam) || 0), 0);
+  const maliyet = satlar.reduce((a, s) => a + (Number(s.maliyet) || 0), 0);
+  const nakit = satlar.reduce((a, s) => a + (Number(s.odeme.nakit) || 0), 0) + zys.reduce((a, z) => a + (Number(z.tahsilat) || 0), 0);
+  const pos = satlar.reduce((a, s) => a + (Number(s.odeme.pos) || 0), 0);
+  const bakiye = satlar.reduce((a, s) => a + (Number(s.odeme.acik) || 0), 0);
+  const gider = store.expenses.filter((e) => isToday(e.tarih)).reduce((a, e) => a + Number(e.tutar || 0), 0);
+  const rapor = { ziyaret: zys.length, ciro, maliyet, kar: ciro - maliyet, gider, nakit, pos, bakiye };
   servis.aktif = false; servis.acik = null;
   stokModuAyarla("dukkan"); // servis bitti = dükkana dön
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
@@ -3115,7 +3114,14 @@ function servisSihirbaz(id) {
   }
   if (adim === "urun") {
     return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
-      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn soft" id="zkSes" type="button" title="Sesli sipariş">&#127908;</button><button class="btn green" id="zkHizliBtn" type="button">Doldur</button><button class="btn soft" id="sFoto" type="button" title="Fiş/faturadan oku">&#128247;</button></div>
+      <div class="sip-bar">
+        <input id="zkHizli" class="sip-in" placeholder="Sipariş yaz veya 🎤 söyle: 7 soda 2 gazoz 5 su" />
+        <div class="sip-btns">
+          <button class="btn soft" id="zkSes" type="button">&#127908; Sesli</button>
+          <button class="btn green" id="zkHizliBtn" type="button">&#10003; Doldur</button>
+          <button class="btn soft" id="sFoto" type="button">&#128247; Kamera</button>
+        </div>
+      </div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
       <div class="cat-tabs" id="sCatTabs">${sCatTabsHTML()}</div>
       <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>

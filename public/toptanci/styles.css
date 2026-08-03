@@ -802,6 +802,15 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 /* Sesli sipariş mikrofon butonu — dinlerken kırmızı yanıp söner */
 #zkSes.dinliyor { background: var(--red); color: #fff; border-color: var(--red); animation: sesPulse 1s ease-in-out infinite; }
 @keyframes sesPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+/* Rota hızlı sipariş çubuğu — tam boy, belirgin (ürünlerin üstünde) */
+.sip-bar { margin: 6px 0 10px; padding: 10px; background: var(--brand-soft); border: 1.5px solid #c6ddf7; border-radius: 12px; }
+.sip-in { width: 100%; box-sizing: border-box; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px; background: #fff; }
+.sip-btns { display: flex; gap: 8px; margin-top: 8px; }
+.sip-btns .btn { flex: 1; justify-content: center; min-height: 46px; font-size: 13.5px; }
+#zkSes.dinliyor { background: var(--red); color: #fff; border-color: var(--red); animation: sesPulse 1s ease-in-out infinite; }
+/* Gün sonu rapor renkleri */
+.rk .rk-kar { color: var(--green-d); }
+.rk .rk-borc { color: var(--red); }
 .servis-tumu { margin-top: 12px; }
 .servis-tumu summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--brand-dark); padding: 8px 0; }
 .so-list { display: flex; flex-direction: column; }
