@@ -2721,22 +2721,26 @@ function irsaliyeAciklama(s, opts) {
 }
 async function irsaliyePaylas(s, opts) {
   if (!s) { alert("Gönderilecek satış yok."); return; }
-  const url = irsaliyeGorsel(s, opts), c = s.musteriId && findCustomer(s.musteriId);
+  const url = irsaliyeGorsel(s, opts);
   const cap = irsaliyeAciklama(s, opts);
-  const file = dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png");
-  // 1) Web Share (dosya) — canShare bazı WebView'lerde false döner; KOŞULSUZ dene.
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  // 1) Native: Filesystem'e yaz → Share ile görsel dosyayı paylaş (WebView'de en güvenilir)
+  if (P && P.Filesystem && P.Share) {
+    try {
+      const b64 = url.split(",")[1];
+      const fname = "irsaliye-" + s.belgeNo + "-" + ((store.counters && store.counters.seq) || 0) + ".png";
+      const w = await P.Filesystem.writeFile({ path: fname, data: b64, directory: "CACHE" });
+      await P.Share.share({ title: "İrsaliye " + s.belgeNo, text: cap, files: [w.uri], dialogTitle: "Fişi paylaş" });
+      return;
+    } catch (e) { if (e && (e.message || "").toLowerCase().includes("cancel")) return; /* devam: web share */ }
+  }
+  // 2) Web Share (dosya) — koşulsuz dene
   if (navigator.share) {
-    try { await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: cap }); return; }
-    catch (e) { if (e && e.name === "AbortError") return; /* dosya paylaşımı reddedildi → alt yol */ }
+    try { await navigator.share({ files: [dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png")], title: "İrsaliye " + s.belgeNo, text: cap }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
   }
-  // 2) Capacitor Share eklentisi varsa (native)
-  const CapShare = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
-  if (CapShare && CapShare.share) {
-    try { await CapShare.share({ title: "İrsaliye " + s.belgeNo, text: cap, url, dialogTitle: "İrsaliyeyi paylaş" }); return; }
-    catch (e) { if (e && (e.message || "").toLowerCase().includes("cancel")) return; }
-  }
-  // 3) Son çare: görseli tam ekran aç (basılı tut → kaydet/paylaş) — WebView içinde çalışsın diye img büyük
-  openModal("Fiş Görseli " + s.belgeNo, `<p class="hint" style="margin:0 0 8px">Görsele <b>basılı tut → Kaydet/Paylaş</b> ile WhatsApp'tan gönder. (Cihazın görsel paylaşımını desteklemiyorsa görseli galeriye kaydedip oradan paylaş.)</p><img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="fiş" />`, { noFoot: true });
+  // 3) Son çare: görseli göster (basılı-tut yok — güncel APK'da native paylaşım gelir)
+  openModal("Fiş Görseli " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="fiş" /><p class="hint" style="margin-top:8px">Paylaşım menüsü açılamadı. Masaüstündeki <b>güncel ToptanciPanel.apk</b>'yı kur (native görsel paylaşımı eklendi).</p>`, { noFoot: true });
 }
 // Fiş kesildikten sonra: görsel + fiş metni bir arada; bağlı numaraya metin gönder / görseli paylaş
 function fisGonderModal(s, opts) {
