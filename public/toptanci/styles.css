@@ -799,6 +799,9 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .ss-fin { width: 74px; min-height: 34px; text-align: right; font-size: 14px; font-weight: 700; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; font-family: var(--font-num); color: var(--text); }
 .ss-tut { flex: 0 0 auto; font-family: var(--font-num); font-weight: 800; color: var(--value); min-width: 66px; text-align: right; }
 .ss-tot { display: flex; justify-content: space-between; padding: 8px 8px 2px; margin-top: 2px; border-top: 2px solid var(--line); font-family: var(--font-num); font-size: 15px; }
+/* Sesli sipariş mikrofon butonu — dinlerken kırmızı yanıp söner */
+#zkSes.dinliyor { background: var(--red); color: #fff; border-color: var(--red); animation: sesPulse 1s ease-in-out infinite; }
+@keyframes sesPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .servis-tumu { margin-top: 12px; }
 .servis-tumu summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--brand-dark); padding: 8px 0; }
 .so-list { display: flex; flex-direction: column; }

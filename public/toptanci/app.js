@@ -3115,7 +3115,7 @@ function servisSihirbaz(id) {
   }
   if (adim === "urun") {
     return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
-      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn green" id="zkHizliBtn" type="button">Doldur</button><button class="btn soft" id="sFoto" type="button" title="Fiş/faturadan oku">&#128247;</button></div>
+      <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn soft" id="zkSes" type="button" title="Sesli sipariş">&#127908;</button><button class="btn green" id="zkHizliBtn" type="button">Doldur</button><button class="btn soft" id="sFoto" type="button" title="Fiş/faturadan oku">&#128247;</button></div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
       <div class="cat-tabs" id="sCatTabs">${sCatTabsHTML()}</div>
       <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
@@ -3188,6 +3188,20 @@ function servisSepetWire() {
     const tc = document.querySelector(`#sihirSepet [data-sstut="${idx}"]`); if (tc) tc.textContent = money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0));
     const tot = document.querySelector("#sihirSepet .ss-toplam"); if (tot) tot.textContent = money.format(cartTotals().toplam);
   });
+}
+// Sesli sipariş: konuşulanı metin kutusuna döker (Web Speech API; yoksa klavye mikrofonuna yönlendirir)
+function sesliSiparis(inputId) {
+  const inp = document.getElementById(inputId);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { if (inp) inp.focus(); alert("Uygulama-içi ses tanıma bu cihazda yok.\nKlavyedeki 🎤 mikrofon tuşuyla konuşabilirsin (kutuya dokun → klavyede mikrofon)."); return; }
+  let rec; try { rec = new SR(); } catch (e) { if (inp) inp.focus(); return; }
+  rec.lang = "tr-TR"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  const btn = document.getElementById("zkSes"); if (btn) btn.classList.add("dinliyor");
+  let taban = inp ? inp.value : ""; if (taban && !/\s$/.test(taban)) taban += " ";
+  rec.onresult = (e) => { let m = ""; for (let i = e.resultIndex; i < e.results.length; i++) m += e.results[i][0].transcript; if (inp) inp.value = taban + m; };
+  rec.onerror = (e) => { if (btn) btn.classList.remove("dinliyor"); if (e && e.error === "not-allowed") alert("Mikrofon izni gerekli (Ayarlar → Uygulama → İzinler)."); };
+  rec.onend = () => { if (btn) btn.classList.remove("dinliyor"); };
+  try { rec.start(); } catch (e) { if (btn) btn.classList.remove("dinliyor"); }
 }
 function hizliSiparisDoldurInline(id) {
   const inp = document.getElementById("zkHizli"); const text = inp ? inp.value : "";
@@ -3321,6 +3335,7 @@ function mountRota() {
       document.querySelectorAll("[data-scat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.scat; gridYen(); }));
       const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; gridYen(); });
       const hz = document.getElementById("zkHizliBtn"); if (hz) hz.addEventListener("click", () => hizliSiparisDoldurInline(servis.acik));
+      const sesB = document.getElementById("zkSes"); if (sesB) sesB.addEventListener("click", () => sesliSiparis("zkHizli"));
       const sf = document.getElementById("sFoto"); if (sf) sf.addEventListener("click", satisFotoOku);
       const og = document.getElementById("odemeGec"); if (og) og.addEventListener("click", () => { if (!activeCart().items.length) { alert("Sepet boş — ürün ekle."); return; } servis.adim = "odeme"; render(); });
       servisSepetWire();
