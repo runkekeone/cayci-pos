@@ -338,7 +338,7 @@ const MENU = [
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function pageHead(title, sub, actions) {
   const acts = (actions || []).map((a) => `<button class="btn ${a.cls || ""}" type="button" ${a.route ? `data-goto="${a.route}"` : ""} ${a.act ? `data-act="${a.act}"` : ""}>${a.label}</button>`).join("");
-  return `<div class="page-head"><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ""}<div class="actions">${acts}</div></div>`;
+  return `<div class="page-head"><button class="pg-back" data-goback type="button" aria-label="Geri">&#8249;</button><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ""}<div class="actions">${acts}</div></div>`;
 }
 function field(f) {
   if (f.type === "select") return `<div class="field"><label>${f.label}</label><select>${(f.options || ["Tümü"]).map((o) => `<option>${o}</option>`).join("")}</select></div>`;
@@ -3020,9 +3020,9 @@ function aracAlimModal() {
   const liste = () => {
     let list = store.products.filter((p) => p.gorunur !== false);
     if (q) { const n = ocrNorm(q); list = list.filter((p) => ocrNorm(p.ad).includes(n)); }
-    return list.slice(0, 300).map((p) => `<div class="aa-row"><div class="aa-ad">${esc(p.ad)}<span class="hint" data-aastok="${p.id}"> · araç ${num2.format(Number(p.aracStok) || 0)}</span></div><input class="aa-in" data-aa="${p.id}" type="number" inputmode="numeric" placeholder="0" /><button class="btn ok aa-btn" data-aaadd="${p.id}" type="button">＋</button></div>`).join("") || `<p class="hint" style="padding:8px">Ürün yok.</p>`;
+    return list.slice(0, 300).map((p) => `<div class="aa-row"><div class="aa-ad">${esc(p.ad)}<span class="hint" data-aastok="${p.id}"> · araç ${num2.format(Number(p.aracStok) || 0)}</span></div><input class="aa-in" data-aa="${p.id}" type="number" inputmode="numeric" placeholder="adet" /><input class="aa-in aa-al" data-aaal="${p.id}" type="number" inputmode="decimal" placeholder="₺alış" value="${Number(p.alis) || ""}" title="birim alış" /><button class="btn ok aa-btn" data-aaadd="${p.id}" type="button">＋</button></div>`).join("") || `<p class="hint" style="padding:8px">Ürün yok.</p>`;
   };
-  const body = `<input id="aaAra" placeholder="Ürün ara..." style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:11px" /><p class="hint" style="margin:8px 0 4px">Aldığın ürünün adetini yaz → ＋ ile araca ekle.</p><div id="aaList" style="max-height:56vh;overflow:auto">${liste()}</div>`;
+  const body = `<input id="aaAra" placeholder="Ürün ara..." style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:11px" /><p class="hint" style="margin:8px 0 4px">Adet + birim alış (₺) yaz → ＋. Araca eklenir, maliyet <b>gidere</b> işlenir.</p><div id="aaList" style="max-height:56vh;overflow:auto">${liste()}</div>`;
   const m = openModal("🛒 Araca Ürün Al", body, {
     noFoot: true,
     onMount: (ov) => {
@@ -3031,8 +3031,11 @@ function aracAlimModal() {
         const inp = l.querySelector(`[data-aa="${b.dataset.aaadd}"]`); const n = inp ? Number(inp.value) || 0 : 0;
         if (n <= 0) { alert("Adet gir."); return; }
         const p = findProduct(b.dataset.aaadd); if (!p) return;
+        const alEl = l.querySelector(`[data-aaal="${b.dataset.aaadd}"]`); const birimAlis = alEl ? Number(alEl.value) || 0 : (Number(p.alis) || 0);
+        const maliyet = n * birimAlis;
         p.aracStok = (Number(p.aracStok) || 0) + n;
-        store.aracHareket.push({ id: genId(), urunId: p.id, ad: p.ad, adet: n, yon: "alim", tarih: new Date().toISOString() });
+        store.aracHareket.push({ id: genId(), urunId: p.id, ad: p.ad, adet: n, birimAlis, tutar: maliyet, yon: "alim", tarih: new Date().toISOString() });
+        if (maliyet > 0) store.expenses.push({ id: genId(), tutar: maliyet, kategori: "Araç Stok Alımı", not: num2.format(n) + " x " + p.ad + " (birim " + money.format(birimAlis) + ")", tarih: new Date().toISOString() });
         saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
         if (inp) inp.value = "";
         const st = l.querySelector(`[data-aastok="${p.id}"]`); if (st) st.textContent = " · araç " + num2.format(p.aracStok);
@@ -3538,6 +3541,7 @@ function render() {
   try { content.innerHTML = page.render(); } catch (e) { content.innerHTML = `<div class="card"><h1>Hata</h1><pre>${esc(e.message)}</pre></div>`; console.error(e); }
   setActiveMenu(route);
   content.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.goto)));
+  content.querySelectorAll("[data-goback]").forEach((b) => b.addEventListener("click", () => { if (history.length > 1) history.back(); else navigate("rapor-gunluk"); }));
   if (page.mount) try { page.mount(); } catch (e) { console.error(e); }
   try { enhanceTables(); } catch (e) { console.error(e); }
   try { updateBell(); } catch (e) { console.error(e); }
