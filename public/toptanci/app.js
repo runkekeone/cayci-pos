@@ -293,7 +293,6 @@ function importCustomers(text) {
 
 /* ============ Sidebar menü ============ */
 const MENU = [
-  { ico: "▦", label: "Anasayfa", route: "anasayfa" },
   { ico: "🖊", label: "Satış Yap", route: "satis" },
   { ico: "🚗", label: "Rota / Saha Satış", route: "rota" },
   { ico: "🎧", label: "Saha Koçu (Görüşme Analizi)", route: "saha-kocu" },
@@ -1366,7 +1365,7 @@ function renderAnasayfa() {
   const kritikRows = kritik.slice(0, 10).map((p) => `<tr><td>${esc(p.ad)}</td><td class="stok-low">${num2.format(Number(p.stok) || 0)}</td><td>${Number(p.kritik) || 0}</td></tr>`).join("");
   const dun = localDateStr(new Date(Date.now() - 86400000));
   const dunCiro = store.sales.filter((s) => localDateStr(new Date(s.tarih)) === dun).reduce((a, s) => a + s.toplam, 0);
-  return pageHead("Anasayfa", "Bugünün özeti") +
+  return pageHead("Bugünün Özeti", null, [{ label: "📈 Raporlar", cls: "soft", route: "rapor-gunluk" }]) +
     grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
     `<div style="height:14px"></div>` +
     grid([["Nakit Kasa", money.format(nakit + tahsilat + gelir - gider), "green"], ["Gider (bugün)", money.format(gider)], ["Kâr (bugün)", money.format(ciro - maliyet), "green"], ["Toplam Alacak", money.format(toplamBorc)]]) +
@@ -1461,6 +1460,7 @@ function mountReport(route) {
   document.querySelectorAll("[data-saleview]").forEach((b) => b.addEventListener("click", () => openSaleView(b.dataset.saleview)));
   raporSatisWire();
   const pr = document.querySelector('[data-act="rprint"]'); if (pr) pr.addEventListener("click", () => window.print());
+  const bo = document.querySelector('[data-act="bugunozet"]'); if (bo) bo.addEventListener("click", () => navigate("anasayfa"));
 }
 function salesInRange(route, def) { const f = reportFilters[route] || def; return store.sales.filter((s) => inRange(s.tarih, f.from, f.to)); }
 
@@ -1474,7 +1474,7 @@ function renderRaporGunluk() {
   const tahsilat = store.payments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const firmaOde = store.firmaPayments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
-  return pageHead("Günlük Rapor", null, [{ label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
+  return pageHead("Günlük Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) +
     grid([["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"]]) +
     `<div style="height:14px"></div>` +
@@ -1485,7 +1485,7 @@ function renderRaporGunluk() {
 function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
   const sales = salesInRange(route, def);
-  return pageHead("Tarihsel Rapor") + reportDateBar(route, def) +
+  return pageHead("Tarihsel Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales);
 }
 function renderRaporUrunsel() {
@@ -3530,7 +3530,7 @@ function setActiveMenu(route) {
 
 /* ============ Router ============ */
 function navigate(route) { location.hash = "#/" + route; }
-function currentRoute() { return location.hash.replace(/^#\/?/, "") || "anasayfa"; }
+function currentRoute() { return location.hash.replace(/^#\/?/, "") || "rapor-gunluk"; }
 function render() {
   const route = currentRoute();
   const page = PAGES[route] || PAGES.anasayfa;
@@ -3577,7 +3577,6 @@ function mobilTabloEtiketle() {
 const MOBILBAR = [
   { ico: "🚗", label: "Rota", route: "rota" },
   { ico: "🛒", label: "Satış", route: "satis" },
-  { ico: "📊", label: "Özet", route: "anasayfa" },
   { ico: "📈", label: "Rapor", route: "rapor-gunluk" },
   { ico: "☰", label: "Menü", act: "menu" },
 ];
