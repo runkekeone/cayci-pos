@@ -2969,18 +2969,31 @@ function rotaIncele(rotaId) {
   const inSet = new Set(r.musteriIds);
   const uyeler = r.musteriIds.map((id) => findCustomer(id)).filter(Boolean);
   const disinda = store.customers.filter((c) => !inSet.has(c.id) && !c.bayi);
-  const uyeRows = uyeler.map((c, i) => `<div class="ri-row"><span class="ri-no">${i + 1}</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}${c.servisGunu ? " · " + esc(c.servisGunu) : ""} · Bakiye ${money.format(customerBorc(c.id))}</span></div><button class="rm" data-rcikar="${c.id}" type="button" title="Rotadan çıkar">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Bu rotada müşteri yok.</p>`;
+  const uyeRows = uyeler.map((c, i) => `<div class="ri-row"><span class="ri-no">${i + 1}</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}${c.servisGunu ? " · " + esc(c.servisGunu) : ""} · Bakiye ${money.format(customerBorc(c.id))}</span></div>${(c.telefon || "").replace(/\D/g, "") ? `<button class="btn soft sm" data-onsip="${c.id}" type="button" title="Ön sipariş mesajı">📲</button>` : ""}<button class="rm" data-rcikar="${c.id}" type="button" title="Rotadan çıkar">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Bu rotada müşteri yok.</p>`;
   const disRows = disinda.map((c) => `<div class="ri-row"><span class="ri-no">＋</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}</span></div><button class="btn green sm" data-rekle="${c.id}" type="button">Ekle</button></div>`).join("") || `<p class="hint" style="padding:8px">Tüm müşteriler bu rotada.</p>`;
-  const body = `<div class="ri-bas">Rotadaki müşteriler (${uyeler.length})</div><div class="ri-list">${uyeRows}</div>
-    <details style="margin-top:12px"><summary>Rotada olmayanlar (${disinda.length}) — eklemek için</summary><div class="ri-list">${disRows}</div></details>`;
+  const telli = uyeler.filter((c) => (c.telefon || "").replace(/\D/g, "")).length;
+  const body = `<div class="ri-bas">Rotadaki müşteriler (${uyeler.length}) <span class="hint">📲 = ön sipariş mesajı</span></div><div class="ri-list">${uyeRows}</div>
+    <details style="margin-top:12px"><summary>Rotada olmayanlar (${disinda.length}) — eklemek için</summary><div class="ri-list">${disRows}</div></details>
+    <button class="btn softred" id="rotaSilBtn" type="button" style="width:100%;margin-top:14px">🗑 Rotayı Sil</button>`;
   const m = openModal("👁 " + esc(r.ad) + " — Rota İçeriği", body, {
     noFoot: true,
     onMount: (ov) => {
       ov.querySelectorAll("[data-rcikar]").forEach((b) => b.onclick = () => { r.musteriIds = r.musteriIds.filter((x) => x !== b.dataset.rcikar); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); m.close(); rotaIncele(rotaId); });
       ov.querySelectorAll("[data-rekle]").forEach((b) => b.onclick = () => { if (!r.musteriIds.includes(b.dataset.rekle)) r.musteriIds.push(b.dataset.rekle); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); m.close(); rotaIncele(rotaId); });
+      ov.querySelectorAll("[data-onsip]").forEach((b) => b.onclick = () => onSiparisMesaj(findCustomer(b.dataset.onsip)));
+      const sil = ov.querySelector("#rotaSilBtn"); if (sil) sil.onclick = () => { if (confirm(`"${r.ad}" rotası silinsin mi?`)) { store.rotalar = (store.rotalar || []).filter((x) => x.id !== rotaId); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); m.close(); render(); } };
       const x = ov.querySelector(".x"); if (x) x.addEventListener("click", () => render());
     },
   });
+}
+// Ön sipariş: müşteriye WhatsApp'tan sipariş isteği mesajı (rotadan önce)
+function onSiparisMesaj(c) {
+  if (!c) return;
+  let d = (c.telefon || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  if (!d) { alert("Bu müşteride telefon kayıtlı değil."); return; }
+  const st = store.settings || {};
+  const txt = `Merhaba ${c.ad},\n${st.fisBaslik || st.firmaAdi || "Özgür Ticaret"} 🚚\nYakında servisimiz size uğrayacak. İhtiyacınız olan ürünleri bu mesaja yazarsanız hazırlayıp getirelim.\nTeşekkürler.`;
+  window.open("https://wa.me/" + d + "?text=" + encodeURIComponent(txt), "_blank");
 }
 // 🤖 Araç Stok Ajanı: araçta olması gereken ama azalan/biten ürünleri izler
 const ARAC_AJAN_ESIK = 5; // aracStandart yoksa varsayılan alt sınır
@@ -3006,19 +3019,13 @@ function renderRota() {
 function renderServisBaslat() {
   const rotalar = store.rotalar || [];
   const rlist = rotalar.length
-    ? rotalar.map((r) => `<div class="rota-kayit-satir"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri</span></div><button class="btn soft sm" data-rincele="${r.id}" type="button">👁 İncele</button><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button><button class="rm" data-rsil="${r.id}" type="button">✕</button></div>`).join("")
+    ? rotalar.map((r) => `<div class="rota-kayit-satir" data-rincele="${r.id}" role="button" tabindex="0"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri · dokun → incele/düzenle/sil</span></div><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button></div>`).join("")
     : `<p class="hint" style="padding:6px">Kayıtlı rota yok. "Yeni Rota Oluştur" ile başla.</p>`;
   return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }]) +
     aracStokAjaniHTML() +
     `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">＋ Yeni Rota Oluştur & Servisi Başlat</button></div>
     <div class="section-title" style="margin-top:14px">Kayıtlı Rotalar</div>
-    <div class="card">${rlist}</div>
-    <div class="section-title" style="margin-top:14px">Rotasız (serbest — yakındaki müşteriler)</div>
-    <div class="card">
-      <button class="btn soft" id="rotaKonum" type="button">📍 Konumu Al</button> <span class="hint" id="rotaKonumDurum"></span>
-      <div id="rotaKart" style="margin-top:10px"></div>
-      <div id="rotaListe" style="margin-top:10px"></div>
-    </div>`;
+    <div class="card">${rlist}</div>`;
 }
 function servisStepperHTML() {
   return servis.musteriIds.map((id, i) => {
@@ -3055,6 +3062,7 @@ function servisSihirbaz(id) {
         <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
       </div>
       ${son ? `<p class="hint">Son satış: ${fmtDate(son.tarih)} · ${money.format(son.toplam)}</p>` : ""}
+      ${(() => { const notlar = (store.ziyaretler || []).filter((z) => z.musteriId === id && (z.not || "").trim()).slice(-3).reverse(); return notlar.length ? `<div class="zn-kutu"><div class="zn-bas">📝 Önceki ziyaret notları</div>${notlar.map((z) => `<div class="zn-not"><span class="hint">${fmtDate(z.tarih)}</span> ${esc(z.not)}</div>`).join("")}</div>` : ""; })()}
       ${(() => { const o = musteriOneri(id); return o.length ? `<div class="oner-kutu"><div class="oner-bas">🎯 Öner (geçen aldı, bu ay almadı)</div><div class="oner-cip">${o.map((p) => `<button class="oner-c" data-oner="${p.id}" type="button">${esc(p.ad)}</button>`).join("")}</div></div>` : ""; })()}
       <button class="btn soft" data-skonum="${id}" type="button" style="width:100%;margin:10px 0 0">📍 ${(c.lat != null && c.lng != null) ? "Konumu Güncelle" : "Bu Müşterinin Konumunu Kaydet"}</button>
       <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
@@ -3115,7 +3123,7 @@ function renderServisAktif() {
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
     : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
-  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "➕ Ekstra Satış", cls: "green", act: "ekstrasatis" }, { label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
     fab + aracStokAjaniHTML() + `<div id="servisBanner"></div>` + govde +
     `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
 }
@@ -3209,6 +3217,7 @@ function mountRotaOlustur() {
 }
 function mountRota() {
   document.querySelectorAll('[data-act="aracalim"]').forEach((aa) => aa.addEventListener("click", aracAlimModal));
+  document.querySelectorAll('[data-act="ekstrasatis"]').forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); pos.cat = "ANA"; pos.q = ""; navigate("satis"); }));
   if (servis.aktif) {
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Servisi bitir?")) servisBitir(); });
     const fab = document.getElementById("servisOzetFab"); if (fab) fab.addEventListener("click", servisOzetAc);
@@ -3252,17 +3261,14 @@ function mountRota() {
     return;
   }
   const ol = document.getElementById("rotaOlustur"); if (ol) ol.addEventListener("click", () => { rotaYapim = { ad: "", sira: [] }; navigate("rota-olustur"); });
-  document.querySelectorAll("[data-rincele]").forEach((b) => b.addEventListener("click", () => rotaIncele(b.dataset.rincele)));
-  document.querySelectorAll("[data-rbaslat]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".rota-kayit-satir[data-rincele]").forEach((row) => {
+    row.addEventListener("click", () => rotaIncele(row.dataset.rincele));
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); rotaIncele(row.dataset.rincele); } });
+  });
+  document.querySelectorAll("[data-rbaslat]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation(); // satıra yayılıp incele açmasın
     const r = (store.rotalar || []).find((x) => x.id === b.dataset.rbaslat); if (r) servisBaslat(r.musteriIds);
   }));
-  document.querySelectorAll("[data-rsil]").forEach((b) => b.addEventListener("click", () => {
-    if (!confirm("Rota silinsin mi?")) return;
-    store.rotalar = (store.rotalar || []).filter((x) => x.id !== b.dataset.rsil); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
-  }));
-  const kb = document.getElementById("rotaKonum"), kd = document.getElementById("rotaKonumDurum");
-  if (kb) kb.addEventListener("click", async () => { kd.textContent = "Konum alınıyor…"; kb.disabled = true; try { rota.konum = await konumAl(); kd.textContent = "✓"; rotaListeDoldur(); } catch (e) { kd.textContent = "alınamadı (" + (e.message || e) + ")"; } kb.disabled = false; });
-  rotaListeDoldur();
 }
 
 /* ============ PROFİLİM ============ */
