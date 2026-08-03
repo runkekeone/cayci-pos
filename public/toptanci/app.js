@@ -3064,15 +3064,12 @@ function servisSepetHTML() {
   if (!it.length) return `<p class="hint" style="padding:6px">Sepet boş — yukarıdan ürün ekle.</p>`;
   const t = cartTotals();
   return it.map((l, i) => {
-    const b = (findProduct(l.urunId) || {}).birim || "Adet";
     const tut = (Number(l.fiyat) || 0) * (Number(l.adet) || 0);
     return `<div class="ss-row">
-      <div class="ss-ust"><span class="ss-ad">${esc(l.ad)}</span><button class="ss-sil" data-sssil="${i}" type="button" aria-label="Sil">🗑</button></div>
-      <div class="ss-alt">
-        <span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}</b><button class="ss-b" data-ssp="${i}" type="button">+</button>${b !== "Adet" ? `<small>${esc(b.toLowerCase())}</small>` : ""}</span>
-        <span class="ss-fiyat">₺<input class="ss-fin" data-ssfiyat="${i}" type="number" step="0.01" inputmode="decimal" value="${Number(l.fiyat) || 0}" /></span>
-        <span class="ss-tut" data-sstut="${i}">${money.format(tut)}</span>
-      </div>
+      <span class="ss-ad">${esc(l.ad)}</span>
+      <span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span>
+      <input class="ss-fin" data-ssfiyat="${i}" type="number" step="0.01" inputmode="decimal" value="${Number(l.fiyat) || 0}" />
+      <span class="ss-tut" data-sstut="${i}">${money.format(tut)}</span>
     </div>`;
   }).join("") + `<div class="ss-tot"><b>Toplam</b><b class="ss-toplam">${money.format(t.toplam)}</b></div>`;
 }
