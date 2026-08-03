@@ -1217,6 +1217,22 @@ function finalizeSale(type, odemeAdi) {
   refreshPOS();
   const grid = document.getElementById("prodGrid"); if (grid) { grid.innerHTML = prodGridHTML(); wireProdCards(); }
   const yeniSale = store.sales[store.sales.length - 1];
+  // Elle değiştirilen fiyat var mı? Varsa müşteriye kaydetmeyi sor.
+  if (satilanMus) {
+    const mc = findCustomer(satilanMus);
+    if (mc) {
+      const map = mc.ozelFiyatlar || {};
+      const degisen = yeniSale.items.filter((it) => { if (!it.urunId) return false; const pr = findProduct(it.urunId); if (!pr) return false; const def = Number(pr.satis) || 0; const kayitli = (map[it.urunId] != null && map[it.urunId] !== "") ? Number(map[it.urunId]) : def; return Number(it.fiyat) !== kayitli; });
+      if (degisen.length) {
+        const liste = degisen.map((it) => "• " + it.ad + ": " + money.format(it.fiyat)).join("\n");
+        if (confirm(mc.ad + " için değiştirdiğin fiyatları kaydet?\n\n" + liste + "\n\nBundan sonra bu müşteriye bu fiyat(lar) otomatik uygulanır.")) {
+          mc.ozelFiyatlar = mc.ozelFiyatlar || {};
+          degisen.forEach((it) => { const pr = findProduct(it.urunId); const def = pr ? Number(pr.satis) || 0 : 0; if (Number(it.fiyat) === def) delete mc.ozelFiyatlar[it.urunId]; else mc.ozelFiyatlar[it.urunId] = Number(it.fiyat); });
+          saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+        }
+      }
+    }
+  }
   const inServis = servis.aktif && servis.acik && satilanMus && servis.acik === satilanMus;
   // Servis dışında (normal POS): irsaliye yazdırma sor. Serviste: otomatik WhatsApp.
   if (inServis) {
