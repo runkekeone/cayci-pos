@@ -2723,15 +2723,20 @@ async function irsaliyePaylas(s, opts) {
   if (!s) { alert("Gönderilecek satış yok."); return; }
   const url = irsaliyeGorsel(s, opts), c = s.musteriId && findCustomer(s.musteriId);
   const cap = irsaliyeAciklama(s, opts);
-  try {
-    const file = dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png");
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: cap });
-      return;
-    }
-  } catch (e) { if (e && e.name === "AbortError") return; }
-  let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
-  openModal("İrsaliye " + s.belgeNo, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="irsaliye" /><p class="hint" style="margin-top:8px">Görsele basılı tut → Paylaş → WhatsApp (kişiyi seç). Açıklama:<br><b>${esc(cap)}</b></p><div class="row"><a class="btn green" href="https://wa.me/${d}?text=${encodeURIComponent(cap)}" target="_blank" rel="noopener">WhatsApp (metin)</a></div>`, { noFoot: true });
+  const file = dataURLtoFile(url, "irsaliye-" + s.belgeNo + ".png");
+  // 1) Web Share (dosya) — canShare bazı WebView'lerde false döner; KOŞULSUZ dene.
+  if (navigator.share) {
+    try { await navigator.share({ files: [file], title: "İrsaliye " + s.belgeNo, text: cap }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; /* dosya paylaşımı reddedildi → alt yol */ }
+  }
+  // 2) Capacitor Share eklentisi varsa (native)
+  const CapShare = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+  if (CapShare && CapShare.share) {
+    try { await CapShare.share({ title: "İrsaliye " + s.belgeNo, text: cap, url, dialogTitle: "İrsaliyeyi paylaş" }); return; }
+    catch (e) { if (e && (e.message || "").toLowerCase().includes("cancel")) return; }
+  }
+  // 3) Son çare: görseli tam ekran aç (basılı tut → kaydet/paylaş) — WebView içinde çalışsın diye img büyük
+  openModal("Fiş Görseli " + s.belgeNo, `<p class="hint" style="margin:0 0 8px">Görsele <b>basılı tut → Kaydet/Paylaş</b> ile WhatsApp'tan gönder. (Cihazın görsel paylaşımını desteklemiyorsa görseli galeriye kaydedip oradan paylaş.)</p><img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="fiş" />`, { noFoot: true });
 }
 // Fiş kesildikten sonra: görsel + fiş metni bir arada; bağlı numaraya metin gönder / görseli paylaş
 function fisGonderModal(s, opts) {
