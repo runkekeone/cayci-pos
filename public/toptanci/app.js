@@ -2792,7 +2792,7 @@ function ziyaretKartiHTML(id) {
     <div class="zk-aksiyon">
       <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
       <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
-      <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi WhatsApp</button>
+      <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi Paylaş (görsel)</button>
       ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>
       <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
     </div>
@@ -2810,7 +2810,7 @@ function ziyaretKartiWire(id) {
   kart.querySelector("[data-zkapat]").onclick = () => { if (servis.aktif) { servis.acik = null; render(); } else kart.innerHTML = ""; };
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
-  kart.querySelector("[data-zkwa]").onclick = () => irsaliyeWa(musterininSonSatisi(id));
+  kart.querySelector("[data-zkwa]").onclick = () => irsaliyePaylas(musterininSonSatisi(id));
   const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
   const pasbtn = kart.querySelector("[data-zkpas]"); if (pasbtn) pasbtn.onclick = () => { if (confirm("Bu müşteri pas geçilsin mi?")) durakPasGec(id); };
   const sonabtn = kart.querySelector("[data-zksona]"); if (sonabtn) sonabtn.onclick = () => durakSonaAt(id);
