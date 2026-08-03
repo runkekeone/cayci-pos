@@ -721,6 +721,9 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .sat-row.sat-borc { background: #fdf0ef; } .sat-row.sat-borc td:nth-child(2) { border-left-color: var(--red); }
 .sat-row:active { filter: brightness(0.97); }
 .sat-tbl .sl-neg { color: var(--red); font-weight: 700; }
+.sr-row { cursor: pointer; }
+.sr-row:hover { background: var(--brand-soft); }
+.sr-row small { color: var(--muted); font-weight: 700; }
 .zk-metrik { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .zkm { background: var(--brand-soft); border-radius: var(--radius); padding: 9px 8px; text-align: center; }
 .zkm span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }

@@ -12,7 +12,7 @@ function emptyStore() {
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
-    duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [], aracHareket: [],
+    duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [], aracHareket: [], servisRaporlari: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
     counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
   };
@@ -305,6 +305,7 @@ const MENU = [
       { label: "Ürün Korelasyon Raporu", route: "rapor-korelasyon" }, { label: "Stok Hareket Rapor", route: "rapor-stokhareket" },
       { label: "Personel Hareket Raporu", route: "rapor-personelhareket" },
       { label: "📊 Müşteri Analizi", route: "musteri-analiz" }, { label: "📊 Ürün Analizi", route: "urun-analiz" },
+      { label: "🚗 Servis Raporları (Gün Sonu)", route: "servis-raporlari" },
   ] },
   { ico: "👤", label: "Müşteriler", route: "musteriler" },
   { ico: "🧑‍🔧", label: "Servisçiler (Bayiler)", route: "servisciler" },
@@ -2221,6 +2222,7 @@ const PAGES = {
   "rota-olustur": { render: renderRotaOlustur, mount: mountRotaOlustur },
   "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   talepler: { render: renderTalepler, mount: mountTalepler },
+  "servis-raporlari": { render: renderServisRaporlari, mount: mountServisRaporlari },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
 
   "rapor-gunluk": { render: renderRaporGunluk, mount: () => mountReport("rapor-gunluk") },
@@ -2541,6 +2543,15 @@ function servisRaporModal(r) {
     <div class="rk"><span>KM (gidilen)</span><b>${num2.format(r.km)} km</b></div>
   </div><p class="hint" style="margin-top:10px">Kâr %'si ciroya göre. KM konum servisleriyle takip edildi. Bakiye = bugün açık hesaba yazılan. Detay: Menü → Raporlar.</p>`, { noFoot: true });
 }
+function renderServisRaporlari() {
+  const list = (store.servisRaporlari || []).slice().reverse();
+  const rows = list.map((r) => `<tr class="sr-row" data-srview="${r.id}"><td>${fmtDate(r.tarih)}</td><td>${r.ziyaret}</td><td>${money.format(r.ciro)}</td><td class="${r.kar < 0 ? "sl-neg" : ""}">${money.format(r.kar)} <small>(%${num2.format(r.karYuzde || 0)})</small></td><td>${num2.format(r.km || 0)} km</td></tr>`).join("");
+  return pageHead("Servis Raporları", list.length + " gün sonu raporu") +
+    (list.length ? tableCard(["Tarih", "Ziyaret", "Ciro", "Kâr", "KM"], rows, infoLine(list.length)) : `<div class="card"><p class="sub">Henüz kayıtlı gün sonu raporu yok. Bir servisi bitirince otomatik buraya kaydolur.</p></div>`);
+}
+function mountServisRaporlari() {
+  document.querySelectorAll("[data-srview]").forEach((tr) => tr.addEventListener("click", () => { const r = (store.servisRaporlari || []).find((x) => x.id === tr.dataset.srview); if (r) servisRaporModal(r); }));
+}
 function renderTalepler() {
   const acik = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
   const rows = acik.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<tr><td>${fmtDate(t.tarih)}</td><td>${c ? esc(c.ad) : "-"}</td><td>${esc(t.metin)}</td><td><div class="act-btns"><button class="edit" data-talepok="${t.id}">✓ Karşılandı</button><button class="del" data-talepsil="${t.id}">Sil</button></div></td></tr>`; }).join("");
@@ -2578,11 +2589,15 @@ function servisBitir() {
   const gider = store.expenses.filter((e) => isToday(e.tarih)).reduce((a, e) => a + Number(e.tutar || 0), 0);
   const kar = ciro - maliyet - komisyon;
   const rapor = { ziyaret: zys.length, ciro, maliyet, kar, karYuzde: ciro > 0 ? (kar / ciro * 100) : 0, gider, nakit, pos, bakiye, km: (servis.km || 0) / 1000 };
+  // Gün sonu raporunu kaydet (sonradan Menü → Servis Raporları'ndan görülebilir)
+  store.servisRaporlari = store.servisRaporlari || [];
+  store.servisRaporlari.push(Object.assign({ id: genId(), tarih: new Date().toISOString() }, rapor));
   servis.aktif = false; servis.acik = null;
   stokModuAyarla("dukkan"); // servis bitti = dükkana dön
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
   servis.musteriIds = []; servis.edilen = []; servis.paslar = []; servis.satislar = []; servis.sonSatisId = null;
   try { localStorage.removeItem("servis-v1"); } catch (e) {}
+  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
   render();
   servisRaporModal(rapor);
 }
