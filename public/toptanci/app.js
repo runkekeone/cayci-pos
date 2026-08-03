@@ -2434,7 +2434,7 @@ function mountSahaKocu() {
 /* ============ ROTA / SAHA SATIŞ ============ */
 const rota = { konum: null, kayit: null, kayitTimer: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
-const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null, stokBitti: false };
+const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null, stokBitti: false, km: 0, kmSon: null };
 
 function rotaKaydet(ad, musteriIds) {
   const r = { id: genId(), ad: ad || ("Rota " + fmtDate(new Date().toISOString())), musteriIds, tarih: new Date().toISOString() };
@@ -2443,7 +2443,7 @@ function rotaKaydet(ad, musteriIds) {
 }
 function servisBaslat(musteriIds) {
   servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.satislar = [];
-  servis.acik = servis.musteriIds[0] || null; servis.adim = "onay"; servis.stokBitti = false; // önce araç stok kontrol
+  servis.acik = servis.musteriIds[0] || null; servis.adim = "onay"; servis.stokBitti = false; servis.km = 0; servis.kmSon = null; // önce araç stok kontrol
   stokModuAyarla("arac"); // servis = araçtan satış
   // Zaten rota sayfasındaysak hash değişmez → render tetiklenmez; elle render et (otomatik geçiş).
   if ((location.hash || "").replace(/^#\/?/, "") === "rota") render(); else navigate("rota");
@@ -2496,12 +2496,13 @@ function servisRaporModal(r) {
     <div class="rk"><span>Ziyaret</span><b>${r.ziyaret}</b></div>
     <div class="rk"><span>Ciro</span><b>${money.format(r.ciro)}</b></div>
     <div class="rk"><span>Ürün Maliyeti</span><b>${money.format(r.maliyet)}</b></div>
-    <div class="rk"><span>Kâr</span><b class="rk-kar">${money.format(r.kar)}</b></div>
+    <div class="rk"><span>Kâr</span><b class="rk-kar">${money.format(r.kar)} <small>(%${num2.format(r.karYuzde)})</small></b></div>
     <div class="rk"><span>Giderler</span><b>${money.format(r.gider)}</b></div>
     <div class="rk"><span>Nakit</span><b>${money.format(r.nakit)}</b></div>
     <div class="rk"><span>Pos</span><b>${money.format(r.pos)}</b></div>
     <div class="rk"><span>Bakiye</span><b class="${r.bakiye > 0 ? "rk-borc" : ""}">${money.format(r.bakiye)}</b></div>
-  </div><p class="hint" style="margin-top:10px">Bakiye = bugün açık hesaba yazılan (tahsil edilmeyen). Detay için Menü → Raporlar.</p>`, { noFoot: true });
+    <div class="rk"><span>KM (gidilen)</span><b>${num2.format(r.km)} km</b></div>
+  </div><p class="hint" style="margin-top:10px">Kâr %'si ciroya göre. KM konum servisleriyle takip edildi. Bakiye = bugün açık hesaba yazılan. Detay: Menü → Raporlar.</p>`, { noFoot: true });
 }
 function renderTalepler() {
   const acik = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
@@ -2515,14 +2516,14 @@ function mountTalepler() {
   if (typeof wireTableSearch === "function") wireTableSearch();
 }
 function servisKaydet() {
-  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, sonSatisId: servis.sonSatisId, stokBitti: servis.stokBitti, carts: pos.carts, active: pos.active })); } catch (e) {}
+  try { localStorage.setItem("servis-v1", JSON.stringify({ aktif: servis.aktif, musteriIds: servis.musteriIds, edilen: servis.edilen, paslar: servis.paslar, acik: servis.acik, adim: servis.adim, satislar: servis.satislar, sonSatisId: servis.sonSatisId, stokBitti: servis.stokBitti, km: servis.km, kmSon: servis.kmSon, carts: pos.carts, active: pos.active })); } catch (e) {}
 }
 function servisYukle() {
   try {
     const s = JSON.parse(localStorage.getItem("servis-v1") || "null");
     if (s && s.aktif) {
       servis.aktif = true; servis.musteriIds = s.musteriIds || []; servis.edilen = s.edilen || []; servis.paslar = s.paslar || [];
-      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.sonSatisId = s.sonSatisId || null; servis.watchId = null; servis.stokBitti = !!s.stokBitti;
+      servis.acik = s.acik || null; servis.adim = s.adim || "onay"; servis.satislar = s.satislar || []; servis.sonSatisId = s.sonSatisId || null; servis.watchId = null; servis.stokBitti = !!s.stokBitti; servis.km = Number(s.km) || 0; servis.kmSon = s.kmSon || null;
       if (s.carts && s.carts.length) { pos.carts = s.carts; pos.active = s.active || 0; }
     }
   } catch (e) {}
@@ -2538,7 +2539,8 @@ function servisBitir() {
   const bakiye = satlar.reduce((a, s) => a + (Number(s.odeme.acik) || 0), 0);
   const komisyon = satlar.reduce((a, s) => a + (Number(s.komisyon) || 0), 0);
   const gider = store.expenses.filter((e) => isToday(e.tarih)).reduce((a, e) => a + Number(e.tutar || 0), 0);
-  const rapor = { ziyaret: zys.length, ciro, maliyet, kar: ciro - maliyet - komisyon, gider, nakit, pos, bakiye };
+  const kar = ciro - maliyet - komisyon;
+  const rapor = { ziyaret: zys.length, ciro, maliyet, kar, karYuzde: ciro > 0 ? (kar / ciro * 100) : 0, gider, nakit, pos, bakiye, km: (servis.km || 0) / 1000 };
   servis.aktif = false; servis.acik = null;
   stokModuAyarla("dukkan"); // servis bitti = dükkana dön
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
@@ -2591,6 +2593,11 @@ function servisKonumIzle() {
   servis.watchId = navigator.geolocation.watchPosition((p) => {
     rota.konum = { lat: p.coords.latitude, lng: p.coords.longitude };
     if (!servis.aktif) return;
+    // KM sayacı: konum servisleriyle gidilen mesafe (jitter/atlama filtreli)
+    const cur = { lat: p.coords.latitude, lng: p.coords.longitude };
+    if (servis.kmSon) { const dm = haversine(servis.kmSon.lat, servis.kmSon.lng, cur.lat, cur.lng); if (dm >= 15 && dm <= 400) { servis.km = (servis.km || 0) + dm; servisKaydet(); } }
+    servis.kmSon = cur;
+    const kmEl = document.getElementById("rtKm"); if (kmEl) kmEl.textContent = ((servis.km || 0) / 1000).toFixed(1) + " km";
     const banner = document.getElementById("servisBanner"); if (!banner) return;
     // 100m içinde, henüz ziyaret edilmemiş rota müşterileri (program tahmin yürütmez — hepsini listeler)
     const yakin = servis.musteriIds.map(findCustomer).filter((c) => c && c.lat != null && !servis.edilen.includes(c.id))
@@ -3026,6 +3033,21 @@ function aracStokAjaniHTML() {
   const chips = list.map(({ p, arac }) => `<span class="ajan-chip ${arac <= 0 ? "bitti" : "az"}">${esc(p.ad)}: <b>${num2.format(arac)}</b></span>`).join("");
   return `<details class="ajan uyari"><summary class="ajan-bas"><span class="ajan-ic">🤖</span><b>Araç Stok Ajanı — ${list.length} azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><span class="ajan-ok">▾</span></summary><div class="ajan-body"><div class="ajan-chips">${chips}</div><button class="ajan-al btn ok sm" data-act="aracalim" type="button">🛒 Araca Al</button></div></details>`;
 }
+// Yemek/mola gideri — servis sırasında hızlı gider girişi
+function yemekModal() {
+  const m = openModal("🍽️ Yemek / Mola Gideri", `<div class="field"><label>Tutar (₺)</label><input id="ymTutar" type="number" inputmode="decimal" placeholder="0" /></div><div class="field"><label>Not (opsiyonel)</label><input id="ymNot" placeholder="ör. öğle yemeği" /></div><button class="btn ok" id="ymKaydet" type="button" style="width:100%;min-height:46px;justify-content:center">Gider Ekle</button>`, {
+    noFoot: true,
+    onMount: (ov) => {
+      const t = ov.querySelector("#ymTutar"); t.focus();
+      ov.querySelector("#ymKaydet").onclick = () => {
+        const v = Number(t.value) || 0; if (v <= 0) { alert("Tutar gir."); return; }
+        store.expenses.push({ id: genId(), tutar: v, kategori: "Yemek", not: (ov.querySelector("#ymNot").value || "").trim() || "Servis yemek/mola", tarih: new Date().toISOString() });
+        saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+        m.close(); alert("Yemek gideri eklendi ✔");
+      };
+    },
+  });
+}
 function renderRota() {
   return servis.aktif ? renderServisAktif() : renderServisBaslat();
 }
@@ -3163,7 +3185,13 @@ function renderServisAktif() {
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
     : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
-  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "➕ Ekstra Satış", cls: "green", act: "ekstrasatis" }, { label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+    `<div class="rota-tiles">
+       <button class="rt rt-satis" data-act="ekstrasatis" type="button"><span class="rt-ic">➕</span><span>+Satış</span></button>
+       <button class="rt rt-stok" data-act="aracalim" type="button"><span class="rt-ic">📦</span><span>+Stok</span></button>
+       <button class="rt rt-yemek" data-act="yemek" type="button"><span class="rt-ic">🍽️</span><span>Yemek</span></button>
+       <button class="rt rt-kmb" data-act="km" type="button"><span class="rt-ic">🚗</span><span id="rtKm">${((servis.km || 0) / 1000).toFixed(1)} km</span></button>
+     </div>` +
     fab + aracStokAjaniHTML() + `<div id="servisBanner"></div>` + govde +
     `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
 }
@@ -3280,6 +3308,8 @@ function mountRotaOlustur() {
 function mountRota() {
   document.querySelectorAll('[data-act="aracalim"]').forEach((aa) => aa.addEventListener("click", aracAlimModal));
   document.querySelectorAll('[data-act="ekstrasatis"]').forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); pos.cat = "ANA"; pos.q = ""; navigate("satis"); }));
+  document.querySelectorAll('[data-act="yemek"]').forEach((b) => b.addEventListener("click", yemekModal));
+  document.querySelectorAll('[data-act="km"]').forEach((b) => b.addEventListener("click", () => alert("Bugün gidilen: " + ((servis.km || 0) / 1000).toFixed(2) + " km\nKonum servisleriyle takip edilir; rota bitene kadar sayar.")));
   if (servis.aktif && !servis.stokBitti) {
     // Araç stok kontrol adımı
     const bitir = document.querySelector('[data-act="servisbitir"]'); if (bitir) bitir.addEventListener("click", () => { if (confirm("Rota iptal edilsin mi?")) servisBitir(); });

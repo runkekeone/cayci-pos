@@ -694,6 +694,17 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 /* İçerik başlıkları — daha ince/zarif */
 .content h1 { font-weight: 700; letter-spacing: -0.3px; }
 .content h2 { font-weight: 700; }
+/* Rota üst 4 kutucuk (+Satış / +Stok / Yemek / KM) */
+.rota-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 2px 2px 12px; }
+.rt { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 62px; border: 1.5px solid var(--line); background: #fff; border-radius: 12px; cursor: pointer; font-size: 11.5px; font-weight: 700; color: var(--text); box-shadow: var(--shadow-soft); padding: 6px 4px; }
+.rt:active { transform: scale(0.96); }
+.rt .rt-ic { font-size: 20px; line-height: 1; }
+.rt-satis { border-color: #bfe6cd; background: #f4fbf6; color: var(--green-d); }
+.rt-stok { border-color: #c6ddf7; background: #f1f7fe; color: var(--brand-dark); }
+.rt-yemek { border-color: #f3ddb4; background: #fdf6ea; color: var(--accent-ink); }
+.rt-kmb { border-color: #d6d0ef; background: #f5f3fb; color: #5b4bb0; }
+.rt-kmb span:last-child { font-family: var(--font-num); font-size: 12.5px; }
+.rk .rk-kar small { font-size: 11px; color: var(--muted); font-weight: 700; }
 .zk-metrik { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .zkm { background: var(--brand-soft); border-radius: var(--radius); padding: 9px 8px; text-align: center; }
 .zkm span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }
