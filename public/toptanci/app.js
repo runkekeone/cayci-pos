@@ -889,15 +889,6 @@ function renderSatis() {
         <div class="pos-tot brand"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
       </div>
 
-      <!-- 2. Arama satırı: 🔍 + barkod + fiyat seçici (altı çizili) -->
-      <div class="pos-search">
-        <div class="ps-field ps-search">
-          <button class="bar-go" id="barAra" type="button" aria-label="Ara">&#128269;</button>
-          <input class="bar-input" id="barInput" placeholder="Ürün barkodunu okut..." />
-        </div>
-        <div class="ps-field pos-price-sel" id="posPriceSel">Fiyat 1 &#9662;</div>
-      </div>
-
       <div class="pos2-cols">
         <!-- SOL sütun (mobilde akışta üst blok) -->
         <div class="pos2-left">
@@ -925,12 +916,7 @@ function renderSatis() {
             </div>
             <div class="note-line">
               <input id="posNot" class="note-in" placeholder="Satış notu" />
-              <span class="app-ver">App V.1.7.7</span>
-            </div>
-            <div class="pos-checks">
-              <label class="pchk">Fiyat<input type="checkbox" /></label>
-              <label class="pchk">İade mod<input type="checkbox" /></label>
-              <label class="pchk">POS kom<input type="checkbox" /></label>
+              <span class="app-ver">Özgür Ticaret</span>
             </div>
           </div>
 
@@ -1219,9 +1205,11 @@ function finalizeSale(type, odemeAdi) {
     if (rest > 0.001) { if (!c.musteriId) { alert("Kalan tutar açık hesaba yazılacak — müşteri seçin."); return; } odeme.acik = rest; }
   }
   const maliyet = c.items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? (Number(pr.alis) || 0) : 0) * i.adet; }, 0);
+  // POS cihaz komisyonu: sadece "Pos" ödemede %2 (nakit/havale/açık hariç)
+  const komisyon = (type === "pos" && !odemeAdi) ? Math.round(toplam * 0.02 * 100) / 100 : 0;
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
-  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, odeme, tarih: new Date().toISOString(), servisGun: localDateStr(new Date()), hafta: haftaNo(new Date()), stokKaynak: stokModu });
+  store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, komisyon, odeme, tarih: new Date().toISOString(), servisGun: localDateStr(new Date()), hafta: haftaNo(new Date()), stokKaynak: stokModu });
   c.items.forEach((i) => stokDus(i.urunId, i.adet)); // aktif moda göre (araç/dükkan) stok düş
   saveStore();
   pos.carts[pos.active] = newCart();
@@ -2548,8 +2536,9 @@ function servisBitir() {
   const nakit = satlar.reduce((a, s) => a + (Number(s.odeme.nakit) || 0), 0) + zys.reduce((a, z) => a + (Number(z.tahsilat) || 0), 0);
   const pos = satlar.reduce((a, s) => a + (Number(s.odeme.pos) || 0), 0);
   const bakiye = satlar.reduce((a, s) => a + (Number(s.odeme.acik) || 0), 0);
+  const komisyon = satlar.reduce((a, s) => a + (Number(s.komisyon) || 0), 0);
   const gider = store.expenses.filter((e) => isToday(e.tarih)).reduce((a, e) => a + Number(e.tutar || 0), 0);
-  const rapor = { ziyaret: zys.length, ciro, maliyet, kar: ciro - maliyet, gider, nakit, pos, bakiye };
+  const rapor = { ziyaret: zys.length, ciro, maliyet, kar: ciro - maliyet - komisyon, gider, nakit, pos, bakiye };
   servis.aktif = false; servis.acik = null;
   stokModuAyarla("dukkan"); // servis bitti = dükkana dön
   if (servis.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(servis.watchId); servis.watchId = null; }
@@ -2674,7 +2663,7 @@ function saleIrsaliyeMetni(s, opts) {
   return (st.fisBaslik || st.firmaAdi || "") + "\nİRSALİYE / SATIŞ FİŞİ\nBelge: " + s.belgeNo + "\nTarih: " + fmtDate(s.tarih) +
     (c ? "\nMüşteri: " + c.ad : "") + "\n\n" + kalem + "\n" +
     (s.iskonto ? "İskonto: -" + money.format(s.iskonto) + "\n" : "") +
-    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + bak + "\n" + (st.fisAltbilgi || "Teşekkür ederiz");
+    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + (s.komisyon ? "\nPOS Komisyonu (%2): -" + money.format(s.komisyon) : "") + bak + "\n" + (st.fisAltbilgi || "Teşekkür ederiz");
 }
 function irsaliyeWa(sale, opts) {
   if (!sale) { alert("Bu müşteride gönderilecek satış yok."); return; }
@@ -2700,6 +2689,7 @@ function irsaliyeGorsel(s, opts) {
   if (s.iskonto) rows.push({ t: "İskonto", r: "-" + money.format(s.iskonto) });
   rows.push({ t: "TOPLAM", r: money.format(s.toplam), bold: true, size: 20 });
   rows.push({ t: "Ödeme: " + saleOdeme(s), color: "#555" });
+  if (s.komisyon) rows.push({ t: "POS Komisyonu (%2)", r: "-" + money.format(s.komisyon), color: "#555" });
   const b = bakiyeHesap(s, opts);
   if (b) {
     rows.push({ sep: 1 });

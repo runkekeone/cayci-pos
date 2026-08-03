@@ -142,10 +142,10 @@ button:disabled, [disabled] { cursor: not-allowed; }
   gap: 6px;
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand);
-  font-size: 20px;
-  letter-spacing: -0.5px;
+  font-size: 17px;
+  letter-spacing: -0.4px;
 }
 .brand .b-badge {
   background: var(--brand);
@@ -280,7 +280,7 @@ body.rail .brand { justify-content: center; padding: 0; }
   display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
   margin-bottom: 22px;
 }
-.page-head h1 { font-size: 23px; font-weight: 800; margin: 0; letter-spacing: -0.5px; color: var(--brand-dark); }
+.page-head h1 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -0.4px; color: var(--brand-dark); }
 .page-head .sub { color: var(--muted); font-size: 13px; }
 .page-head .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -366,7 +366,7 @@ table.grid tbody tr:hover { background: #f7f9fc; }
   position: relative;
 }
 .stat .s-label { font-size: 12.5px; color: var(--muted); font-weight: 600; min-width: 0; text-transform: uppercase; letter-spacing: 0.4px; }
-.stat .s-value { font-size: 27px; font-weight: 800; letter-spacing: -0.8px; min-width: 0; color: var(--value); }
+.stat .s-value { font-size: 22px; font-weight: 700; letter-spacing: -0.6px; min-width: 0; color: var(--value); }
 .stat.green .s-value { color: var(--green-d); }
 .stat.blue .s-value { color: var(--brand); }
 .stat .s-trend {
@@ -690,7 +690,10 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .rota-konumsuz summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--brand-dark); padding: 8px 0; }
 .ziyaret-kart { background: var(--card); border: 1px solid var(--brand-ring); border-radius: var(--radius-md); box-shadow: var(--shadow-soft); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .zk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.zk-head h2 { margin: 0; font-size: 17px; color: var(--text); }
+.zk-head h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+/* İçerik başlıkları — daha ince/zarif */
+.content h1 { font-weight: 700; letter-spacing: -0.3px; }
+.content h2 { font-weight: 700; }
 .zk-metrik { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .zkm { background: var(--brand-soft); border-radius: var(--radius); padding: 9px 8px; text-align: center; }
 .zkm span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }
@@ -776,14 +779,14 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .servis-fab span { font-size: 10px; opacity: .9; }
 .servis-fab b { font-family: var(--font-num); font-size: 15px; }
 .sihir { padding: 16px; }
-.sihir h2 { margin: 2px 0 2px; font-size: 19px; }
+.sihir h2 { margin: 2px 0 2px; font-size: 16px; font-weight: 700; }
 .sihir-adim { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--brand); }
 .sihir-soru { font-size: 15px; font-weight: 700; color: var(--text); margin: 14px 0 10px; }
 .sihir-btn { display: flex; flex-direction: column; gap: 8px; }
 .sihir-btn .btn { width: 100%; }
 .sihir-odeme { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sihir-tot { font-size: 15px; margin: 6px 0; }
-.sihir-tot b { font-family: var(--font-num); font-size: 22px; font-weight: 800; color: var(--value); }
+.sihir-tot b { font-family: var(--font-num); font-size: 18px; font-weight: 700; color: var(--value); }
 .sihir .prod-grid { max-height: 40vh; }
 .sihir-sepet { margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
 .ss-row { display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--line-soft); }
@@ -1097,7 +1100,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .layout, .mainarea { max-width: 100vw; overflow-x: hidden; }
   .card { padding: 14px; border-radius: 14px; margin-bottom: 14px; }
   .page-head { margin-bottom: 14px; }
-  .page-head h1 { font-size: 19px; }
+  .page-head h1 { font-size: 17px; }
   .page-head .actions { margin-left: 0; width: 100%; }
 
   /* --- üst barı sadeleştir: sadece menü + arama + kullanıcı --- */
