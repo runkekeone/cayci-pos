@@ -3184,8 +3184,8 @@ function renderServisAktif() {
   const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>📋 ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
-    : `<div class="card" style="text-align:center;padding:28px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint">${done} satış · ${pas} pas</p></div>`;
-  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : ""), [{ label: "⏹ Bitir", cls: "softred", act: "servisbitir" }]) +
+    : `<div class="card" style="text-align:center;padding:24px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint" style="margin-bottom:14px">${done} satış · ${pas} pas</p><button class="btn softred lg" data-act="servisbitir" type="button" style="width:100%;justify-content:center">⏹ Servisi Bitir → Gün Sonu Raporu</button></div>`;
+  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : "")) +
     `<div class="rota-tiles">
        <button class="rt rt-satis" data-act="ekstrasatis" type="button"><span class="rt-ic">➕</span><span>+Satış</span></button>
        <button class="rt rt-stok" data-act="aracalim" type="button"><span class="rt-ic">📦</span><span>+Stok</span></button>

@@ -603,7 +603,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 /* Kategori şeridi: tek satır, yatay kaydırılabilir pill'ler (Getir tarzı) */
 .cat-tabs { display: flex; flex-wrap: nowrap; gap: 8px; padding: 2px 0 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .cat-tabs::-webkit-scrollbar { display: none; }
-.cat-tab { flex: 0 0 auto; cursor: pointer; font-size: 13px; font-weight: 600; color: #5a6470; background: #eef1f5; border: 1px solid #e4e8ee; border-radius: var(--radius-pill); padding: 8px 16px; white-space: nowrap; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.cat-tab { flex: 0 0 auto; cursor: pointer; font-size: 11.5px; font-weight: 600; color: #5a6470; background: #eef1f5; border: 1px solid #e4e8ee; border-radius: var(--radius-pill); padding: 5px 11px; white-space: nowrap; transition: background .15s ease, color .15s ease, border-color .15s ease; }
 .cat-tab:hover { border-color: #cfd6de; }
 .cat-tab.on { color: #fff; background: #818b98; border-color: #818b98; }
 /* Ürün kartları: kompakt, tutarlı yükseklik, havadar ama düzenli */
@@ -1290,7 +1290,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .prod-card .p-name { font-size: 11.5px; min-height: 28px; }
   .prod-card .p-price { font-size: 13px; }
   /* Kategori pill'leri: tek satır kaydırılabilir şerit, dokunma hedefi 44px */
-  .cat-tab, .cat-tab.on { padding: 10px 16px; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; }
+  .cat-tab, .cat-tab.on { padding: 6px 12px; font-size: 12px; min-height: 34px; display: inline-flex; align-items: center; }
 
   /* FİŞ + ÖDEME = alttan yukarı açılan sabit panel (bottom sheet) */
   .pos-sheet {
