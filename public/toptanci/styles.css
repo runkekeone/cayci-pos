@@ -728,6 +728,31 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .sr-row { cursor: pointer; }
 .sr-row:hover { background: var(--brand-soft); }
 .sr-row small { color: var(--muted); font-weight: 700; }
+/* Dükkan hub */
+.section-title { font-size: 13px; font-weight: 800; color: var(--brand-dark); letter-spacing: .2px; margin: 16px 2px 8px; }
+.dk-aksiyon { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 2px 2px 8px; }
+.dk-aksiyon .btn { justify-content: center; min-height: 52px; font-size: 13px; }
+.dk-ozet { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text); }
+.dk-ozet .link-btn { margin-left: auto; }
+.dk-ozet .sl-neg { color: var(--red); font-weight: 700; }
+.dk-stok-list { margin-top: 8px; max-height: 34vh; overflow-y: auto; }
+.dk-stok-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--line-soft); }
+.dk-stok-row:last-child { border-bottom: 0; }
+.dk-ad { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-stok-row b { font-family: var(--font-num); }
+.dk-stok-row .stok-low { color: var(--accent-ink); }
+.dk-evrak { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-evrak .btn { flex: 1 1 auto; min-width: 44%; justify-content: center; min-height: 44px; font-size: 12.5px; }
+.dk-kasa { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dk-kbox { display: flex; flex-direction: column; gap: 2px; background: #f7f9fc; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.dk-kbox span { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.dk-kbox b { font-family: var(--font-num); font-size: 14px; }
+.dk-kbox.green { background: #f1faf4; border-color: #cdeede; } .dk-kbox.green b { color: var(--green-d); }
+.dk-not-list { margin-top: 4px; }
+.dk-not { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft); }
+.dk-not:last-child { border-bottom: 0; }
+.dk-not-txt { flex: 1; min-width: 0; font-size: 13px; color: var(--text); }
+.dk-not-txt .hint { margin-right: 4px; }
 .zk-metrik { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .zkm { background: var(--brand-soft); border-radius: var(--radius); padding: 9px 8px; text-align: center; }
 .zkm span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted); }
