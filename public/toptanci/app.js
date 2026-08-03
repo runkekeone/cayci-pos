@@ -393,6 +393,7 @@ function formModal(title, fields, item, onSave) {
     if (f.type === "select") return `<div class="field"><label>${f.label}</label><select data-k="${f.key}">${f.options.map((o) => { const v = typeof o === "object" ? o.v : o; const t = typeof o === "object" ? o.t : o; return `<option value="${esc(v)}" ${String(val) === String(v) ? "selected" : ""}>${esc(t)}</option>`; }).join("")}</select></div>`;
     if (f.type === "textarea") return `<div class="field"><label>${f.label}</label><textarea data-k="${f.key}" rows="3">${esc(val)}</textarea></div>`;
     if (f.type === "checkbox") return `<label class="field field-chk"><input data-k="${f.key}" type="checkbox" ${val ? "checked" : ""} /> <span>${f.label}</span></label>`;
+    if (f.type === "foto") return `<div class="field"><button class="btn soft" type="button" data-foto="${f.key}" style="width:100%;justify-content:center;min-height:44px">${f.label}</button><span class="hint" id="fotoDurum-${f.key}" style="display:block;margin-top:4px"></span></div>`;
     if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">📇 Rehber</button></div></div>`;
     return `<div class="field"><label>${f.label}${f.req ? " *" : ""}</label><input data-k="${f.key}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""} value="${esc(val)}" placeholder="${f.ph || ""}" /></div>`;
   }).join("");
@@ -403,11 +404,13 @@ function formModal(title, fields, item, onSave) {
         const inp = ov.querySelector(`[data-k="${b.dataset.rehberfor}"]`); if (inp && k.tel) inp.value = k.tel;
         const adInp = ov.querySelector('[data-k="ad"]'); if (adInp && !adInp.value && k.ad) adInp.value = k.ad;
       }));
+      ov.querySelectorAll("[data-foto]").forEach((b) => b.addEventListener("click", () => vergiLevhasiOku(ov, b.dataset.foto)));
     },
     onOk: (ov) => {
       const data = {};
       let ok = true;
       fields.forEach((f) => {
+        if (f.type === "foto") return; // sadece aksiyon butonu, veri değil
         const el = ov.querySelector(`[data-k="${f.key}"]`);
         let v = f.type === "checkbox" ? el.checked : el.value;
         if (f.type === "number") v = v === "" ? "" : Number(v);
@@ -660,6 +663,7 @@ function renderUrunAnaliz() {
 function openYeniMusteri(onDone, item, preset) {
   const seed = item || preset || null; // preset: yeni kayıt için varsayılan değerler (ör. bayi:true)
   formModal(item ? "Müşteri Düzenle" : (preset && preset.bayi ? "Yeni Servisçi (Bayi)" : "Yeni Müşteri Oluştur"), [
+    { key: "vergiFoto", label: "📷 Vergi Levhası Çek → Otomatik Doldur", type: "foto" },
     { key: "ad", label: "Müşteri Tanımı", req: true, ph: "Ad Soyad / Ünvan" },
     { key: "vade", label: "Vade Süresi (gün)", type: "number", ph: "opsiyonel" },
     { key: "telefon", label: "Telefon", ph: "05xx", rehber: true },
@@ -1616,6 +1620,25 @@ function ocrPickImage(cb) {
     r.readAsDataURL(f);
   });
   inp.click();
+}
+// Vergi levhası fotoğrafı → OCR → müşteri formu alanlarını doldur (formModal içinden)
+async function vergiLevhasiOku(ov, key) {
+  const durum = ov.querySelector("#fotoDurum-" + key);
+  if (!SB || !SB.functions) { if (durum) durum.textContent = "Bulut bağlantısı yok."; return; }
+  ocrPickImage(async (imageBase64, mediaType) => {
+    if (durum) durum.textContent = "Vergi levhası okunuyor…";
+    let res;
+    try {
+      const { data, error } = await SB.functions.invoke("ocr-extract", { body: { mode: "vergi", imageBase64, mediaType } });
+      res = error ? null : data;
+    } catch (e) { res = null; }
+    if (!res || !res.ok || !res.data) { if (durum) durum.textContent = "Okunamadı (internet/kurulum). Elle gir."; return; }
+    const d = res.data, set = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el && !el.value) el.value = v; };
+    const setForce = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el) el.value = v; };
+    setForce("ad", d.unvan); setForce("vergiNo", d.vergiNo); setForce("vergiDairesi", d.vergiDairesi);
+    setForce("adres", d.adres); set("bolge", d.il); set("mahalle", d.ilce);
+    if (durum) durum.textContent = "✓ Dolduruldu — kontrol edip Kaydet'e bas.";
+  });
 }
 async function alisFotoOku() {
   const durum = document.getElementById("aFotoDurum");
@@ -2761,11 +2784,16 @@ async function taraBaslat() {
   });
 }
 function konumKaydet(id) {
-  if (!rota.konum) { alert("Önce konumu al."); return; }
   const c = findCustomer(id); if (!c) return;
-  c.lat = rota.konum.lat; c.lng = rota.konum.lng; c.konumTarih = new Date().toISOString();
-  saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
-  alert("Müşterinin konumu kaydedildi 📍"); render();
+  const kaydet = (lat, lng) => { c.lat = lat; c.lng = lng; c.konumTarih = new Date().toISOString(); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); alert(c.ad + " konumu kaydedildi 📍"); render(); };
+  if (rota.konum) { kaydet(rota.konum.lat, rota.konum.lng); return; }
+  if (!navigator.geolocation) { alert("Bu cihazda konum desteklenmiyor."); return; }
+  // Servis başlamış olsun olmasın anlık konumu al (GPS watch henüz fix vermemişse de çalışır)
+  navigator.geolocation.getCurrentPosition(
+    (p) => { rota.konum = { lat: p.coords.latitude, lng: p.coords.longitude }; kaydet(p.coords.latitude, p.coords.longitude); },
+    (e) => alert("Konum alınamadı: " + ((e && e.message) || e) + "\nTelefon konumunu/GPS'i aç ve tekrar dene."),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
 }
 
 function ziyaretKartiHTML(id) {
@@ -2914,12 +2942,11 @@ function servisSepetHTML() {
   const t = cartTotals();
   return it.map((l, i) => { const b = (findProduct(l.urunId) || {}).birim || "Adet"; const bl = b !== "Adet" ? ` <small>${esc(b.toLowerCase())}</small>` : ""; return `<div class="ss-row"><span class="ss-ad">${esc(l.ad)}</span><span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}${bl}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span><span class="ss-tut">${money.format((Number(l.fiyat) || 0) * (Number(l.adet) || 0))}</span></div>`; }).join("") + `<div class="ss-tot"><b>Toplam</b><b>${money.format(t.toplam)}</b></div>`;
 }
-function servisProdGridHTML() {
-  const q = ocrNorm(pos.q || "");
-  let list = store.products.filter((p) => p.gorunur !== false);
-  if (q) { const qr = (pos.q || "").trim().toLocaleLowerCase("tr"); list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr)); }
-  if (!list.length) return `<p class="hint" style="grid-column:1/-1;padding:14px;text-align:center">Ürün yok.</p>`;
-  return list.map((p) => { const b = (p.birim && p.birim !== "Adet") ? ` <small>/ ${esc(p.birim.toLowerCase())}</small>` : ""; return `<div class="prod-card" data-add="${p.id}"><span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}${b}</span></div>`; }).join("");
+// Servis ürün adımı kategori şeridi (ana satış ekranıyla aynı kategoriler; data-scat)
+function sCatTabsHTML() {
+  const used = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
+  const cats = ["ANA"].concat(allGroupNames().filter((g) => used.has(g)));
+  return cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-scat="${c}">${c === "ANA" ? "☰ Kategoriler" : esc(c)}</span>`).join("");
 }
 function servisSihirbaz(id) {
   const c = findCustomer(id); if (!c) return "";
@@ -2936,6 +2963,7 @@ function servisSihirbaz(id) {
       </div>
       ${son ? `<p class="hint">Son satış: ${fmtDate(son.tarih)} · ${money.format(son.toplam)}</p>` : ""}
       ${(() => { const o = musteriOneri(id); return o.length ? `<div class="oner-kutu"><div class="oner-bas">🎯 Öner (geçen aldı, bu ay almadı)</div><div class="oner-cip">${o.map((p) => `<button class="oner-c" data-oner="${p.id}" type="button">${esc(p.ad)}</button>`).join("")}</div></div>` : ""; })()}
+      <button class="btn soft" data-skonum="${id}" type="button" style="width:100%;margin:10px 0 0">📍 ${(c.lat != null && c.lng != null) ? "Konumu Güncelle" : "Bu Müşterinin Konumunu Kaydet"}</button>
       <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
       <div class="sihir-btn">
         <button class="btn green lg" data-sonay="${id}" type="button">✓ Evet — Devam</button>
@@ -2953,7 +2981,8 @@ function servisSihirbaz(id) {
     return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
       <div class="zk-hizli-row" style="margin:8px 0"><input id="zkHizli" placeholder="Hızlı: 7 soda 2 gazoz" /><button class="btn green" id="zkHizliBtn" type="button">Doldur</button><button class="btn soft" id="sFoto" type="button" title="Fiş/faturadan oku">&#128247;</button></div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
-      <div class="prod-grid" id="prodGrid">${servisProdGridHTML()}</div>
+      <div class="cat-tabs" id="sCatTabs">${sCatTabsHTML()}</div>
+      <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
       <div class="sihir-sepet" id="sihirSepet">${servisSepetHTML()}</div>
       <div class="sihir-btn"><button class="btn primary lg" id="odemeGec" type="button">Ödemeye Geç →</button><button class="btn soft sm" data-sgeri="satisMi" type="button">← Geri</button></div>
     </div>`;
@@ -3097,9 +3126,10 @@ function mountRota() {
       if (tel && typeof kvGet === "function") kvGet("bayi_puan:" + tel).then((r) => { if (pEl) pEl.textContent = num2.format((r && r.value) || 0); }).catch(() => { if (pEl) pEl.textContent = "0"; });
       else if (pEl) pEl.textContent = "0";
     }
+    document.querySelectorAll("[data-skonum]").forEach((b) => b.addEventListener("click", () => konumKaydet(b.dataset.skonum)));
     document.querySelectorAll("[data-zkpas]").forEach((b) => b.addEventListener("click", () => { if (confirm("Pas geçilsin mi?")) durakPasGec(b.dataset.zkpas); }));
     document.querySelectorAll("[data-zksona]").forEach((b) => b.addEventListener("click", () => durakSonaAt(b.dataset.zksona)));
-    const satvar = document.querySelector("[data-satvar]"); if (satvar) satvar.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; servis.adim = "urun"; render(); });
+    const satvar = document.querySelector("[data-satvar]"); if (satvar) satvar.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; pos.cat = "ANA"; pos.q = ""; servis.adim = "urun"; render(); });
     const satyok = document.querySelector("[data-satyok]"); if (satyok) satyok.addEventListener("click", () => { servis.sonSatisId = null; servis.adim = "kapanis"; render(); });
     document.querySelectorAll("[data-oner]").forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); activeCart().musteriId = servis.acik; addToCart(b.dataset.oner); servis.adim = "urun"; render(); }));
     if (servis.adim === "kapanis") {
@@ -3108,9 +3138,14 @@ function mountRota() {
     }
     if (servis.adim === "urun") {
       activeCart().musteriId = servis.acik;
-      const wireAdds = () => document.querySelectorAll("#prodGrid [data-add]").forEach((el) => el.onclick = () => { addToCart(el.dataset.add); servisSepetGuncelle(); });
-      wireAdds();
-      const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = servisProdGridHTML(); wireAdds(); } });
+      const gridYen = () => { const g = document.getElementById("prodGrid"); if (g) { g.innerHTML = prodGridHTML(); srvAdds(); } document.querySelectorAll("[data-scat]").forEach((x) => x.classList.toggle("on", x.dataset.scat === pos.cat)); };
+      const srvAdds = () => {
+        document.querySelectorAll("#prodGrid [data-add]").forEach((el) => el.onclick = () => { addToCart(el.dataset.add); servisSepetGuncelle(); });
+        document.querySelectorAll("#prodGrid [data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; gridYen(); });
+      };
+      srvAdds();
+      document.querySelectorAll("[data-scat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.scat; gridYen(); }));
+      const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; gridYen(); });
       const hz = document.getElementById("zkHizliBtn"); if (hz) hz.addEventListener("click", () => hizliSiparisDoldurInline(servis.acik));
       const sf = document.getElementById("sFoto"); if (sf) sf.addEventListener("click", satisFotoOku);
       const og = document.getElementById("odemeGec"); if (og) og.addEventListener("click", () => { if (!activeCart().items.length) { alert("Sepet boş — ürün ekle."); return; } servis.adim = "odeme"; render(); });

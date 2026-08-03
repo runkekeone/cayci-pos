@@ -60,6 +60,19 @@ const SCHEMAS: Record<string, unknown> = {
     },
     required: ['lines'],
   },
+  vergi: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      unvan: { type: 'string' },
+      vergiNo: { type: 'string' },
+      vergiDairesi: { type: 'string' },
+      adres: { type: 'string' },
+      il: { type: 'string' },
+      ilce: { type: 'string' },
+    },
+    required: ['unvan'],
+  },
   fatura: {
     type: 'object',
     additionalProperties: false,
@@ -91,11 +104,18 @@ function prompt(mode: string, catalog?: string[]): string {
       ? `\n\nMevcut ürün listesi (name/ad alanını bunlardan en yakın olana eşle; ` +
         `tam eşleşme yoksa fotoğraftaki adı yaz):\n- ${catalog.join('\n- ')}`
       : ''
+  const belge = mode === 'fatura' ? 'alış faturası' : mode === 'vergi' ? 'vergi levhası' : 'fiş/adisyon'
   const ortak =
-    `Bu bir Türkçe ${mode === 'fatura' ? 'alış faturası' : 'fiş/adisyon'} fotoğrafı. ` +
+    `Bu bir Türkçe ${belge} fotoğrafı. ` +
     `Sadece istenen alanları çıkar. Okunamayan sayısal alanı 0, metni boş bırak. ` +
     `Para tutarlarını sayı olarak ver (₺, TL, nokta/virgül ayıklanmış).` +
     eslesme
+  if (mode === 'vergi')
+    return (
+      `Bu bir Türkçe vergi levhası fotoğrafı. Sadece istenen alanları çıkar; okunamayanı boş bırak.\n` +
+      `"unvan": ticari ünvan / ad soyad. "vergiNo": vergi kimlik no (VKN 10 hane) ya da TCKN (11 hane), sadece rakam. ` +
+      `"vergiDairesi": vergi dairesi adı. "adres": iş yeri adresi (tam). "il": il. "ilce": ilçe.`
+    )
   if (mode === 'alis')
     return (
       ortak +
