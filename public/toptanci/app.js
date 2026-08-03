@@ -1583,6 +1583,30 @@ function ocrNorm(s) {
     .replace(/[üÜ]/g, "u").replace(/[öÖ]/g, "o").replace(/[çÇ]/g, "c")
     .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 }
+// Serbest sipariş kelimesini ürüne eşle — MÜŞTERİ GEÇMİŞİNE göre (ör. "sade soda" → o müşterinin hep aldığı marka)
+function musteriUrunSecim(keyword, musteriId) {
+  let n = ocrNorm(keyword);
+  if (!n) return "";
+  n = n.replace(/kola/g, "cola").replace(/mesrubat/g, "").trim(); // sinonim (kola=cola)
+  if (!n) return "";
+  let adaylar = store.products.filter((p) => p.gorunur !== false && ocrNorm(p.ad).includes(n));
+  if (!adaylar.length) {
+    const kel = n.split(/\s+/).filter(Boolean);
+    if (kel.length) adaylar = store.products.filter((p) => p.gorunur !== false && kel.every((k) => ocrNorm(p.ad).includes(k)));
+  }
+  if (!adaylar.length) return ocrMatch(keyword, store.products, "ad"); // yedek: genel eşleşme
+  if (adaylar.length === 1) return adaylar[0].id;
+  // Bu müşterinin geçmişinde en çok aldığı aday öne
+  if (musteriId) {
+    const say = {};
+    store.sales.forEach((s) => { if (s.musteriId === musteriId) s.items.forEach((it) => { say[it.urunId] = (say[it.urunId] || 0) + (Number(it.adet) || 0); }); });
+    const sirali = adaylar.slice().sort((a, b) => (say[b.id] || 0) - (say[a.id] || 0));
+    if ((say[sirali[0].id] || 0) > 0) return sirali[0].id;
+  }
+  // Geçmiş yoksa: ana ürün (öne çıkan) tercih, yoksa ilk aday
+  const ana = adaylar.find((p) => p.anaUrun);
+  return (ana || adaylar[0]).id;
+}
 function ocrMatch(name, list, key) {
   const n = ocrNorm(name);
   if (!n) return "";
@@ -2570,7 +2594,7 @@ function hizliSiparisDoldur(id, text, durumEl) {
   if (!parc.length) { if (durumEl) durumEl.textContent = "Anlaşılamadı. Örnek: 7 soda 2 gazoz 17 su"; return; }
   const c = pos.carts[pos.active]; c.musteriId = id;
   let ekli = 0; const atil = [];
-  parc.forEach((p) => { const pid = ocrMatch(p.k, store.products, "ad"); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); ekli++; } else atil.push(p.q + " " + p.k); });
+  parc.forEach((p) => { const pid = musteriUrunSecim(p.k, id); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); ekli++; } else atil.push(p.q + " " + p.k); });
   if (!ekli) { if (durumEl) durumEl.textContent = "Ürün eşleşmedi: " + atil.join(", "); return; }
   navigate("satis");
 }
@@ -3138,7 +3162,7 @@ function hizliSiparisDoldurInline(id) {
   const inp = document.getElementById("zkHizli"); const text = inp ? inp.value : "";
   const parc = siparisParse(text); if (!parc.length) { alert("Anlaşılamadı. Örnek: 7 soda 2 gazoz 17 su"); return; }
   const c = activeCart(); c.musteriId = id;
-  parc.forEach((p) => { const pid = ocrMatch(p.k, store.products, "ad"); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); } });
+  parc.forEach((p) => { const pid = musteriUrunSecim(p.k, id); if (pid) { for (let i = 0; i < Math.round(p.q); i++) addToCart(pid); } });
   if (inp) inp.value = "";
   servisSepetGuncelle();
 }
