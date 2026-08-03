@@ -2433,7 +2433,9 @@ function servisBaslat(musteriIds) {
   servis.aktif = true; servis.musteriIds = musteriIds.slice(); servis.edilen = []; servis.paslar = []; servis.satislar = [];
   servis.acik = servis.musteriIds[0] || null; servis.adim = "onay";
   stokModuAyarla("arac"); // servis = araçtan satış
-  navigate("rota"); servisKonumIzle();
+  // Zaten rota sayfasındaysak hash değişmez → render tetiklenmez; elle render et (otomatik geçiş).
+  if ((location.hash || "").replace(/^#\/?/, "") === "rota") render(); else navigate("rota");
+  servisKonumIzle();
 }
 function servisSonrakiAc() {
   const next = servis.musteriIds.find((id) => !servis.edilen.includes(id) && !servis.paslar.includes(id));

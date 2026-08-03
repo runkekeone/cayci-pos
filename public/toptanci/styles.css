@@ -712,10 +712,12 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .sd-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .sd-mid b { font-size: 14.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sd-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--green-d); }
-.rota-kayit-satir { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-soft); }
+.rota-kayit-satir { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; padding: 8px 4px; border-bottom: 1px solid var(--line-soft); }
 .rota-kayit-satir:last-child { border-bottom: 0; }
 .rk-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.rk-mid b { font-size: 14.5px; color: var(--text); }
+.rk-mid b { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rota-kayit-satir .btn.sm { flex: 0 0 auto; padding: 6px 10px; font-size: 11.5px; min-height: 34px; box-shadow: none; }
+.rota-kayit-satir .rm { flex: 0 0 auto; min-width: 30px; }
 .rota-secim { max-height: 46vh; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); }
 .rota-sec-satir { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
 .rota-sec-satir:last-child { border-bottom: 0; }
@@ -1072,7 +1074,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .user-btn { font-size: 0; padding: 8px; min-height: 44px; min-width: 44px; }
   .user-btn::after { content: "\1F464"; font-size: 20px; }
   .hamburger { font-size: 24px; padding: 8px 8px; min-height: 44px; min-width: 44px; }
-  .searchbox { width: auto; flex: 1; max-width: none; min-width: 0; }
+  .searchbox { width: auto; flex: 1; max-width: none; min-width: 0; height: 38px; margin: 0 6px; padding: 0 8px 0 14px; background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.28); }
 
   /* --- her tabloyu KOMPAKT karta çevir (data-label ile) --- */
   .table-wrap { overflow: auto; max-height: 58vh; }
@@ -1167,7 +1169,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   /* Menü öğeleri — dokunma için ferah */
   .menu-item > a { padding: 14px 16px; min-height: 48px; }
   .submenu a { padding: 13px 18px 13px 52px; min-height: 46px; }
-  .searchbox input { padding: 12px 4px; }
+  .searchbox input { padding: 7px 4px; font-size: 13.5px; }
   .link-btn { padding: 6px 2px; min-height: 40px; display: inline-flex; align-items: center; }
   /* Üst bar dropdown öğeleri */
   .dropdown a { padding: 13px 18px; min-height: 46px; }
