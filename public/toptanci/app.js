@@ -3035,7 +3035,7 @@ function aracStokAjaniHTML() {
   if (!list.length) return `<div class="ajan ok"><span class="ajan-ic">🤖</span><div class="ajan-txt"><b>Araç Stok Ajanı</b><span class="hint">Azalan/biten ürün yok — araç dolu 👍</span></div></div>`;
   const bitti = list.filter((x) => x.arac <= 0).length;
   const chips = list.map(({ p, arac }) => `<span class="ajan-chip ${arac <= 0 ? "bitti" : "az"}">${esc(p.ad)}: <b>${num2.format(arac)}</b></span>`).join("");
-  return `<div class="ajan uyari"><div class="ajan-bas"><span class="ajan-ic">🤖</span><b>Araç Stok Ajanı — ${list.length} ürün azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><button class="ajan-al btn ok sm" data-act="aracalim" type="button">🛒 Araca Al</button></div><div class="ajan-chips">${chips}</div></div>`;
+  return `<details class="ajan uyari"><summary class="ajan-bas"><span class="ajan-ic">🤖</span><b>Araç Stok Ajanı — ${list.length} azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><span class="ajan-ok">▾</span></summary><div class="ajan-body"><div class="ajan-chips">${chips}</div><button class="ajan-al btn ok sm" data-act="aracalim" type="button">🛒 Araca Al</button></div></details>`;
 }
 function renderRota() {
   return servis.aktif ? renderServisAktif() : renderServisBaslat();
@@ -3064,7 +3064,18 @@ function servisSepetHTML() {
   const it = activeCart().items;
   if (!it.length) return `<p class="hint" style="padding:6px">Sepet boş — yukarıdan ürün ekle.</p>`;
   const t = cartTotals();
-  return it.map((l, i) => { const b = (findProduct(l.urunId) || {}).birim || "Adet"; const bl = b !== "Adet" ? ` <small>${esc(b.toLowerCase())}</small>` : ""; return `<div class="ss-row"><span class="ss-ad">${esc(l.ad)}</span><span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}${bl}</b><button class="ss-b" data-ssp="${i}" type="button">+</button></span><span class="ss-tut">${money.format((Number(l.fiyat) || 0) * (Number(l.adet) || 0))}</span></div>`; }).join("") + `<div class="ss-tot"><b>Toplam</b><b>${money.format(t.toplam)}</b></div>`;
+  return it.map((l, i) => {
+    const b = (findProduct(l.urunId) || {}).birim || "Adet";
+    const tut = (Number(l.fiyat) || 0) * (Number(l.adet) || 0);
+    return `<div class="ss-row">
+      <div class="ss-ust"><span class="ss-ad">${esc(l.ad)}</span><button class="ss-sil" data-sssil="${i}" type="button" aria-label="Sil">🗑</button></div>
+      <div class="ss-alt">
+        <span class="ss-adet"><button class="ss-b" data-ssm="${i}" type="button">−</button><b>${num2.format(l.adet)}</b><button class="ss-b" data-ssp="${i}" type="button">+</button>${b !== "Adet" ? `<small>${esc(b.toLowerCase())}</small>` : ""}</span>
+        <span class="ss-fiyat">₺<input class="ss-fin" data-ssfiyat="${i}" type="number" step="0.01" inputmode="decimal" value="${Number(l.fiyat) || 0}" /></span>
+        <span class="ss-tut" data-sstut="${i}">${money.format(tut)}</span>
+      </div>
+    </div>`;
+  }).join("") + `<div class="ss-tot"><b>Toplam</b><b class="ss-toplam">${money.format(t.toplam)}</b></div>`;
 }
 // Servis ürün adımı kategori şeridi (ana satış ekranıyla aynı kategoriler; data-scat)
 function sCatTabsHTML() {
@@ -3169,6 +3180,14 @@ function servisSepetGuncelle() {
 function servisSepetWire() {
   document.querySelectorAll("#sihirSepet [data-ssp]").forEach((b) => b.onclick = () => { const it = activeCart().items[Number(b.dataset.ssp)]; if (it) it.adet = (Number(it.adet) || 0) + 1; servisSepetGuncelle(); });
   document.querySelectorAll("#sihirSepet [data-ssm]").forEach((b) => b.onclick = () => { const c = activeCart(); const idx = Number(b.dataset.ssm); const it = c.items[idx]; if (it) { it.adet = (Number(it.adet) || 0) - 1; if (it.adet <= 0) c.items.splice(idx, 1); } servisSepetGuncelle(); });
+  document.querySelectorAll("#sihirSepet [data-sssil]").forEach((b) => b.onclick = () => { activeCart().items.splice(Number(b.dataset.sssil), 1); servisSepetGuncelle(); });
+  // Fiyat düzenleme — re-render YOK (odak kaybolmasın), sadece satır ve toplam güncellenir
+  document.querySelectorAll("#sihirSepet [data-ssfiyat]").forEach((el) => el.oninput = () => {
+    const idx = Number(el.dataset.ssfiyat); const it = activeCart().items[idx]; if (!it) return;
+    it.fiyat = el.value === "" ? 0 : Number(el.value) || 0;
+    const tc = document.querySelector(`#sihirSepet [data-sstut="${idx}"]`); if (tc) tc.textContent = money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0));
+    const tot = document.querySelector("#sihirSepet .ss-toplam"); if (tot) tot.textContent = money.format(cartTotals().toplam);
+  });
 }
 function hizliSiparisDoldurInline(id) {
   const inp = document.getElementById("zkHizli"); const text = inp ? inp.value : "";

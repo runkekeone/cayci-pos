@@ -552,12 +552,17 @@ td.arac-stok { color: var(--accent-ink); font-weight: 700; }
 .ajan.ok { display: flex; align-items: center; gap: 10px; background: #eef7f0; border-color: #cde7d5; }
 .ajan.ok .ajan-txt { display: flex; flex-direction: column; }
 .ajan.ok .ajan-txt b { font-size: 13px; color: var(--green-d); }
-.ajan.uyari { background: #fff6ed; border-color: #f6d9b0; }
-.ajan-bas { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #9a5406; }
-.ajan-bas b { flex: 1; min-width: 0; }
+.ajan.uyari { background: #fff6ed; border-color: #f6d9b0; padding: 0; }
+details.ajan.uyari > summary { list-style: none; }
+details.ajan.uyari > summary::-webkit-details-marker { display: none; }
+.ajan-bas { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #9a5406; cursor: pointer; padding: 11px 12px; }
+.ajan-bas b { flex: 1; min-width: 0; font-weight: 800; }
+.ajan-bas .ajan-ok { flex: 0 0 auto; font-size: 14px; transition: transform .18s; }
+details.ajan.uyari[open] > summary .ajan-ok { transform: rotate(180deg); }
 .ajan-ic { font-size: 18px; flex: 0 0 auto; }
-.btn.ajan-al.sm { flex: 0 0 auto; min-height: 32px; padding: 5px 10px; font-size: 11.5px; }
-.ajan-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ajan-body { padding: 0 12px 12px; }
+.btn.ajan-al.sm { flex: 0 0 auto; min-height: 34px; padding: 6px 12px; font-size: 12px; margin-top: 8px; }
+.ajan-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ajan-chip { font-size: 11.5px; font-weight: 600; border-radius: var(--radius-pill); padding: 3px 10px; white-space: nowrap; }
 .ajan-chip.az { background: #fdeecb; color: #7a4a06; }
 .ajan-chip.bitti { background: #fdeceb; color: var(--red); }
@@ -781,14 +786,19 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .sihir-tot b { font-family: var(--font-num); font-size: 22px; font-weight: 800; color: var(--value); }
 .sihir .prod-grid { max-height: 40vh; }
 .sihir-sepet { margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
-.ss-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
-.ss-row:last-of-type { border-bottom: 0; }
-.ss-ad { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-row { display: flex; flex-direction: column; gap: 5px; padding: 8px 8px; margin-bottom: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-soft); }
+.ss-ust { display: flex; align-items: center; gap: 8px; }
+.ss-ad { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-sil { flex: 0 0 auto; border: 0; background: none; font-size: 15px; cursor: pointer; padding: 2px 4px; opacity: .8; }
+.ss-alt { display: flex; align-items: center; gap: 8px; }
 .ss-adet { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
-.ss-adet b { font-family: var(--font-num); min-width: 20px; text-align: center; }
-.ss-b { width: 26px; height: 26px; border: 1px solid var(--line); background: #fff; border-radius: 6px; font-size: 16px; line-height: 1; cursor: pointer; }
-.ss-tut { flex: 0 0 auto; font-family: var(--font-num); font-weight: 700; color: var(--value); min-width: 64px; text-align: right; }
-.ss-tot { display: flex; justify-content: space-between; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--line); font-family: var(--font-num); }
+.ss-adet b { font-family: var(--font-num); min-width: 22px; text-align: center; font-size: 14px; }
+.ss-adet small { color: var(--muted); font-size: 11px; }
+.ss-b { width: 30px; height: 30px; border: 1px solid var(--line); background: #fff; border-radius: 7px; font-size: 17px; line-height: 1; cursor: pointer; }
+.ss-fiyat { flex: 1; min-width: 0; display: flex; align-items: center; gap: 3px; color: var(--muted); font-size: 13px; justify-content: flex-end; }
+.ss-fin { width: 74px; min-height: 34px; text-align: right; font-size: 14px; font-weight: 700; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; font-family: var(--font-num); color: var(--text); }
+.ss-tut { flex: 0 0 auto; font-family: var(--font-num); font-weight: 800; color: var(--value); min-width: 66px; text-align: right; }
+.ss-tot { display: flex; justify-content: space-between; padding: 8px 8px 2px; margin-top: 2px; border-top: 2px solid var(--line); font-family: var(--font-num); font-size: 15px; }
 .servis-tumu { margin-top: 12px; }
 .servis-tumu summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--brand-dark); padding: 8px 0; }
 .so-list { display: flex; flex-direction: column; }
