@@ -296,6 +296,7 @@ const MENU = [
   { ico: "🏪", label: "Dükkan", route: "dukkan" },
   { ico: "🖊", label: "Satış Yap", route: "satis" },
   { ico: "🚗", label: "Rota / Saha Satış", route: "rota" },
+  { ico: "🗺", label: "Harita / Rota Planı", route: "harita" },
   { ico: "🎧", label: "Saha Koçu (Görüşme Analizi)", route: "saha-kocu" },
   { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
   { ico: "📢", label: "Duyurular", route: "duyurular" },
@@ -2268,6 +2269,7 @@ const PAGES = {
   satis: { render: renderSatis, mount: mountSatis },
   rota: { render: renderRota, mount: mountRota },
   "rota-olustur": { render: renderRotaOlustur, mount: mountRotaOlustur },
+  harita: { render: renderHarita, mount: mountHarita },
   "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   talepler: { render: renderTalepler, mount: mountTalepler },
   "servis-raporlari": { render: renderServisRaporlari, mount: mountServisRaporlari },
@@ -3408,6 +3410,250 @@ function mountRotaOlustur() {
     servisBaslat(ids);
   };
 }
+
+/* ============ HARİTA / ROTA PLANI ============ */
+/* Harita + pinler: Leaflet + OpenStreetMap (anahtar gerekmez, ücretsiz).
+ * Navigasyon: Google Maps yol tarifi bağlantısı (google.com/maps/dir/?api=1 ...).
+ * Sıra numarası = rotadaki durak numarası; servis aktifken edilen duraklar yeşil ✓ olur. */
+const harita = { map: null, katman: null, cizgi: null, sira: [], rotaId: "", benim: null, watchId: null, kirli: false };
+const HR_MAX_DURAK = 10; // Google Maps yol tarifi: origin + 8 ara nokta + destination
+
+function haritaKonumlu() { return store.customers.filter((c) => c.lat != null && c.lng != null && !c.bayi); }
+
+/** Seçili rotaya (ya da rotaSira alanına) göre başlangıç sırasını kur. */
+function haritaSiraKur() {
+  const konumluIds = new Set(haritaKonumlu().map((c) => c.id));
+  if (harita.rotaId) {
+    const r = (store.rotalar || []).find((x) => x.id === harita.rotaId);
+    harita.sira = r ? r.musteriIds.filter((id) => konumluIds.has(id)) : [];
+  } else if (servis.aktif && servis.musteriIds.length) {
+    harita.sira = servis.musteriIds.filter((id) => konumluIds.has(id));
+  } else {
+    harita.sira = haritaKonumlu().filter((c) => Number(c.rotaSira) > 0)
+      .sort((a, b) => Number(a.rotaSira) - Number(b.rotaSira)).map((c) => c.id);
+  }
+  harita.kirli = false;
+}
+
+function renderHarita() {
+  const konumlu = haritaKonumlu(), konumsuz = store.customers.filter((c) => !c.bayi && (c.lat == null || c.lng == null));
+  const rotaOpts = [`<option value="">— Rota seçilmedi (rota sırasına göre) —</option>`]
+    .concat((store.rotalar || []).map((r) => `<option value="${r.id}" ${r.id === harita.rotaId ? "selected" : ""}>${esc(r.ad)} (${r.musteriIds.length})</option>`)).join("");
+  return pageHead("Harita / Rota Planı", `${konumlu.length} konumlu müşteri${konumsuz.length ? " · " + konumsuz.length + " konumsuz" : ""}`, [{ label: "🚗 Rota Sayfası", cls: "soft", route: "rota" }]) +
+    `<div class="card hr-card">
+      <div class="hr-ust">
+        <select id="hrRota" class="hr-sel">${rotaOpts}</select>
+        <button class="btn soft sm" id="hrKonum" type="button">📍 Konumum</button>
+        <button class="btn soft sm" id="hrYakin" type="button" title="Konumundan başlayarak en yakın duraklara göre sırala">⚡ En Yakından Sırala</button>
+        <button class="btn soft sm" id="hrHepsi" type="button">➕ Tüm Konumluları Ekle</button>
+      </div>
+      <div id="hrMap" class="hr-map"></div>
+      <p class="hint hr-ipucu">Gri pin = rotada değil (dokun → ekle) · Numaralı pin = rota sırası · Yeşil ✓ = ziyaret edildi</p>
+    </div>
+    <div class="section-title" style="margin-top:14px">Rota Sırası (<span id="hrSayi">0</span> durak)</div>
+    <div class="card"><div id="hrListe" class="hr-liste"></div>
+      <div class="hr-alt">
+        <button class="btn primary" id="hrNav" type="button">🧭 Google Maps'te Navigasyon</button>
+        <button class="btn ok" id="hrKaydet" type="button">💾 Rotayı Kaydet</button>
+        <button class="btn green" id="hrBaslat" type="button">▶ Servisi Başlat</button>
+      </div>
+    </div>` +
+    (konumsuz.length ? `<details class="card" style="margin-top:12px"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length}) — haritada gösterilemez</summary><div class="hr-liste">${konumsuz.map((c) => `<div class="hr-item"><span class="hr-no gri">—</span><div class="hr-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.telefon || "telefon yok")}</span></div></div>`).join("")}</div><p class="hint" style="margin-top:8px">Sahada uğrayınca müşteri kartından <b>📍 Konumu Kaydet</b>.</p></details>` : "");
+}
+
+/** Numaralı / durum renkli pin (görsel dosya yok — CSS ile çizilir). */
+function hrIkon(metin, sinif) {
+  return L.divIcon({ className: "", html: `<span class="hr-pin ${sinif}">${metin}</span>`, iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16] });
+}
+
+function haritaCiz() {
+  if (!harita.map) return;
+  harita.katman.clearLayers();
+  const siraSet = new Map(harita.sira.map((id, i) => [id, i + 1]));
+  const noktalar = [];
+  for (const c of haritaKonumlu()) {
+    const no = siraSet.get(c.id);
+    const edildi = servis.aktif && servis.edilen.includes(c.id);
+    const m = L.marker([c.lat, c.lng], { icon: hrIkon(no ? (edildi ? "✓" : no) : "•", no ? (edildi ? "bitti" : "rota") : "dis") });
+    const borc = customerBorc(c.id);
+    m.bindPopup(`<div class="hr-pop"><b>${esc(c.ad)}</b>
+      <span class="hint">${esc(c.mahalle || c.bolge || "")}${no ? " · " + no + ". durak" : ""}</span>
+      <span class="hint">Bakiye: ${money.format(borc)}</span>
+      <div class="hr-pop-btn">
+        ${no ? `<button class="btn softred sm" data-hrcik="${c.id}" type="button">✕ Rotadan çıkar</button>` : `<button class="btn green sm" data-hrekle="${c.id}" type="button">＋ Rotaya ekle</button>`}
+        <a class="btn soft sm" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">🧭 Buraya git</a>
+      </div></div>`);
+    m.addTo(harita.katman);
+    if (no) noktalar[no - 1] = [c.lat, c.lng];
+  }
+  const cizgiNoktalar = noktalar.filter(Boolean);
+  if (harita.cizgi) { harita.map.removeLayer(harita.cizgi); harita.cizgi = null; }
+  if (cizgiNoktalar.length > 1) harita.cizgi = L.polyline(cizgiNoktalar, { color: "#1E40AF", weight: 3, opacity: 0.65, dashArray: "6 6" }).addTo(harita.map);
+  hrListeCiz();
+}
+
+function hrListeCiz() {
+  const el = document.getElementById("hrListe"); if (!el) return;
+  const sayi = document.getElementById("hrSayi"); if (sayi) sayi.textContent = String(harita.sira.length);
+  el.innerHTML = harita.sira.length
+    ? harita.sira.map((id, i) => {
+        const c = findCustomer(id); if (!c) return "";
+        const edildi = servis.aktif && servis.edilen.includes(id);
+        return `<div class="hr-item ${edildi ? "bitti" : ""}">
+          <span class="hr-no ${edildi ? "yesil" : ""}">${edildi ? "✓" : i + 1}</span>
+          <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}</span></div>
+          <div class="hr-ok"><button class="hr-mini" data-hryukari="${id}" type="button" title="Yukarı">▲</button><button class="hr-mini" data-hrasagi="${id}" type="button" title="Aşağı">▼</button><button class="hr-mini rm" data-hrcik="${id}" type="button" title="Çıkar">✕</button></div>
+        </div>`;
+      }).join("")
+    : `<p class="hint" style="padding:8px">Rotada durak yok. Haritadaki gri pinlere dokunup ekle ya da "Tüm Konumluları Ekle".</p>`;
+  hrWire();
+}
+
+function hrWire() {
+  const cik = (id) => { harita.sira = harita.sira.filter((x) => x !== id); harita.kirli = true; haritaCiz(); };
+  const ekle = (id) => { if (!harita.sira.includes(id)) harita.sira.push(id); harita.kirli = true; haritaCiz(); };
+  const tasi = (id, yon) => {
+    const i = harita.sira.indexOf(id), j = i + yon;
+    if (i < 0 || j < 0 || j >= harita.sira.length) return;
+    const t = harita.sira[i]; harita.sira[i] = harita.sira[j]; harita.sira[j] = t;
+    harita.kirli = true; haritaCiz();
+  };
+  document.querySelectorAll("[data-hrcik]").forEach((b) => b.onclick = () => cik(b.dataset.hrcik));
+  document.querySelectorAll("[data-hrekle]").forEach((b) => b.onclick = () => ekle(b.dataset.hrekle));
+  document.querySelectorAll("[data-hryukari]").forEach((b) => b.onclick = () => tasi(b.dataset.hryukari, -1));
+  document.querySelectorAll("[data-hrasagi]").forEach((b) => b.onclick = () => tasi(b.dataset.hrasagi, 1));
+  document.querySelectorAll("[data-hrgit]").forEach((b) => b.onclick = () => {
+    const c = findCustomer(b.dataset.hrgit); if (!c || !harita.map) return;
+    harita.map.setView([c.lat, c.lng], Math.max(harita.map.getZoom(), 16));
+    document.getElementById("hrMap").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+/** Google Maps yol tarifi bağlantısı. Tek bağlantıda en fazla HR_MAX_DURAK nokta
+ *  (başlangıç + 8 ara nokta + varış) taşınır; fazlası uç uca eklenen bölümlere ayrılır. */
+function hrNavigasyon() {
+  const duraklar = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  if (!duraklar.length) { alert("Önce rotaya durak ekle."); return; }
+  const kisa = (s) => (s.length > 16 ? s.slice(0, 15) + "…" : s);
+  const noktalar = (rota.konum ? [{ k: `${rota.konum.lat},${rota.konum.lng}`, et: "Konumun" }] : [])
+    .concat(duraklar.map((c, i) => ({ k: `${c.lat},${c.lng}`, et: `${i + 1}. ${kisa(c.ad)}` })));
+  const link = (grup) => {
+    const q = (v) => encodeURIComponent(v);
+    if (grup.length === 1) return `https://www.google.com/maps/dir/?api=1&destination=${q(grup[0].k)}&travelmode=driving`;
+    const ara = grup.slice(1, -1).map((g) => g.k).join("|");
+    return `https://www.google.com/maps/dir/?api=1&origin=${q(grup[0].k)}&destination=${q(grup[grup.length - 1].k)}${ara ? "&waypoints=" + q(ara) : ""}&travelmode=driving`;
+  };
+  if (noktalar.length <= HR_MAX_DURAK) { window.open(link(noktalar), "_blank"); return; }
+  const parcalar = [];
+  for (let i = 0; i < noktalar.length - 1; i += HR_MAX_DURAK - 1) {
+    const g = noktalar.slice(i, i + HR_MAX_DURAK);
+    parcalar.push({ ad: `${g[0].et} → ${g[g.length - 1].et}`, url: link(g) });
+  }
+  openModal("🧭 Navigasyon — " + duraklar.length + " durak", `<p class="hint">Google Maps tek yol tarifinde en fazla ${HR_MAX_DURAK} nokta taşır. Rota ${parcalar.length} bölüme ayrıldı — bölüm bitince sonrakini aç (bölümler uç uca ekli).</p>
+    <div class="hr-parca">${parcalar.map((p, i) => `<a class="btn ${i === 0 ? "primary" : "soft"}" href="${p.url}" target="_blank" rel="noopener">Bölüm ${i + 1} · ${esc(p.ad)}</a>`).join("")}</div>`, { noFoot: true });
+}
+
+/** Konumdan başlayarak en yakın komşu sırası (basit ısınma turu). */
+function hrEnYakindanSirala() {
+  const kalan = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  if (kalan.length < 2) { alert("Sıralamak için en az 2 durak gerek."); return; }
+  if (!rota.konum) { alert("Önce 📍 Konumum'a bas — sıralama senin konumundan başlar."); return; }
+  let x = rota.konum.lat, y = rota.konum.lng;
+  const yeni = [];
+  while (kalan.length) {
+    let en = 0, enD = Infinity;
+    kalan.forEach((c, i) => { const d = haversine(x, y, c.lat, c.lng); if (d < enD) { enD = d; en = i; } });
+    const s = kalan.splice(en, 1)[0]; yeni.push(s.id); x = s.lat; y = s.lng;
+  }
+  harita.sira = yeni; harita.kirli = true; haritaCiz();
+  alert("Rota konumuna göre en yakından uzağa sıralandı ⚡\nGerekirse ▲▼ ile elle düzelt.");
+}
+
+function hrKonumTakip() {
+  if (!navigator.geolocation) { alert("Bu cihazda konum desteklenmiyor."); return; }
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      rota.konum = { lat: p.coords.latitude, lng: p.coords.longitude };
+      if (!harita.map) return;
+      if (harita.benim) harita.map.removeLayer(harita.benim);
+      harita.benim = L.marker([rota.konum.lat, rota.konum.lng], { icon: hrIkon("🚚", "ben"), zIndexOffset: 1000 }).addTo(harita.map).bindPopup("Buradasın");
+      harita.map.setView([rota.konum.lat, rota.konum.lng], 15);
+    },
+    (e) => alert("Konum alınamadı: " + ((e && e.message) || e) + "\nTelefonun konum/GPS iznini aç."),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+  );
+}
+
+function hrRotaKaydet() {
+  if (!harita.sira.length) { alert("Rotada durak yok."); return; }
+  const mevcut = (store.rotalar || []).find((r) => r.id === harita.rotaId);
+  if (mevcut) {
+    // Rotada konumu olmayan üyeler varsa korunur — haritada sadece konumlular sıralanır.
+    const konumluIds = new Set(haritaKonumlu().map((c) => c.id));
+    const konumsuzUyeler = mevcut.musteriIds.filter((id) => !konumluIds.has(id));
+    mevcut.musteriIds = harita.sira.concat(konumsuzUyeler);
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+    harita.kirli = false;
+    alert(`"${mevcut.ad}" rotası güncellendi ✔ (${harita.sira.length} durak${konumsuzUyeler.length ? " + " + konumsuzUyeler.length + " konumsuz üye" : ""})`);
+    return;
+  }
+  const ad = (prompt("Yeni rota adı:", "Harita Rotası") || "").trim();
+  if (!ad) return;
+  const r = rotaKaydet(ad, harita.sira.slice());
+  harita.rotaId = r.id; harita.kirli = false;
+  alert(`"${ad}" rotası kaydedildi ✔ — Rota sayfasından başlatabilirsin.`);
+  render();
+}
+
+function haritaTemizle() {
+  if (harita.watchId != null && navigator.geolocation) { navigator.geolocation.clearWatch(harita.watchId); harita.watchId = null; }
+  if (harita.map) { harita.map.remove(); harita.map = null; harita.katman = null; harita.cizgi = null; harita.benim = null; }
+}
+// Sayfadan çıkınca haritayı bırak (GPS/tile dinleyicileri sızmasın). Sayfada kalınıyorsa dokunma.
+window.addEventListener("hashchange", () => { if (currentRoute() !== "harita") haritaTemizle(); });
+
+function mountHarita() {
+  const el = document.getElementById("hrMap");
+  if (!el) return;
+  if (typeof L === "undefined") { el.innerHTML = `<p class="hint" style="padding:16px">Harita kütüphanesi yüklenemedi (vendor/leaflet.js). Uygulamayı güncelle.</p>`; return; }
+  haritaTemizle();
+  haritaSiraKur();
+
+  const konumlu = haritaKonumlu();
+  harita.map = L.map(el, { zoomControl: true, attributionControl: true });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(harita.map);
+  harita.katman = L.layerGroup().addTo(harita.map);
+  harita.map.on("popupopen", hrWire); // popup DOM'a sonradan girer — butonları o an bağla
+  if (konumlu.length) harita.map.fitBounds(L.latLngBounds(konumlu.map((c) => [c.lat, c.lng])).pad(0.25));
+  else harita.map.setView([41.0, 29.09], 12);
+  setTimeout(() => harita.map && harita.map.invalidateSize(), 150); // sayfa yerleşimi oturunca
+
+  haritaCiz();
+  if (rota.konum) hrKonumTakip();
+
+  const sel = document.getElementById("hrRota");
+  if (sel) sel.addEventListener("change", () => {
+    if (harita.kirli && !confirm("Kaydedilmemiş sıra değişikliği var. Rota değiştirilsin mi?")) { sel.value = harita.rotaId; return; }
+    harita.rotaId = sel.value; haritaSiraKur(); haritaCiz();
+  });
+  const hepsi = document.getElementById("hrHepsi");
+  if (hepsi) hepsi.addEventListener("click", () => {
+    const varOlan = new Set(harita.sira);
+    haritaKonumlu().forEach((c) => { if (!varOlan.has(c.id)) harita.sira.push(c.id); });
+    harita.kirli = true; haritaCiz();
+  });
+  const kn = document.getElementById("hrKonum"); if (kn) kn.addEventListener("click", hrKonumTakip);
+  const yk = document.getElementById("hrYakin"); if (yk) yk.addEventListener("click", hrEnYakindanSirala);
+  const nv = document.getElementById("hrNav"); if (nv) nv.addEventListener("click", hrNavigasyon);
+  const kd = document.getElementById("hrKaydet"); if (kd) kd.addEventListener("click", hrRotaKaydet);
+  const bs = document.getElementById("hrBaslat");
+  if (bs) bs.addEventListener("click", () => {
+    if (!harita.sira.length) { alert("Rotada durak yok."); return; }
+    if (harita.kirli && confirm("Sıra değişti — servise başlamadan rota kaydedilsin mi?")) hrRotaKaydet();
+    servisBaslat(harita.sira.slice());
+  });
+}
+
 function mountRota() {
   document.querySelectorAll('[data-act="aracalim"]').forEach((aa) => aa.addEventListener("click", aracAlimModal));
   document.querySelectorAll('[data-act="ekstrasatis"]').forEach((b) => b.addEventListener("click", () => { pos.carts[pos.active] = newCart(); pos.cat = "ANA"; pos.q = ""; navigate("satis"); }));

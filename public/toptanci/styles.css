@@ -1529,3 +1529,39 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .rs-row:last-child { border-bottom: 0; }
 .rs-row:active { background: var(--brand-soft); }
 .rs-row b { font-size: 14px; color: var(--text); }
+
+/* ===== Harita / Rota Planı ===== */
+.hr-card { padding-bottom: 12px; }
+.hr-ust { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.hr-sel { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; background: var(--card); color: var(--text); font: inherit; }
+.hr-map { width: 100%; height: 52vh; min-height: 300px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; z-index: 0; }
+.hr-ipucu { margin-top: 8px; }
+.hr-pin { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-size: 12px; font-weight: 800; color: #fff; background: var(--brand); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35); }
+.hr-pin.dis { background: #94a3b8; width: 18px; height: 18px; font-size: 10px; }
+.hr-pin.bitti { background: var(--green-d); }
+.hr-pin.ben { background: #fff; border-color: var(--brand); font-size: 15px; }
+.hr-pop b { display: block; font-size: 14px; margin-bottom: 2px; }
+.hr-pop .hint { display: block; }
+.hr-pop-btn { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hr-pop-btn .btn { text-decoration: none; }
+.hr-liste { display: flex; flex-direction: column; }
+.hr-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line-soft); }
+.hr-item:last-child { border-bottom: 0; }
+.hr-item.bitti { opacity: 0.6; }
+.hr-no { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 800; font-size: 12px; }
+.hr-no.yesil { background: var(--green-d); }
+.hr-no.gri { background: #cbd5e1; color: #475569; }
+.hr-mid { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.hr-mid b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-ok { flex: 0 0 auto; display: flex; gap: 4px; }
+.hr-mini { min-width: 32px; min-height: 32px; border: 1px solid var(--line); background: var(--card); border-radius: 8px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.hr-mini:active { background: var(--brand-soft); }
+.hr-mini.rm { color: var(--red); }
+.hr-alt { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hr-alt .btn { flex: 1 1 160px; justify-content: center; min-height: 44px; }
+.hr-parca { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.hr-parca .btn { justify-content: center; min-height: 44px; text-decoration: none; }
+@media (max-width: 720px) {
+  .hr-map { height: 46vh; min-height: 260px; }
+  .hr-ust .btn { flex: 1 1 auto; }
+}
