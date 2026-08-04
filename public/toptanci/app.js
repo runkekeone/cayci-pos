@@ -3417,8 +3417,75 @@ function mountRotaOlustur() {
  * Sıra numarası = rotadaki durak numarası; servis aktifken edilen duraklar yeşil ✓ olur. */
 const harita = { map: null, katman: null, cizgi: null, sira: [], rotaId: "", benim: null, watchId: null, kirli: false };
 const HR_MAX_DURAK = 10; // Google Maps yol tarifi: origin + 8 ara nokta + destination
+const HR_YOL_KAT = 1.3;  // kuş uçuşu → tahmini asfalt yol payı (yol tarifi API'si ücretli)
+const HR_YAKIT_VARSAYILAN = { fiyat: 75, tuketim: 10 }; // ₺/lt · lt/100km
 
 function haritaKonumlu() { return store.customers.filter((c) => c.lat != null && c.lng != null && !c.bayi); }
+
+function hrYakitAyar() {
+  const s = store.settings || {};
+  return {
+    fiyat: Number(s.yakitFiyat) > 0 ? Number(s.yakitFiyat) : HR_YAKIT_VARSAYILAN.fiyat,
+    tuketim: Number(s.yakitTuketim) > 0 ? Number(s.yakitTuketim) : HR_YAKIT_VARSAYILAN.tuketim,
+  };
+}
+
+/** Rota ölçümü: durak arası mesafeler, toplam yol, sonraki durak, mazot bedeli.
+ *  Mesafe kuş uçuşu (haversine) × HR_YOL_KAT. Konum alınmışsa ilk bacak senden başlar. */
+function hrOlcum() {
+  const duraklar = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  const bacak = [];            // bacak[i] = i. durağa gelirken gidilen metre (yoksa null)
+  let onceki = rota.konum ? { lat: rota.konum.lat, lng: rota.konum.lng } : null;
+  let toplam = 0;
+  duraklar.forEach((c) => {
+    const d = onceki ? haversine(onceki.lat, onceki.lng, c.lat, c.lng) : null;
+    bacak.push(d);
+    if (d != null) toplam += d;
+    onceki = c;
+  });
+  const yolM = toplam * HR_YOL_KAT;
+  const { fiyat, tuketim } = hrYakitAyar();
+  const litre = (yolM / 1000) * (tuketim / 100);
+  // Sonraki durak: servis açıksa ilk ziyaret edilmemiş durak, değilse 1. durak.
+  const kalanlar = servis.aktif ? duraklar.filter((c) => !servis.edilen.includes(c.id) && !servis.paslar.includes(c.id)) : duraklar;
+  const hedef = kalanlar[0] || null;
+  const sonraki = hedef ? {
+    c: hedef,
+    no: duraklar.indexOf(hedef) + 1,
+    d: rota.konum ? haversine(rota.konum.lat, rota.konum.lng, hedef.lat, hedef.lng) * HR_YOL_KAT : null,
+  } : null;
+  return { duraklar, bacak, kusUcusuM: toplam, yolM, litre, bedel: litre * fiyat, fiyat, tuketim, sonraki };
+}
+
+function hrOlcumCiz() {
+  const kutu = document.getElementById("hrOlcum"); if (!kutu) return;
+  const o = hrOlcum();
+  const yakit = hrYakitAyar();
+  const sonrakiMetin = o.sonraki
+    ? `${o.sonraki.no}. ${esc(o.sonraki.c.ad)}${o.sonraki.d != null ? ` · <b>${mesafeMetin(o.sonraki.d)}</b>` : ` · <span class="hint">📍 Konumum'a bas</span>`}`
+    : `<span class="hint">durak yok</span>`;
+  kutu.innerHTML = `
+    <div class="hr-olc">
+      <div class="hr-olc-k"><span>Toplam rota</span><b>${o.yolM ? (o.yolM / 1000).toFixed(1) + " km" : "—"}</b></div>
+      <div class="hr-olc-k"><span>Sonraki durak</span><b class="ince">${sonrakiMetin}</b></div>
+      <div class="hr-olc-k"><span>Tahmini mazot</span><b>${money.format(o.bedel)}</b></div>
+      <div class="hr-olc-k"><span>Yakıt</span><b>${o.litre ? num2.format(o.litre) + " lt" : "—"}</b></div>
+    </div>
+    <div class="hr-yakit">
+      <label>₺/lt <input id="hrFiyat" type="number" inputmode="decimal" step="0.01" value="${yakit.fiyat}" /></label>
+      <label>lt/100km <input id="hrTuketim" type="number" inputmode="decimal" step="0.1" value="${yakit.tuketim}" /></label>
+      <span class="hint">Mesafe kuş uçuşu ×${HR_YOL_KAT} (yol payı)${rota.konum ? "" : " · ilk bacak için 📍 Konumum"}</span>
+    </div>`;
+  const kaydet = (k, el) => el.addEventListener("change", () => {
+    const v = Number(el.value);
+    store.settings = store.settings || {};
+    store.settings[k] = v > 0 ? v : "";
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+    hrOlcumCiz();
+  });
+  kaydet("yakitFiyat", kutu.querySelector("#hrFiyat"));
+  kaydet("yakitTuketim", kutu.querySelector("#hrTuketim"));
+}
 
 /** Seçili rotaya (ya da rotaSira alanına) göre başlangıç sırasını kur. */
 function haritaSiraKur() {
@@ -3448,6 +3515,7 @@ function renderHarita() {
         <button class="btn soft sm" id="hrHepsi" type="button">➕ Tüm Konumluları Ekle</button>
       </div>
       <div id="hrMap" class="hr-map"></div>
+      <div id="hrOlcum" class="hr-olcum"></div>
       <p class="hint hr-ipucu">Gri pin = rotada değil (dokun → ekle) · Numaralı pin = rota sırası · Yeşil ✓ = ziyaret edildi</p>
     </div>
     <div class="section-title" style="margin-top:14px">Rota Sırası (<span id="hrSayi">0</span> durak)</div>
@@ -3495,17 +3563,23 @@ function haritaCiz() {
 function hrListeCiz() {
   const el = document.getElementById("hrListe"); if (!el) return;
   const sayi = document.getElementById("hrSayi"); if (sayi) sayi.textContent = String(harita.sira.length);
+  const o = hrOlcum();
+  const bacakMap = new Map(o.duraklar.map((c, i) => [c.id, o.bacak[i]]));
+  const sonrakiId = o.sonraki ? o.sonraki.c.id : null;
   el.innerHTML = harita.sira.length
     ? harita.sira.map((id, i) => {
         const c = findCustomer(id); if (!c) return "";
         const edildi = servis.aktif && servis.edilen.includes(id);
-        return `<div class="hr-item ${edildi ? "bitti" : ""}">
+        const bacak = bacakMap.get(id);
+        const mes = bacak != null ? `<span class="hr-mes">${i === 0 ? "senden" : "önceki duraktan"} ${mesafeMetin(bacak * HR_YOL_KAT)}</span>` : "";
+        return `<div class="hr-item ${edildi ? "bitti" : ""} ${id === sonrakiId ? "sonraki" : ""}">
           <span class="hr-no ${edildi ? "yesil" : ""}">${edildi ? "✓" : i + 1}</span>
-          <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}</span></div>
+          <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}${mes ? " · " : ""}${mes}</span></div>
           <div class="hr-ok"><button class="hr-mini" data-hryukari="${id}" type="button" title="Yukarı">▲</button><button class="hr-mini" data-hrasagi="${id}" type="button" title="Aşağı">▼</button><button class="hr-mini rm" data-hrcik="${id}" type="button" title="Çıkar">✕</button></div>
         </div>`;
       }).join("")
     : `<p class="hint" style="padding:8px">Rotada durak yok. Haritadaki gri pinlere dokunup ekle ya da "Tüm Konumluları Ekle".</p>`;
+  hrOlcumCiz();
   hrWire();
 }
 
@@ -3578,6 +3652,7 @@ function hrKonumTakip() {
       if (harita.benim) harita.map.removeLayer(harita.benim);
       harita.benim = L.marker([rota.konum.lat, rota.konum.lng], { icon: hrIkon("🚚", "ben"), zIndexOffset: 1000 }).addTo(harita.map).bindPopup("Buradasın");
       harita.map.setView([rota.konum.lat, rota.konum.lng], 15);
+      hrListeCiz(); // ilk bacak + sonraki durak mesafesi artık hesaplanabilir
     },
     (e) => alert("Konum alınamadı: " + ((e && e.message) || e) + "\nTelefonun konum/GPS iznini aç."),
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
