@@ -1709,18 +1709,34 @@ function ocrPickImage(cb) {
   });
   inp.click();
 }
+/** OCR hata metnini kullanıcının anlayacağı dile çevir (sessiz başarısızlık olmasın). */
+function ocrHataMetni(res, error) {
+  const ham = String((res && res.error) || (error && (error.message || error)) || "").toLowerCase();
+  if (ham.includes("gecersiz mode")) return "Sunucudaki okuma servisi eski sürüm — 'vergi levhası' modu yok. Güncellenmesi gerek (Supabase → ocr-extract).";
+  if (ham.includes("api key")) return "Yapay zekâ anahtarı geçersiz/süresi dolmuş. Supabase → Edge Functions → Secrets → ANTHROPIC_API_KEY yenilenmeli.";
+  if (ham.includes("kurulmamis")) return "Sunucuda ANTHROPIC_API_KEY tanımlı değil — kurulum gerek.";
+  if (ham.includes("gorsel yok")) return "Fotoğraf gönderilemedi, tekrar dene.";
+  if (ham.includes("failed to fetch") || ham.includes("network")) return "İnternete ulaşılamadı. Bağlantını kontrol edip tekrar dene.";
+  return ham ? "Okunamadı: " + ham : "Okunamadı — internet/kurulum gerekli. Elle girebilirsin.";
+}
+
 // Vergi levhası fotoğrafı → OCR → müşteri formu alanlarını doldur (formModal içinden)
 async function vergiLevhasiOku(ov, key) {
   const durum = ov.querySelector("#fotoDurum-" + key);
-  if (!SB || !SB.functions) { if (durum) durum.textContent = "Bulut bağlantısı yok."; return; }
+  if (!SB || !SB.functions) { if (durum) durum.textContent = "Bulut bağlantısı yok."; alert("Bulut bağlantısı yok — fotoğraftan okuma internet ister."); return; }
   ocrPickImage(async (imageBase64, mediaType) => {
-    if (durum) durum.textContent = "Vergi levhası okunuyor…";
-    let res;
+    if (durum) durum.textContent = "Vergi levhası okunuyor… (10-20 sn)";
+    let res, hata;
     try {
       const { data, error } = await SB.functions.invoke("ocr-extract", { body: { mode: "vergi", imageBase64, mediaType } });
-      res = error ? null : data;
-    } catch (e) { res = null; }
-    if (!res || !res.ok || !res.data) { if (durum) durum.textContent = "Okunamadı (internet/kurulum). Elle gir."; return; }
+      res = error ? null : data; hata = error;
+    } catch (e) { res = null; hata = e; }
+    if (!res || !res.ok || !res.data) {
+      const m = ocrHataMetni(res, hata);
+      if (durum) durum.textContent = "⚠ " + m;
+      alert("Vergi levhası okunamadı.\n\n" + m);   // sessizce hiçbir şey olmaması yerine sebebi söyle
+      return;
+    }
     const d = res.data, set = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el && !el.value) el.value = v; };
     const setForce = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el) el.value = v; };
     setForce("ad", d.unvan); setForce("vergiNo", d.vergiNo); setForce("vergiDairesi", d.vergiDairesi);
@@ -1731,15 +1747,20 @@ async function vergiLevhasiOku(ov, key) {
 async function alisFotoOku() {
   const durum = document.getElementById("aFotoDurum");
   ocrPickImage(async (imageBase64, mediaType) => {
-    if (durum) durum.textContent = "Okunuyor…";
-    let res;
+    if (durum) durum.textContent = "Okunuyor… (10-20 sn)";
+    let res, hata;
     try {
       const { data, error } = await SB.functions.invoke("ocr-extract", {
         body: { mode: "fatura", imageBase64, mediaType, catalog: store.products.map((p) => p.ad) },
       });
-      res = error ? null : data;
-    } catch (e) { res = null; }
-    if (!res || !res.ok || !res.data) { if (durum) durum.textContent = "Okunamadı — internet/kurulum gerekli. Elle girebilirsin."; return; }
+      res = error ? null : data; hata = error;
+    } catch (e) { res = null; hata = e; }
+    if (!res || !res.ok || !res.data) {
+      const m = ocrHataMetni(res, hata);
+      if (durum) durum.textContent = "⚠ " + m;
+      alert("Fatura okunamadı.\n\n" + m);
+      return;
+    }
     const d = res.data;
     if (d.no) { const el = document.getElementById("aNo"); if (el) el.value = d.no; }
     if (d.tarih) { const t = new Date(d.tarih); if (!isNaN(t)) { const el = document.getElementById("aTarih"); if (el) el.value = t.toISOString().slice(0, 10); } }
