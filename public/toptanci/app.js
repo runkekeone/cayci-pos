@@ -3415,10 +3415,13 @@ function mountRotaOlustur() {
 /* Harita + pinler: Leaflet + OpenStreetMap (anahtar gerekmez, ücretsiz).
  * Navigasyon: Google Maps yol tarifi bağlantısı (google.com/maps/dir/?api=1 ...).
  * Sıra numarası = rotadaki durak numarası; servis aktifken edilen duraklar yeşil ✓ olur. */
-const harita = { map: null, katman: null, cizgi: null, sira: [], rotaId: "", benim: null, watchId: null, kirli: false };
+const harita = { map: null, katman: null, cizgi: null, sira: [], rotaId: "", benim: null, watchId: null, kirli: false, yol: null, yolIstek: "" };
 const HR_MAX_DURAK = 10; // Google Maps yol tarifi: origin + 8 ara nokta + destination
-const HR_YOL_KAT = 1.3;  // kuş uçuşu → tahmini asfalt yol payı (yol tarifi API'si ücretli)
+const HR_YOL_KAT = 1.3;  // yol servisi yoksa kuş uçuşu → tahmini asfalt yol payı
 const HR_YAKIT_VARSAYILAN = { fiyat: 75, tuketim: 10 }; // ₺/lt · lt/100km
+/* Gerçek yol mesafesi: OSRM açık sunucusu (ücretsiz, anahtarsız). Ulaşılamazsa
+ * kuş uçuşu × HR_YOL_KAT tahminine düşer — internet yokken de sayfa çalışır. */
+const HR_OSRM = "https://router.project-osrm.org/route/v1/driving/";
 
 function haritaKonumlu() { return store.customers.filter((c) => c.lat != null && c.lng != null && !c.bayi); }
 
@@ -3430,31 +3433,70 @@ function hrYakitAyar() {
   };
 }
 
+/** Rota noktaları: konum (varsa) + sıradaki duraklar. OSRM için lng,lat düzeninde. */
+function hrNoktalar(duraklar) {
+  return (rota.konum ? [[rota.konum.lng, rota.konum.lat]] : []).concat(duraklar.map((c) => [c.lng, c.lat]));
+}
+function hrImza(noktalar) { return noktalar.map((p) => p[0].toFixed(5) + "," + p[1].toFixed(5)).join(";"); }
+
+/** Gerçek yolu OSRM'den çek (bacak bacak mesafe + süre + yol çizgisi). Sessizce başarısız olur. */
+async function hrYolHesapla() {
+  const duraklar = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  const noktalar = hrNoktalar(duraklar);
+  if (noktalar.length < 2) { harita.yol = null; return; }
+  const imza = hrImza(noktalar);
+  if ((harita.yol && harita.yol.imza === imza) || harita.yolIstek === imza) return; // zaten var / uçuşta
+  harita.yolIstek = imza;
+  try {
+    const r = await fetch(HR_OSRM + imza + "?overview=full&geometries=geojson");
+    const j = await r.json();
+    if (!r.ok || j.code !== "Ok" || !j.routes || !j.routes.length) throw new Error(j.code || "yol bulunamadı");
+    const y = j.routes[0];
+    harita.yol = { imza, mesafe: y.distance, sure: y.duration, bacak: y.legs.map((l) => l.distance), geo: y.geometry.coordinates };
+  } catch (e) {
+    harita.yol = { imza, hata: true }; // internet yok / servis meşgul → tahmine düş
+  } finally {
+    harita.yolIstek = "";
+  }
+  if (harita.map) haritaCiz();
+}
+
 /** Rota ölçümü: durak arası mesafeler, toplam yol, sonraki durak, mazot bedeli.
- *  Mesafe kuş uçuşu (haversine) × HR_YOL_KAT. Konum alınmışsa ilk bacak senden başlar. */
+ *  Kaynak = OSRM gerçek yol; yoksa kuş uçuşu (haversine) × HR_YOL_KAT tahmini. */
 function hrOlcum() {
   const duraklar = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  const imza = hrImza(hrNoktalar(duraklar));
+  const yol = harita.yol && harita.yol.imza === imza && !harita.yol.hata ? harita.yol : null;
   const bacak = [];            // bacak[i] = i. durağa gelirken gidilen metre (yoksa null)
   let onceki = rota.konum ? { lat: rota.konum.lat, lng: rota.konum.lng } : null;
-  let toplam = 0;
-  duraklar.forEach((c) => {
+  let kus = 0;
+  duraklar.forEach((c, i) => {
     const d = onceki ? haversine(onceki.lat, onceki.lng, c.lat, c.lng) : null;
-    bacak.push(d);
-    if (d != null) toplam += d;
+    if (d != null) kus += d;
+    // OSRM bacakları: konum varsa legs[i] = i. durağa geliş, yoksa legs[i-1].
+    const legIdx = rota.konum ? i : i - 1;
+    bacak.push(yol ? (legIdx >= 0 ? yol.bacak[legIdx] : null) : (d != null ? d * HR_YOL_KAT : null));
     onceki = c;
   });
-  const yolM = toplam * HR_YOL_KAT;
+  const yolM = yol ? yol.mesafe : kus * HR_YOL_KAT;
   const { fiyat, tuketim } = hrYakitAyar();
   const litre = (yolM / 1000) * (tuketim / 100);
   // Sonraki durak: servis açıksa ilk ziyaret edilmemiş durak, değilse 1. durak.
   const kalanlar = servis.aktif ? duraklar.filter((c) => !servis.edilen.includes(c.id) && !servis.paslar.includes(c.id)) : duraklar;
   const hedef = kalanlar[0] || null;
-  const sonraki = hedef ? {
-    c: hedef,
-    no: duraklar.indexOf(hedef) + 1,
-    d: rota.konum ? haversine(rota.konum.lat, rota.konum.lng, hedef.lat, hedef.lng) * HR_YOL_KAT : null,
-  } : null;
-  return { duraklar, bacak, kusUcusuM: toplam, yolM, litre, bedel: litre * fiyat, fiyat, tuketim, sonraki };
+  const hedefIdx = hedef ? duraklar.indexOf(hedef) : -1;
+  let sonrakiD = null;
+  if (hedef && rota.konum) {
+    // Sıradaki durak listenin başındaysa gerçek bacak; ortasındaysa senden kuş uçuşu tahmini.
+    sonrakiD = (yol && hedefIdx === 0) ? yol.bacak[0]
+      : haversine(rota.konum.lat, rota.konum.lng, hedef.lat, hedef.lng) * HR_YOL_KAT;
+  }
+  return {
+    duraklar, bacak, kusUcusuM: kus, yolM, litre, bedel: litre * fiyat, fiyat, tuketim,
+    gercekYol: !!yol, sure: yol ? yol.sure : null,
+    yolDurum: yol ? "yol" : (harita.yol && harita.yol.imza === imza && harita.yol.hata ? "hata" : (harita.yolIstek === imza ? "yukleniyor" : "tahmin")),
+    sonraki: hedef ? { c: hedef, no: hedefIdx + 1, d: sonrakiD, kesin: !!(yol && hedefIdx === 0) } : null,
+  };
 }
 
 function hrOlcumCiz() {
@@ -3462,19 +3504,28 @@ function hrOlcumCiz() {
   const o = hrOlcum();
   const yakit = hrYakitAyar();
   const sonrakiMetin = o.sonraki
-    ? `${o.sonraki.no}. ${esc(o.sonraki.c.ad)}${o.sonraki.d != null ? ` · <b>${mesafeMetin(o.sonraki.d)}</b>` : ` · <span class="hint">📍 Konumum'a bas</span>`}`
+    ? `${o.sonraki.no}. ${esc(o.sonraki.c.ad)}${o.sonraki.d != null ? ` · <b>${mesafeMetin(o.sonraki.d)}</b>${o.sonraki.kesin ? "" : "*"}` : ` · <span class="hint">📍 Konumum'a bas</span>`}`
     : `<span class="hint">durak yok</span>`;
+  const rozet = {
+    yol: `<span class="hr-rozet ok">🛣 yol üzerinden</span>`,
+    yukleniyor: `<span class="hr-rozet">⏳ yol hesaplanıyor…</span>`,
+    hata: `<span class="hr-rozet uyari">⚠ yol servisi yok — kuş uçuşu ×${HR_YOL_KAT} tahmini</span>`,
+    tahmin: `<span class="hr-rozet">kuş uçuşu ×${HR_YOL_KAT} tahmini</span>`,
+  }[o.yolDurum];
+  const sure = o.sure ? `${Math.round(o.sure / 60)} dk` : "—";
   kutu.innerHTML = `
     <div class="hr-olc">
       <div class="hr-olc-k"><span>Toplam rota</span><b>${o.yolM ? (o.yolM / 1000).toFixed(1) + " km" : "—"}</b></div>
       <div class="hr-olc-k"><span>Sonraki durak</span><b class="ince">${sonrakiMetin}</b></div>
       <div class="hr-olc-k"><span>Tahmini mazot</span><b>${money.format(o.bedel)}</b></div>
-      <div class="hr-olc-k"><span>Yakıt</span><b>${o.litre ? num2.format(o.litre) + " lt" : "—"}</b></div>
+      <div class="hr-olc-k"><span>Yakıt · süre</span><b>${o.litre ? num2.format(o.litre) + " lt" : "—"} · ${sure}</b></div>
     </div>
     <div class="hr-yakit">
       <label>₺/lt <input id="hrFiyat" type="number" inputmode="decimal" step="0.01" value="${yakit.fiyat}" /></label>
       <label>lt/100km <input id="hrTuketim" type="number" inputmode="decimal" step="0.1" value="${yakit.tuketim}" /></label>
-      <span class="hint">Mesafe kuş uçuşu ×${HR_YOL_KAT} (yol payı)${rota.konum ? "" : " · ilk bacak için 📍 Konumum"}</span>
+      ${rozet}
+      <button class="btn soft sm" id="hrYolYenile" type="button">🔄 Yolu Yenile</button>
+      <span class="hint">${rota.konum ? "" : "İlk bacak için 📍 Konumum"}${o.sonraki && !o.sonraki.kesin && o.sonraki.d != null ? " · * sıradaki durak kuş uçuşu tahmini" : ""}</span>
     </div>`;
   const kaydet = (k, el) => el.addEventListener("change", () => {
     const v = Number(el.value);
@@ -3485,6 +3536,8 @@ function hrOlcumCiz() {
   });
   kaydet("yakitFiyat", kutu.querySelector("#hrFiyat"));
   kaydet("yakitTuketim", kutu.querySelector("#hrTuketim"));
+  const yn = kutu.querySelector("#hrYolYenile");
+  if (yn) yn.addEventListener("click", () => { harita.yol = null; harita.yolIstek = ""; hrOlcumCiz(); hrYolHesapla(); });
 }
 
 /** Seçili rotaya (ya da rotaSira alanına) göre başlangıç sırasını kur. */
@@ -3556,7 +3609,16 @@ function haritaCiz() {
   }
   const cizgiNoktalar = noktalar.filter(Boolean);
   if (harita.cizgi) { harita.map.removeLayer(harita.cizgi); harita.cizgi = null; }
-  if (cizgiNoktalar.length > 1) harita.cizgi = L.polyline(cizgiNoktalar, { color: "#1E40AF", weight: 3, opacity: 0.65, dashArray: "6 6" }).addTo(harita.map);
+  const duraklar = harita.sira.map((id) => findCustomer(id)).filter((c) => c && c.lat != null);
+  const imza = hrImza(hrNoktalar(duraklar));
+  const yol = harita.yol && harita.yol.imza === imza && !harita.yol.hata ? harita.yol : null;
+  if (yol) {
+    // Gerçek yol geometrisi (OSRM: [lng, lat] → Leaflet [lat, lng])
+    harita.cizgi = L.polyline(yol.geo.map((p) => [p[1], p[0]]), { color: "#1E40AF", weight: 5, opacity: 0.75 }).addTo(harita.map);
+  } else if (cizgiNoktalar.length > 1) {
+    harita.cizgi = L.polyline(cizgiNoktalar, { color: "#1E40AF", weight: 3, opacity: 0.5, dashArray: "6 6" }).addTo(harita.map);
+  }
+  if (duraklar.length) hrYolHesapla(); // gerçek yol yoksa/eskiyse arka planda çek
   hrListeCiz();
 }
 

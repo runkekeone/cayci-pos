@@ -1579,3 +1579,6 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .hr-mes { white-space: nowrap; }
 .hr-item.sonraki { background: var(--brand-soft); border-radius: 10px; }
 .hr-item.sonraki .hr-no { box-shadow: 0 0 0 3px var(--brand-ring); }
+.hr-rozet { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
+.hr-rozet.ok { background: #dcfce7; color: var(--green-d); }
+.hr-rozet.uyari { background: #fef3c7; color: #92400e; }
