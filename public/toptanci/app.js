@@ -778,9 +778,9 @@ function mountMusteriDetay() {
 /* ---- Fiyat Listesi (müşteriye WhatsApp metni / PDF olarak gönder) ---- */
 // Görünür ürünleri gruba göre ayırır; grup adları ve her grubun ürünleri alfabetik sıralı.
 // Metin ve PDF üretimi bu ortak yapıyı kullanır.
-function fiyatGruplari() {
+function fiyatGruplari(secili) {
   const gruplar = {};
-  store.products.filter((p) => p.gorunur !== false).forEach((p) => {
+  store.products.filter((p) => p.gorunur !== false && (!secili || secili.has(String(p.id)))).forEach((p) => {
     const g = ((p.grup || "").trim()) || "Diğer";
     (gruplar[g] = gruplar[g] || []).push(p);
   });
@@ -791,11 +791,11 @@ function fiyatGruplari() {
 function urunBirimEk(p) { return p.birim && p.birim !== "Adet" ? ` (${p.birim})` : ""; }
 
 // WhatsApp için düzenlenebilir düz metin fiyat listesi.
-function buildFiyatListesi() {
+function buildFiyatListesi(secili) {
   const st = store.settings || {};
   const firma = st.firmaAdi || "FİYAT LİSTESİ";
   const bugun = new Date().toLocaleDateString("tr-TR");
-  const { gAdlari, gruplar } = fiyatGruplari();
+  const { gAdlari, gruplar } = fiyatGruplari(secili);
   let govde = "";
   gAdlari.forEach((g) => {
     govde += gAdlari.length > 1 ? `\n*${g}*\n` : "\n";
@@ -806,9 +806,9 @@ function buildFiyatListesi() {
 
 // PDF/yazdırma: düzenli tablo görünümlü liste. Yazdır dialogunda "PDF olarak kaydet/paylaş"
 // ile müşteriye PDF gönderilir (tarayıcının kendi PDF motoru — Türkçe karakterler tam).
-function fiyatListesiPDF() {
-  const { gAdlari, gruplar } = fiyatGruplari();
-  if (!gAdlari.length) { alert("Gönderilecek görünür ürün yok — önce ürün ekleyin."); return; }
+function fiyatListesiPDF(secili) {
+  const { gAdlari, gruplar } = fiyatGruplari(secili);
+  if (!gAdlari.length) { alert("Gönderilecek ürün seçili değil."); return; }
   const st = store.settings || {};
   const firma = esc(st.firmaAdi || "FİYAT LİSTESİ");
   const bugun = new Date().toLocaleDateString("tr-TR");
@@ -824,8 +824,22 @@ function fiyatListesiPDF() {
   openPrint("Fiyat Listesi — PDF", head + govde + foot);
 }
 
-// Fiyat listesini düzenlenebilir bir pencerede gösterir; onaylayınca WhatsApp'ta açar.
-// custId verilirse o müşterinin numarasına gider; yoksa WhatsApp'ta kişi seçtirir.
+// Pencere içi ürün seçim listesi (işaretle/kaldır). Hepsi varsayılan işaretli.
+function fiyatSecimHTML() {
+  const { gAdlari, gruplar } = fiyatGruplari();
+  return gAdlari.map((g) => {
+    const items = gruplar[g].map((p) =>
+      `<label class="fl-item" data-ad="${esc(String(p.ad || "").toLocaleLowerCase("tr"))}" style="display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer">
+        <input type="checkbox" data-pid="${esc(String(p.id))}" checked style="width:18px;height:18px;flex:none">
+        <span style="flex:1;min-width:0">${esc(p.ad)}${esc(urunBirimEk(p))}</span>
+        <span class="hint" style="flex:none">${money.format(Number(p.satis) || 0)}</span>
+      </label>`).join("");
+    return (gAdlari.length > 1 ? `<div style="font-weight:600;margin:8px 0 2px;font-size:12px;color:var(--muted,#6b7684)">${esc(g)}</div>` : "") + items;
+  }).join("");
+}
+
+// Fiyat listesini gönderme penceresi: önce gönderilecek ürünleri seç, sonra
+// WhatsApp metni / PDF olarak paylaş. custId verilirse o müşterinin numarasına gider.
 function openFiyatListesi(custId) {
   const c = custId ? findCustomer(custId) : null;
   if (!store.products.filter((p) => p.gorunur !== false).length) {
@@ -837,30 +851,60 @@ function openFiyatListesi(custId) {
     ? esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon kayıtlı değil, WhatsApp'ta kişi seçeceksin")
     : "WhatsApp açılınca kişiyi sen seçeceksin";
   const body = `
-    <p class="hint" style="margin-bottom:8px">Alıcı: <b>${kime}</b><br>Aşağıdaki metni düzenleyip <b>WhatsApp'tan Gönder</b> ile hızlıca yollayabilir, ya da <b>PDF</b> olarak düzenli tablo halinde paylaşabilirsin.</p>
-    <textarea id="flText" rows="12" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
+    <p class="hint" style="margin-bottom:6px">Alıcı: <b>${kime}</b></p>
+    <p class="hint" style="margin:0 0 6px;font-size:12px"><b>1)</b> Bu müşteriye gidecek ürünleri seç (istemediğinin işaretini kaldır):</p>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+      <input id="flSearch" type="text" placeholder="🔍 Ürün ara..." style="flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line,#d9dee6);font-size:13px">
+      <button class="btn soft" id="flAll" type="button" style="min-height:38px">Tümü</button>
+      <button class="btn soft" id="flNone" type="button" style="min-height:38px">Temizle</button>
+    </div>
+    <div id="flList" style="max-height:190px;overflow:auto;border:1px solid var(--line,#d9dee6);border-radius:10px;padding:8px 10px">${fiyatSecimHTML()}</div>
+    <div class="hint" id="flCount" style="margin:6px 0 8px"></div>
+    <p class="hint" style="margin:0 0 4px;font-size:12px"><b>2)</b> Metni gerekirse düzenle, sonra gönder:</p>
+    <textarea id="flText" rows="8" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn soft" id="flCopy" type="button" style="flex:1;justify-content:center;min-height:44px">📋 Tümünü Kopyala</button>
       <button class="btn softgreen" id="flPdf" type="button" style="flex:1;justify-content:center;min-height:44px">📄 PDF olarak paylaş</button>
     </div>
-    <p class="hint" style="margin-top:6px;font-size:11px">PDF: açılan yazdırma ekranından <b>"PDF olarak kaydet"</b> seç → dosyayı WhatsApp'ta müşteriye ekle. (PDF ürün listesinden düzenli tablo üretir.)</p>`;
+    <p class="hint" style="margin-top:6px;font-size:11px">PDF: açılan yazdırma ekranından <b>"PDF olarak kaydet"</b> → dosyayı WhatsApp'ta müşteriye ekle.</p>`;
   openModal("Fiyat Listesi Gönder", body, {
     wide: true,
     okLabel: "📲 WhatsApp'tan Gönder",
     onMount: (ov) => {
+      const ta = ov.querySelector("#flText");
+      const cnt = ov.querySelector("#flCount");
+      const list = ov.querySelector("#flList");
+      const kutular = () => Array.from(list.querySelectorAll('input[type="checkbox"]'));
+      const seciliSet = () => { const s = new Set(); kutular().forEach((cb) => { if (cb.checked) s.add(cb.dataset.pid); }); return s; };
+      const yenile = () => {
+        const s = seciliSet(), tum = kutular().length;
+        ta.value = s.size ? buildFiyatListesi(s) : "";
+        cnt.textContent = s.size === 0 ? "⚠ Hiç ürün seçili değil" : (s.size === tum ? `Tüm ürünler seçili (${tum})` : `${s.size} / ${tum} ürün seçili`);
+      };
+      list.addEventListener("change", yenile);
+      ov.querySelector("#flAll").addEventListener("click", () => { kutular().forEach((cb) => (cb.checked = true)); yenile(); });
+      ov.querySelector("#flNone").addEventListener("click", () => { kutular().forEach((cb) => (cb.checked = false)); yenile(); });
+      const sr = ov.querySelector("#flSearch");
+      sr.addEventListener("input", () => {
+        const q = sr.value.trim().toLocaleLowerCase("tr");
+        list.querySelectorAll(".fl-item").forEach((el) => { el.style.display = !q || el.dataset.ad.includes(q) ? "flex" : "none"; });
+      });
       const cp = ov.querySelector("#flCopy");
-      if (cp) cp.addEventListener("click", async () => {
-        const ta = ov.querySelector("#flText");
+      cp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(ta.value); cp.textContent = "✓ Kopyalandı"; }
         catch { ta.select(); try { document.execCommand("copy"); cp.textContent = "✓ Kopyalandı"; } catch { /* yoksay */ } }
         setTimeout(() => { cp.textContent = "📋 Tümünü Kopyala"; }, 1500);
       });
-      const pd = ov.querySelector("#flPdf");
-      if (pd) pd.addEventListener("click", () => fiyatListesiPDF());
+      ov.querySelector("#flPdf").addEventListener("click", () => {
+        const s = seciliSet();
+        if (!s.size) { alert("En az bir ürün seçmelisin."); return; }
+        fiyatListesiPDF(s);
+      });
+      yenile();
     },
     onOk: (ov) => {
       const t = ov.querySelector("#flText").value.trim();
-      if (!t) { alert("Liste boş — göndermek için önce metin gerekli."); return false; }
+      if (!t) { alert("Önce en az bir ürün seç — liste boş."); return false; }
       let d = ((c && c.telefon) || "").replace(/\D/g, "");
       if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
       const url = (d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + encodeURIComponent(t);
