@@ -474,7 +474,7 @@ function renderUrunler() {
       <td><div class="act-btns"><button class="edit" data-edit="${p.id}">Düzenle</button><button class="del" data-del="${p.id}">Sil</button></div></td>
     </tr>`;
   }).join("");
-  return pageHead("Ürünler", store.products.length + " ürün", [{ label: "🚚 Araç Stoğu", route: "arac-yukleme" }, { label: "＋ Ürün Ekle", route: "urun-ekle" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
+  return pageHead("Ürünler", store.products.length + " ürün", [{ label: "🚚 Araç Stoğu", route: "arac-yukleme" }, { label: "＋ Ürün Ekle", route: "urun-ekle" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
     tableCard(["Sıra", "Görsel", "Ürün Barkodu", "Ürün Adı", "Dükkan", "Araç", "KDV", "Kritik Stok", "Alış Fiyatı", "Fiyat 1", "İşlem"], rows, infoLine(store.products.length));
 }
 function mountUrunler() {
@@ -483,6 +483,7 @@ function mountUrunler() {
   const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportProducts);
   const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importProducts));
   const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"]])));
+  const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(null));
   wireTableSearch();
 }
 let editProductId = null;
@@ -761,7 +762,7 @@ function renderMusteriDetay() {
   const pays = store.payments.filter((p) => p.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const salesRows = sales.map((s, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${s.items.reduce((a, it) => a + it.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.odeme.acik)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`).join("");
   const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>Tahsilat</td><td>${esc(p.not || "-")}</td><td>${money.format(p.tutar)}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
+  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length));
@@ -770,7 +771,71 @@ function mountMusteriDetay() {
   const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(selectedCustomerId));
   const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
   const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
+  const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
   wireSaleLinks();
+}
+
+/* ---- Fiyat Listesi (müşteriye WhatsApp'tan gönder) ---- */
+// Görünür ürünlerden gruplara ayrılmış, düzenlenebilir fiyat listesi metni üretir.
+function buildFiyatListesi() {
+  const st = store.settings || {};
+  const firma = st.firmaAdi || "FİYAT LİSTESİ";
+  const bugun = new Date().toLocaleDateString("tr-TR");
+  const urunler = store.products.filter((p) => p.gorunur !== false);
+  const gruplar = {};
+  urunler.forEach((p) => {
+    const g = ((p.grup || "").trim()) || "Diğer";
+    (gruplar[g] = gruplar[g] || []).push(p);
+  });
+  const gAdlari = Object.keys(gruplar).sort((a, b) => a.localeCompare(b, "tr"));
+  let govde = "";
+  gAdlari.forEach((g) => {
+    govde += gAdlari.length > 1 ? `\n*${g}*\n` : "\n";
+    gruplar[g].slice().sort((a, b) => String(a.ad).localeCompare(String(b.ad), "tr")).forEach((p) => {
+      const birim = p.birim && p.birim !== "Adet" ? ` (${p.birim})` : "";
+      govde += `• ${p.ad}${birim} — ${money.format(Number(p.satis) || 0)}\n`;
+    });
+  });
+  return `📋 ${firma} — FİYAT LİSTESİ\n${bugun}\n${govde}\nFiyatlarımıza KDV dahildir. Bilgilerinize sunarız.`;
+}
+
+// Fiyat listesini düzenlenebilir bir pencerede gösterir; onaylayınca WhatsApp'ta açar.
+// custId verilirse o müşterinin numarasına gider; yoksa WhatsApp'ta kişi seçtirir.
+function openFiyatListesi(custId) {
+  const c = custId ? findCustomer(custId) : null;
+  if (!store.products.filter((p) => p.gorunur !== false).length) {
+    alert("Gönderilecek görünür ürün yok — önce ürün ekleyin.");
+    return;
+  }
+  const metin = buildFiyatListesi();
+  const kime = c
+    ? esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon kayıtlı değil, WhatsApp'ta kişi seçeceksin")
+    : "WhatsApp açılınca kişiyi sen seçeceksin";
+  const body = `
+    <p class="hint" style="margin-bottom:8px">Alıcı: <b>${kime}</b><br>Listeyi aşağıda düzenleyebilirsin. <b>Gönder</b> deyince WhatsApp metin hazır açılır.</p>
+    <textarea id="flText" rows="14" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
+    <button class="btn soft" id="flCopy" type="button" style="width:100%;justify-content:center;margin-top:8px;min-height:44px">📋 Tümünü Kopyala</button>`;
+  openModal("Fiyat Listesi Gönder", body, {
+    wide: true,
+    okLabel: "📲 WhatsApp'tan Gönder",
+    onMount: (ov) => {
+      const cp = ov.querySelector("#flCopy");
+      if (cp) cp.addEventListener("click", async () => {
+        const ta = ov.querySelector("#flText");
+        try { await navigator.clipboard.writeText(ta.value); cp.textContent = "✓ Kopyalandı"; }
+        catch { ta.select(); try { document.execCommand("copy"); cp.textContent = "✓ Kopyalandı"; } catch { /* yoksay */ } }
+        setTimeout(() => { cp.textContent = "📋 Tümünü Kopyala"; }, 1500);
+      });
+    },
+    onOk: (ov) => {
+      const t = ov.querySelector("#flText").value.trim();
+      if (!t) { alert("Liste boş — göndermek için önce metin gerekli."); return false; }
+      let d = ((c && c.telefon) || "").replace(/\D/g, "");
+      if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+      const url = (d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + encodeURIComponent(t);
+      window.open(url, "_blank");
+    },
+  });
 }
 function odemeLabel(o) { const p = []; if (o.nakit) p.push("Nakit"); if (o.pos) p.push("POS"); if (o.acik) p.push("Açık Hesap"); return p.join(" + ") || "-"; }
 function saleOdeme(s) { return s.odemeAdi || odemeLabel(s.odeme); }
