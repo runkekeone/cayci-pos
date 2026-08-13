@@ -775,28 +775,53 @@ function mountMusteriDetay() {
   wireSaleLinks();
 }
 
-/* ---- Fiyat Listesi (müşteriye WhatsApp'tan gönder) ---- */
-// Görünür ürünlerden gruplara ayrılmış, düzenlenebilir fiyat listesi metni üretir.
-function buildFiyatListesi() {
-  const st = store.settings || {};
-  const firma = st.firmaAdi || "FİYAT LİSTESİ";
-  const bugun = new Date().toLocaleDateString("tr-TR");
-  const urunler = store.products.filter((p) => p.gorunur !== false);
+/* ---- Fiyat Listesi (müşteriye WhatsApp metni / PDF olarak gönder) ---- */
+// Görünür ürünleri gruba göre ayırır; grup adları ve her grubun ürünleri alfabetik sıralı.
+// Metin ve PDF üretimi bu ortak yapıyı kullanır.
+function fiyatGruplari() {
   const gruplar = {};
-  urunler.forEach((p) => {
+  store.products.filter((p) => p.gorunur !== false).forEach((p) => {
     const g = ((p.grup || "").trim()) || "Diğer";
     (gruplar[g] = gruplar[g] || []).push(p);
   });
   const gAdlari = Object.keys(gruplar).sort((a, b) => a.localeCompare(b, "tr"));
+  gAdlari.forEach((g) => gruplar[g].sort((a, b) => String(a.ad).localeCompare(String(b.ad), "tr")));
+  return { gAdlari, gruplar };
+}
+function urunBirimEk(p) { return p.birim && p.birim !== "Adet" ? ` (${p.birim})` : ""; }
+
+// WhatsApp için düzenlenebilir düz metin fiyat listesi.
+function buildFiyatListesi() {
+  const st = store.settings || {};
+  const firma = st.firmaAdi || "FİYAT LİSTESİ";
+  const bugun = new Date().toLocaleDateString("tr-TR");
+  const { gAdlari, gruplar } = fiyatGruplari();
   let govde = "";
   gAdlari.forEach((g) => {
     govde += gAdlari.length > 1 ? `\n*${g}*\n` : "\n";
-    gruplar[g].slice().sort((a, b) => String(a.ad).localeCompare(String(b.ad), "tr")).forEach((p) => {
-      const birim = p.birim && p.birim !== "Adet" ? ` (${p.birim})` : "";
-      govde += `• ${p.ad}${birim} — ${money.format(Number(p.satis) || 0)}\n`;
-    });
+    gruplar[g].forEach((p) => { govde += `• ${p.ad}${urunBirimEk(p)} — ${money.format(Number(p.satis) || 0)}\n`; });
   });
   return `📋 ${firma} — FİYAT LİSTESİ\n${bugun}\n${govde}\nFiyatlarımıza KDV dahildir. Bilgilerinize sunarız.`;
+}
+
+// PDF/yazdırma: düzenli tablo görünümlü liste. Yazdır dialogunda "PDF olarak kaydet/paylaş"
+// ile müşteriye PDF gönderilir (tarayıcının kendi PDF motoru — Türkçe karakterler tam).
+function fiyatListesiPDF() {
+  const { gAdlari, gruplar } = fiyatGruplari();
+  if (!gAdlari.length) { alert("Gönderilecek görünür ürün yok — önce ürün ekleyin."); return; }
+  const st = store.settings || {};
+  const firma = esc(st.firmaAdi || "FİYAT LİSTESİ");
+  const bugun = new Date().toLocaleDateString("tr-TR");
+  const tekGrup = gAdlari.length <= 1;
+  let govde = "";
+  gAdlari.forEach((g) => {
+    if (!tekGrup) govde += `<h3 style="font-size:14px;margin:14px 0 4px">${esc(g)}</h3>`;
+    const satir = gruplar[g].map((p) => `<tr><td>${esc(p.ad)}${esc(urunBirimEk(p))}</td><td class="r">${money.format(Number(p.satis) || 0)}</td></tr>`).join("");
+    govde += `<table>${satir}</table>`;
+  });
+  const head = `<h2>${firma}</h2><div class="c">FİYAT LİSTESİ · ${bugun}</div>${st.fisTel ? `<div class="c">Tel: ${esc(st.fisTel)}</div>` : ""}<hr>`;
+  const foot = `<hr><div class="c">Fiyatlarımıza KDV dahildir. Bilgilerinize sunarız.</div>`;
+  openPrint("Fiyat Listesi — PDF", head + govde + foot);
 }
 
 // Fiyat listesini düzenlenebilir bir pencerede gösterir; onaylayınca WhatsApp'ta açar.
@@ -812,9 +837,13 @@ function openFiyatListesi(custId) {
     ? esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon kayıtlı değil, WhatsApp'ta kişi seçeceksin")
     : "WhatsApp açılınca kişiyi sen seçeceksin";
   const body = `
-    <p class="hint" style="margin-bottom:8px">Alıcı: <b>${kime}</b><br>Listeyi aşağıda düzenleyebilirsin. <b>Gönder</b> deyince WhatsApp metin hazır açılır.</p>
-    <textarea id="flText" rows="14" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
-    <button class="btn soft" id="flCopy" type="button" style="width:100%;justify-content:center;margin-top:8px;min-height:44px">📋 Tümünü Kopyala</button>`;
+    <p class="hint" style="margin-bottom:8px">Alıcı: <b>${kime}</b><br>Aşağıdaki metni düzenleyip <b>WhatsApp'tan Gönder</b> ile hızlıca yollayabilir, ya da <b>PDF</b> olarak düzenli tablo halinde paylaşabilirsin.</p>
+    <textarea id="flText" rows="12" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn soft" id="flCopy" type="button" style="flex:1;justify-content:center;min-height:44px">📋 Tümünü Kopyala</button>
+      <button class="btn softgreen" id="flPdf" type="button" style="flex:1;justify-content:center;min-height:44px">📄 PDF olarak paylaş</button>
+    </div>
+    <p class="hint" style="margin-top:6px;font-size:11px">PDF: açılan yazdırma ekranından <b>"PDF olarak kaydet"</b> seç → dosyayı WhatsApp'ta müşteriye ekle. (PDF ürün listesinden düzenli tablo üretir.)</p>`;
   openModal("Fiyat Listesi Gönder", body, {
     wide: true,
     okLabel: "📲 WhatsApp'tan Gönder",
@@ -826,6 +855,8 @@ function openFiyatListesi(custId) {
         catch { ta.select(); try { document.execCommand("copy"); cp.textContent = "✓ Kopyalandı"; } catch { /* yoksay */ } }
         setTimeout(() => { cp.textContent = "📋 Tümünü Kopyala"; }, 1500);
       });
+      const pd = ov.querySelector("#flPdf");
+      if (pd) pd.addEventListener("click", () => fiyatListesiPDF());
     },
     onOk: (ov) => {
       const t = ov.querySelector("#flText").value.trim();
