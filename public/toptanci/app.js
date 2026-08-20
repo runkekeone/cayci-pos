@@ -270,8 +270,8 @@ function importProducts(text) {
 }
 /* Müşteri dışa/içe */
 function exportCustomers() {
-  const head = ["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"];
-  const rows = [head].concat(store.customers.map((c) => [c.ad, c.telefon || "", c.acilis || 0, c.adres || "", c.vergiNo || ""]));
+  const head = ["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No", "Konum Adresi", "Enlem", "Boylam"];
+  const rows = [head].concat(store.customers.map((c) => [c.ad, c.telefon || "", c.acilis || 0, c.adres || "", c.vergiNo || "", c.konumAdresi || "", c.lat != null ? c.lat : "", c.lng != null ? c.lng : ""]));
   downloadFile("babuco-musteriler.csv", csvBuild(rows));
 }
 function importCustomers(text) {
@@ -279,12 +279,16 @@ function importCustomers(text) {
   const head = rows[0].map((h) => (h || "").toLowerCase().trim());
   const iAd = headerIndex(head, ["müşteri adı", "musteri adi", "müşteri", "musteri", "ad", "müşteri tanımı", "name"]),
     iTel = headerIndex(head, ["telefon", "gsm", "phone"]), iAcilis = headerIndex(head, ["açılış borcu", "acilis borcu", "açılış", "borç", "kalan borç", "kalan borcu"]),
-    iAdres = headerIndex(head, ["adres", "address"]), iVno = headerIndex(head, ["vergi no", "vergi numarası", "tckn", "vergi no / tckn"]);
+    iAdres = headerIndex(head, ["adres", "address"]), iVno = headerIndex(head, ["vergi no", "vergi numarası", "tckn", "vergi no / tckn"]),
+    iKonum = headerIndex(head, ["konum adresi", "konum"]), iLat = headerIndex(head, ["enlem", "lat", "latitude"]), iLng = headerIndex(head, ["boylam", "lng", "lon", "longitude"]);
   if (iAd < 0) { alert("'Müşteri Adı' sütunu bulunamadı."); return; }
   let add = 0, upd = 0, err = 0;
   for (let r = 1; r < rows.length; r++) {
     const c = rows[r]; const ad = (c[iAd] || "").trim(); if (!ad) { err++; continue; }
     const data = { ad, telefon: iTel >= 0 ? (c[iTel] || "").trim() : "", acilis: num(c[iAcilis]), adres: iAdres >= 0 ? (c[iAdres] || "").trim() : "", vergiNo: iVno >= 0 ? (c[iVno] || "").trim() : "" };
+    // Konum kolonları opsiyonel: yoksa mevcut kayıttaki konuma DOKUNMA (Object.assign atlar).
+    if (iKonum >= 0 && (c[iKonum] || "").trim()) data.konumAdresi = (c[iKonum] || "").trim();
+    if (iLat >= 0 && (c[iLat] || "").trim() && iLng >= 0 && (c[iLng] || "").trim()) { data.lat = num(c[iLat]); data.lng = num(c[iLng]); }
     let ex = store.customers.find((x) => x.ad === ad);
     if (ex) { Object.assign(ex, data); upd++; } else { store.customers.push(Object.assign({ id: genId() }, data)); add++; }
   }
@@ -534,9 +538,10 @@ function renderMusteriler() {
   const toplamBorc = liste.reduce((s, c) => s + customerBorc(c.id), 0);
   const rows = liste.map((c, i) => {
     const borc = customerBorc(c.id);
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+    const konum = konumKisa(c);
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button>${konum ? `<br><span class="badge">📍 ${esc(konum)}</span>` : ""}</td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
-  return pageHead("Müşteriler", `${liste.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
+  return pageHead("Müşteriler", `${liste.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "📍 Adresleri Çöz", cls: "soft", act: "adresCoz" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
     tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
 }
 // Servisçiler (bayi) — normal müşterilerden ayrı; mekanik olarak müşteri (aynı borç/tahsilat/özel fiyat).
@@ -739,6 +744,7 @@ function mountMusteriler() {
   document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
   document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
   document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
+  const ac = document.querySelector('[data-act="adresCoz"]'); if (ac) ac.addEventListener("click", adresleriCoz);
   const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportCustomers);
   const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importCustomers));
   const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-musteri-sablon.csv", csvBuild([["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"]])));
@@ -764,6 +770,7 @@ function renderMusteriDetay() {
   const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>Tahsilat</td><td>${esc(p.not || "-")}</td><td>${money.format(p.tutar)}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
   return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
+    konumKartiHTML(c) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length));
 }
@@ -772,6 +779,7 @@ function mountMusteriDetay() {
   const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
   const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
   const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
+  mountKonumKarti(selectedCustomerId);
   wireSaleLinks();
 }
 
@@ -3091,9 +3099,139 @@ async function taraBaslat() {
     },
   });
 }
+/* ---- Kayıtlı konum → okunur adres (ters geocode) ----
+ * lat/lng tek başına "nereye gideceğim"i söylemiyor. Koordinat, Nominatim (OSM —
+ * haritanın zaten kullandığı ekosistem; anahtarsız/ücretsiz) ile mahalle/sokak
+ * adresine çevrilip müşteri kaydına yazılır (konumAdresi). Bir kez çözülünce
+ * önbellekten okunur: internet olmasa da görünür, servise tekrar istek gitmez.
+ */
+const GEO_URL = "https://nominatim.openstreetmap.org/reverse";
+let _geoSonIstek = 0;            // Nominatim adabı: saniyede birden fazla istek yok
+const _geoDenendi = new Set();   // bu oturumda denenip çözülemeyenler — otomatik deneme
+                                 // render()'ı tetiklediği için, koruma olmazsa sonsuz döngü olur
+
+async function tersGeocode(lat, lng) {
+  const bekle = Math.max(0, 1100 - (Date.now() - _geoSonIstek));
+  if (bekle) await new Promise((r) => setTimeout(r, bekle));
+  _geoSonIstek = Date.now();
+  const res = await fetch(`${GEO_URL}?format=jsonv2&zoom=18&addressdetails=1&accept-language=tr&lat=${lat}&lon=${lng}`, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error("adres servisi yanıt vermedi (" + res.status + ")");
+  return adresMetni(await res.json());
+}
+
+/** Nominatim yanıtı → "Atatürk Mah., Çamlık Sk. No:12, Ümraniye, İstanbul".
+ *  Alan adları ülkeye/yere göre değişir; sırayla denenir, tekrarlar atılır. */
+function adresMetni(d) {
+  const a = (d && d.address) || {};
+  const sokak = a.road || a.pedestrian || a.footway || a.residential || "";
+  const parcalar = [
+    a.neighbourhood || a.quarter || a.suburb || "",                        // mahalle
+    sokak ? sokak + (a.house_number ? " No:" + a.house_number : "") : "",  // cadde/sokak + kapı no
+    a.city_district || a.town || a.district || a.county || a.municipality || "", // ilçe
+    a.province || a.state || a.city || "",                                 // il
+  ];
+  const temiz = [];
+  for (const p of parcalar) { const t = String(p || "").trim(); if (t && !temiz.includes(t)) temiz.push(t); }
+  return temiz.join(", ") || String((d && d.display_name) || "");
+}
+
+/** Müşterinin kayıtlı konumunu adrese çevirip saklar. zorla=true önbelleği tazeler. */
+async function musteriAdresCoz(id, zorla) {
+  const c = findCustomer(id);
+  if (!c || c.lat == null || c.lng == null) return "";
+  if (c.konumAdresi && !zorla) return c.konumAdresi;
+  const metin = await tersGeocode(c.lat, c.lng);
+  if (!metin) return "";
+  c.konumAdresi = metin;
+  c.konumAdresTarih = new Date().toISOString();
+  saveStore();
+  return metin;
+}
+
+/** Gösterilecek konum satırı. Adres henüz çözülmediyse ham koordinat. */
+function konumOzet(c) {
+  if (!c || c.lat == null || c.lng == null) return "";
+  return c.konumAdresi || `${Number(c.lat).toFixed(5)}, ${Number(c.lng).toFixed(5)}`;
+}
+/** Liste/pin gibi dar alanlar: çözülmüş adresin ilk iki parçası (mahalle, sokak).
+ *  Adres çözülmemişse boş döner — dar satırda ham koordinat gürültüden başka bir şey değil. */
+function konumKisa(c) {
+  if (!c || !c.konumAdresi) return "";
+  return c.konumAdresi.split(", ").slice(0, 2).join(", ");
+}
+/** Google Maps yol tarifi bağlantısı — telefondan dokununca navigasyon açılır. */
+function haritaLinki(c) { return `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`; }
+
+/** Adresi çöz, bitince ekranı tazele. Sessiz (arka plan) ya da uyarılı (kullanıcı bastı). */
+async function adresTazele(id, zorla) {
+  const el = document.getElementById("kkAdres");
+  if (el) el.textContent = "📍 adres çözülüyor…";
+  try {
+    await musteriAdresCoz(id, zorla);
+  } catch (e) {
+    if (zorla) alert("Adres çözülemedi: " + ((e && e.message) || e) + "\nİnternet bağlantını kontrol et.");
+  }
+  render();
+}
+
+/** Konumu kayıtlı olup adresi çözülmemiş tüm müşterileri sırayla çözer. */
+async function adresleriCoz() {
+  const eksik = store.customers.filter((c) => c.lat != null && c.lng != null && !c.konumAdresi);
+  if (!eksik.length) { alert("Konumu kayıtlı olup adresi çözülmemiş müşteri yok."); return; }
+  if (!confirm(`${eksik.length} müşterinin konumu adrese çevrilecek (yaklaşık ${Math.ceil(eksik.length * 1.1)} sn). Devam?`)) return;
+  let ok = 0, hata = 0;
+  for (const c of eksik) {
+    try { if (await musteriAdresCoz(c.id, false)) ok++; else hata++; } catch { hata++; }
+  }
+  render();
+  alert(`Adres çözüldü: ${ok}${hata ? " · çözülemeyen: " + hata : ""}`);
+}
+
+/* Konum kartı butonları: dar ekranda alt satıra sarar (sabit 3'lü ızgara taşıyordu),
+ * dokunma hedefi 48px. Stil satır içi — styles.css designer'ın dosyası (bkz. TAKIM.md). */
+const KK_BTN = "flex:1 1 140px;min-width:0;justify-content:center;min-height:48px;font-size:13px";
+
+/** Müşteri detayındaki konum bölümü: kayıtlı koordinatın açık adresi + yol tarifi. */
+function konumKartiHTML(c) {
+  const konumVar = c.lat != null && c.lng != null;
+  const koordinat = konumVar ? `${Number(c.lat).toFixed(5)}, ${Number(c.lng).toFixed(5)}` : "";
+  return `<h1 style="font-size:15px;margin:18px 0 8px">Konum</h1>
+    <div class="card">
+      ${konumVar
+        ? `<p id="kkAdres" style="margin:0;font-size:15px;font-weight:600">📍 ${esc(c.konumAdresi || koordinat)}</p>
+           <p class="hint" style="margin:4px 0 10px">${esc(koordinat)}${c.konumTarih ? " · konum kaydı: " + fmtDate(c.konumTarih) : ""}${c.konumAdresi ? "" : " · adres henüz çözülmedi"}</p>`
+        : `<p class="sub" style="margin:0 0 10px">Kayıtlı konum yok. Müşterinin yanındayken <b>📍 Konumu Kaydet</b>'e bas — bir daha adres aramana gerek kalmaz.</p>`}
+      ${c.adres ? `<p class="hint" style="margin:0 0 10px">Elle yazılan adres: ${esc(c.adres)}</p>` : ""}
+      <div class="kk-btn" style="display:flex;flex-wrap:wrap;gap:8px">
+        ${konumVar ? `<a class="btn primary" style="${KK_BTN}" href="${haritaLinki(c)}" target="_blank" rel="noopener">🧭 Yol Tarifi</a>
+        <button class="btn soft" style="${KK_BTN}" data-act="kkYenile" type="button">🔄 Adresi Yenile</button>` : ""}
+        <button class="btn soft" style="${KK_BTN}" data-act="kkKaydet" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
+      </div>
+    </div>`;
+}
+
+/** Konum kartının butonlarını bağlar; adres yoksa arka planda bir kez çözmeyi dener. */
+function mountKonumKarti(id) {
+  const c = findCustomer(id); if (!c) return;
+  const k = document.querySelector('[data-act="kkKaydet"]'); if (k) k.addEventListener("click", () => konumKaydet(id));
+  const y = document.querySelector('[data-act="kkYenile"]'); if (y) y.addEventListener("click", () => { _geoDenendi.delete(id); adresTazele(id, true); });
+  if (c.lat != null && c.lng != null && !c.konumAdresi && !_geoDenendi.has(id)) {
+    _geoDenendi.add(id);
+    adresTazele(id, false);
+  }
+}
+
 function konumKaydet(id) {
   const c = findCustomer(id); if (!c) return;
-  const kaydet = (lat, lng) => { c.lat = lat; c.lng = lng; c.konumTarih = new Date().toISOString(); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); alert(c.ad + " konumu kaydedildi 📍"); render(); };
+  const kaydet = (lat, lng) => {
+    c.lat = lat; c.lng = lng; c.konumTarih = new Date().toISOString();
+    c.konumAdresi = ""; c.konumAdresTarih = ""; // yeni koordinat → eski adres geçersiz
+    _geoDenendi.delete(id);
+    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
+    alert(c.ad + " konumu kaydedildi 📍");
+    render();
+    musteriAdresCoz(id, true).then(() => render()).catch(() => {}); // adres arka planda gelir
+  };
   if (rota.konum) { kaydet(rota.konum.lat, rota.konum.lng); return; }
   if (!navigator.geolocation) { alert("Bu cihazda konum desteklenmiyor."); return; }
   // Servis başlamış olsun olmasın anlık konumu al (GPS watch henüz fix vermemişse de çalışır)
@@ -3112,7 +3250,7 @@ function ziyaretKartiHTML(id) {
   const sonRows = son.length ? son.map((s) => `<div class="zk-satis"><span>${fmtDate(s.tarih)} · ${s.items.length} kalem</span><b>${money.format(s.toplam)}</b></div>`).join("") : `<p class="hint">Henüz satış yok.</p>`;
   const konumVar = c.lat != null && c.lng != null;
   return `<div class="ziyaret-kart">
-    <div class="zk-head"><div><h2>${esc(c.ad)}</h2>${c.telefon ? `<span class="hint">${esc(c.telefon)}</span>` : ""}</div>
+    <div class="zk-head"><div><h2>${esc(c.ad)}</h2>${c.telefon ? `<span class="hint" style="display:block">${esc(c.telefon)}</span>` : ""}${konumOzet(c) ? `<span class="hint" style="display:block">📍 ${esc(konumOzet(c))}</span>` : ""}</div>
       <button class="btn soft sm" data-zkapat type="button">✕</button></div>
     <div class="zk-metrik">
       <div class="zkm"><span>Bakiye</span><b class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</b></div>
@@ -3365,6 +3503,7 @@ function servisSihirbaz(id) {
     return `<div class="card sihir">
       <div class="sihir-adim">Durak · 1/4</div><h2>${esc(c.ad)}</h2>
       ${c.telefon ? `<p class="hint">${esc(c.telefon)}${c.adres ? " · " + esc(c.adres) : ""}</p>` : ""}
+      ${konumOzet(c) ? `<p class="hint" style="margin-top:2px">📍 ${esc(konumOzet(c))} · <a href="${haritaLinki(c)}" target="_blank" rel="noopener">yol tarifi</a></p>` : ""}
       <div class="zk-metrik" style="margin:12px 0">
         <div class="zkm"><span>Bakiye</span><b class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</b></div>
         <div class="zkm"><span>Bu ay</span><b>${money.format(ay)}</b></div>
@@ -3740,7 +3879,7 @@ function renderHarita() {
         <button class="btn green" id="hrBaslat" type="button">▶ Servisi Başlat</button>
       </div>
     </div>` +
-    (konumsuz.length ? `<details class="card" style="margin-top:12px"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length}) — haritada gösterilemez</summary><div class="hr-liste">${konumsuz.map((c) => `<div class="hr-item"><span class="hr-no gri">—</span><div class="hr-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.telefon || "telefon yok")}</span></div></div>`).join("")}</div><p class="hint" style="margin-top:8px">Sahada uğrayınca müşteri kartından <b>📍 Konumu Kaydet</b>.</p></details>` : "");
+    (konumsuz.length ? `<details class="card" style="margin-top:12px"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length}) — haritada gösterilemez</summary><div class="hr-liste">${konumsuz.map((c) => `<div class="hr-item"><span class="hr-no gri">—</span><div class="hr-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.telefon || "telefon yok")}</span></div></div>`).join("")}</div><p class="hint" style="margin-top:8px">Sahada uğrayınca müşteri kartından <b>📍 Konumu Kaydet</b>. Kayıtlı konumun açık adresi (mahalle/sokak) müşteri detayında görünür.</p></details>` : "");
 }
 
 /** Numaralı / durum renkli pin (görsel dosya yok — CSS ile çizilir). */
@@ -3759,7 +3898,7 @@ function haritaCiz() {
     const m = L.marker([c.lat, c.lng], { icon: hrIkon(no ? (edildi ? "✓" : no) : "•", no ? (edildi ? "bitti" : "rota") : "dis") });
     const borc = customerBorc(c.id);
     m.bindPopup(`<div class="hr-pop"><b>${esc(c.ad)}</b>
-      <span class="hint">${esc(c.mahalle || c.bolge || "")}${no ? " · " + no + ". durak" : ""}</span>
+      <span class="hint">${esc(konumKisa(c) || c.mahalle || c.bolge || "")}${no ? " · " + no + ". durak" : ""}</span>
       <span class="hint">Bakiye: ${money.format(borc)}</span>
       <div class="hr-pop-btn">
         ${no ? `<button class="btn softred sm" data-hrcik="${c.id}" type="button">✕ Rotadan çıkar</button>` : `<button class="btn green sm" data-hrekle="${c.id}" type="button">＋ Rotaya ekle</button>`}
@@ -3797,7 +3936,7 @@ function hrListeCiz() {
         const mes = bacak != null ? `<span class="hr-mes">${i === 0 ? "senden" : "önceki duraktan"} ${mesafeMetin(bacak * HR_YOL_KAT)}</span>` : "";
         return `<div class="hr-item ${edildi ? "bitti" : ""} ${id === sonrakiId ? "sonraki" : ""}">
           <span class="hr-no ${edildi ? "yesil" : ""}">${edildi ? "✓" : i + 1}</span>
-          <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}${mes ? " · " : ""}${mes}</span></div>
+          <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(konumKisa(c) || c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}${mes ? " · " : ""}${mes}</span></div>
           <div class="hr-ok"><button class="hr-mini" data-hryukari="${id}" type="button" title="Yukarı">▲</button><button class="hr-mini" data-hrasagi="${id}" type="button" title="Aşağı">▼</button><button class="hr-mini rm" data-hrcik="${id}" type="button" title="Çıkar">✕</button></div>
         </div>`;
       }).join("")
