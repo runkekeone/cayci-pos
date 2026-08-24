@@ -926,6 +926,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 }
 .act-btns .edit { background: var(--brand); }
 .act-btns .del { background: var(--red); }
+.act-btns .warn { background: var(--orange); }
 .link-btn { background: none; border: 0; color: var(--brand); cursor: pointer; padding: 0; font: inherit; font-weight: 600; }
 .stok-low { color: var(--red); font-weight: 700; }
 .badge { display: inline-block; font-size: 11px; background: #eef2f8; color: #5a6470; padding: 2px 8px; border-radius: 10px; }
