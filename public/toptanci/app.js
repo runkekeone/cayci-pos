@@ -7,14 +7,14 @@ const num2 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 
 function emptyStore() {
   return {
-    products: [], customers: [], sales: [], payments: [],
+    products: [], customers: [], sales: [], payments: [], tsiparisler: [],
     groups: [], firmalar: [], purchases: [], firmaPayments: [],
     expenses: [], incomes: [], personeller: [], gorevler: [],
     odemeTipleri: [], stokSayimlari: [], efaturalar: [], iadeler: [],
     stokHareket: [], altUrunler: [], varyantlar: [], gelenSiparisler: [],
     duyurular: [], gorusmeler: [], rotalar: [], talepler: [], ziyaretler: [], aracHareket: [], servisRaporlari: [], dukkanNotlari: [],
     settings: { firmaAdi: "ÖZGÜR TİCARET", firmaNo: "U225211984", eposta: "", ad: "", soyad: "", ilce: "", fisBaslik: "", fisAdres: "", fisTel: "", fisAltbilgi: "Teşekkür ederiz" },
-    counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0 },
+    counters: { sale: 0, purchase: 0, sayim: 0, efatura: 0, seq: 0, tsiparis: 0 },
   };
 }
 let store = loadStore();
@@ -103,6 +103,23 @@ function customerBorc(id) {
   return b;
 }
 function customerSalesCount(id) { return store.sales.filter((s) => s.musteriId === id).length; }
+
+/* ---- Toplu Sipariş (müşteri ile aramızdaki "sözleşme"): çok kalemli sipariş, zamanla parça parça
+   teslim edilir ve parça parça ödenir. Kalan miktar/tutar bağımsız iki sayaçtır — teslim edilen adet
+   ile ödenen tutar birbirine otomatik bağlı DEĞİLDİR, sadece elle girileni düşer. Normal Satış/Alışverişler
+   akışına karışmaz, ayrı tabloda tutulur; ama teslimat stoktan gerçekten düşer. ---- */
+function findTsiparis(id) { return store.tsiparisler.find((t) => t.id === id); }
+function tsiparisKalemKalan(t, urunId) {
+  const sip = t.kalemler.find((k) => k.urunId === urunId);
+  if (!sip) return 0;
+  let teslim = 0;
+  t.hareketler.forEach((h) => (h.teslim || []).forEach((k) => { if (k.urunId === urunId) teslim += Number(k.adet) || 0; }));
+  return Math.max(0, (Number(sip.adet) || 0) - teslim);
+}
+function tsiparisOdenen(t) { return t.hareketler.reduce((a, h) => a + (Number(h.odeme) || 0), 0); }
+function tsiparisKalanTutar(t) { return (Number(t.toplamTutar) || 0) - tsiparisOdenen(t); }
+function tsiparisAcikMi(t) { return t.kalemler.some((k) => tsiparisKalemKalan(t, k.urunId) > 0.001) || tsiparisKalanTutar(t) > 0.01; }
+function tsiparisKalemOzet(t) { return t.kalemler.map((k) => k.ad + " (" + num2.format(tsiparisKalemKalan(t, k.urunId)) + "/" + num2.format(k.adet) + ")").join(", "); }
 function firmaBorc(id) {
   let b = 0;
   store.purchases.forEach((p) => { if (p.firmaId === id) b += Number(p.borc) || 0; });
@@ -776,18 +793,184 @@ function renderMusteriDetay() {
   const pays = store.payments.filter((p) => p.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const salesRows = sales.map((s, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${s.items.reduce((a, it) => a + it.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.odeme.acik)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`).join("");
   const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>${p.tutar < 0 ? "Borç Ekleme" : "Tahsilat"}</td><td>${esc(p.not || "-")}</td><td>${money.format(Math.abs(p.tutar))}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
+  const tsipler = store.tsiparisler.filter((t) => t.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
+  const tsipRows = tsipler.map((t, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-tsip="${t.id}">${esc(tsiparisKalemOzet(t))}</button></td><td>${money.format(t.toplamTutar)}</td><td>${money.format(tsiparisKalanTutar(t))}</td><td>${tsiparisAcikMi(t) ? '<span class="risk-orta">Açık</span>' : '<span class="risk-dusuk">Kapandı</span>'}</td><td>${fmtDate(t.tarih)}</td></tr>`).join("");
+  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "📦 Toplu Sipariş", cls: "soft", act: "tsipYeni" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
-    `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length));
+    `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length)) +
+    `<h1 style="font-size:15px;margin:18px 0 8px">Toplu Siparişler</h1>` + tableCard(["Sıra", "Kalemler (kalan/sipariş)", "Toplam Tutar", "Kalan Tutar", "Durum", "Tarih"], tsipRows, infoLine(tsipler.length));
 }
 function mountMusteriDetay() {
   const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(selectedCustomerId));
   const be = document.querySelector('[data-act="borcekle"]'); if (be) be.addEventListener("click", () => openBorcEkle(selectedCustomerId));
+  const ty = document.querySelector('[data-act="tsipYeni"]'); if (ty) ty.addEventListener("click", () => openYeniTsiparis(selectedCustomerId));
+  document.querySelectorAll("[data-tsip]").forEach((b) => b.addEventListener("click", () => { selectedTsiparisId = b.dataset.tsip; navigate("tsiparis-detay"); }));
   const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
   const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
   const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
   wireSaleLinks();
+}
+
+/* ---- Toplu Sipariş ekranları ---- */
+let selectedTsiparisId = null;
+let tsipDraft = []; // yeni sipariş oluşturma modalının taslak kalemleri
+function openYeniTsiparis(custId) {
+  const c = findCustomer(custId); if (!c) return;
+  tsipDraft = [];
+  const prodOpts = `<option value="">Ürün seçin</option>` + store.products.filter((p) => p.gorunur !== false).map((p) => `<option value="${p.id}" data-fiyat="${Number(p.satis) || 0}">${esc(p.ad)}</option>`).join("");
+  const body = `<p class="sub">${esc(c.ad)} için toplu sipariş — birden fazla ürün ekleyebilirsin. Bu, satıştan ayrı bir "sözleşme" kaydıdır; zamanla parça parça teslim edip parça parça tahsil edeceksin.</p>
+    <div class="filters">
+      <div class="field" style="flex:2"><label>Ürün</label><select id="tsUrun">${prodOpts}</select></div>
+      <div class="field"><label>Adet</label><input id="tsAdet" type="number" step="0.01" value="1" /></div>
+      <div class="field"><label>Birim Fiyat (₺)</label><input id="tsFiyat" type="number" step="0.01" /></div>
+      <div class="field"><label>&nbsp;</label><button class="btn soft" id="tsEkle" type="button">+ Ekle</button></div>
+    </div>
+    <div id="tsList" class="sd-list" style="margin-top:10px"></div>
+    <div class="totbox sd-genel" style="margin-top:12px"><strong>Sipariş Toplamı</strong><span id="tsTot">₺0,00</span></div>
+    <div class="field" style="margin-top:10px"><label>Not</label><input id="tsNot" placeholder="opsiyonel" /></div>`;
+  openModal(`Yeni Toplu Sipariş — ${esc(c.ad)}`, body, {
+    wide: true,
+    okLabel: "Siparişi Kaydet",
+    onMount: (ov) => {
+      const draw = () => {
+        ov.querySelector("#tsList").innerHTML = tsipDraft.map((k, i) => `<div class="sd-card"><div class="sd-card-top"><div class="sd-card-name">${esc(k.ad)}</div><b class="sd-card-tot">${money.format(k.adet * k.fiyat)}</b><button class="sd-del" data-tsmv="${i}" type="button" aria-label="Kaldır">&times;</button></div><div class="sd-card-sub">${num2.format(k.adet)} × ${money.format(k.fiyat)}</div></div>`).join("") || `<p class="hint">Henüz ürün eklenmedi.</p>`;
+        ov.querySelector("#tsTot").textContent = money.format(tsipDraft.reduce((a, k) => a + k.adet * k.fiyat, 0));
+        ov.querySelectorAll("[data-tsmv]").forEach((b) => b.addEventListener("click", () => { tsipDraft.splice(Number(b.dataset.tsmv), 1); draw(); }));
+      };
+      ov.querySelector("#tsUrun").addEventListener("change", (e) => { const o = e.target.selectedOptions[0]; ov.querySelector("#tsFiyat").value = o ? (o.dataset.fiyat || 0) : ""; });
+      ov.querySelector("#tsEkle").addEventListener("click", () => {
+        const pid = ov.querySelector("#tsUrun").value, adet = Number(ov.querySelector("#tsAdet").value), fiyat = Number(ov.querySelector("#tsFiyat").value) || 0;
+        if (!pid || !adet || adet <= 0) { alert("Ürün ve adet girin."); return; }
+        const pr = findProduct(pid); if (!pr) return;
+        const mevcut = tsipDraft.find((k) => k.urunId === pid);
+        if (mevcut) { mevcut.adet += adet; mevcut.fiyat = fiyat; } else tsipDraft.push({ urunId: pid, ad: pr.ad, adet, fiyat });
+        ov.querySelector("#tsUrun").value = ""; ov.querySelector("#tsAdet").value = "1"; ov.querySelector("#tsFiyat").value = "";
+        draw();
+      });
+      draw();
+    },
+    onOk: (ov) => {
+      if (!tsipDraft.length) { alert("En az bir ürün ekleyin."); return false; }
+      const toplamTutar = tsipDraft.reduce((a, k) => a + k.adet * k.fiyat, 0);
+      store.tsiparisler.push({ id: genId(), musteriId: custId, tarih: new Date().toISOString(), not: ov.querySelector("#tsNot").value.trim(), kalemler: tsipDraft.map((k) => Object.assign({}, k)), toplamTutar, hareketler: [] });
+      saveStore(); render();
+    },
+  });
+}
+function renderTsiparisDetay() {
+  const t = selectedTsiparisId ? findTsiparis(selectedTsiparisId) : null;
+  if (!t) return pageHead("Toplu Sipariş") + `<div class="card"><p class="sub">Sipariş bulunamadı. <button class="link-btn" data-goto="musteriler">Müşteriler listesine dön</button>.</p></div>`;
+  const c = findCustomer(t.musteriId);
+  const kalemRows = t.kalemler.map((k, i) => `<tr><td>${i + 1}</td><td>${esc(k.ad)}</td><td>${num2.format(k.adet)}</td><td>${num2.format(k.adet - tsiparisKalemKalan(t, k.urunId))}</td><td>${num2.format(tsiparisKalemKalan(t, k.urunId))}</td><td>${money.format(k.fiyat)}</td></tr>`).join("");
+  const hareketRows = t.hareketler.slice().sort((a, b) => b.tarih.localeCompare(a.tarih)).map((h, i) => {
+    const teslimTxt = (h.teslim || []).filter((x) => x.adet > 0).map((x) => x.ad + " " + num2.format(x.adet)).join(", ");
+    const ekstraTxt = (h.ekstra || []).filter((x) => x.adet > 0).map((x) => x.ad + " " + num2.format(x.adet)).join(", ");
+    return `<tr><td>${i + 1}</td><td>${esc(h.belgeNo || "-")}</td><td>${esc(teslimTxt || "-")}</td><td>${esc(ekstraTxt || "-")}</td><td>${money.format(h.odeme || 0)}</td><td>${esc(h.not || "-")}</td><td>${fmtDate(h.tarih)}</td></tr>`;
+  }).join("");
+  return pageHead("Toplu Sipariş Detayı", (c ? esc(c.ad) + " · " : "") + (tsiparisAcikMi(t) ? "Açık" : "Kapandı"), [{ label: "Teslimat / Ödeme Gir", cls: "green", act: "hareket" }, { label: "🗑 Siparişi Sil", cls: "softred", act: "sil" }, { label: "Müşteriye Dön", cls: "soft", act: "musteriyeDon" }]) +
+    grid([["Sipariş Toplamı", money.format(t.toplamTutar), "blue"], ["Ödenen", money.format(tsiparisOdenen(t)), "green"], ["Kalan Tutar", money.format(tsiparisKalanTutar(t))], ["Not", esc(t.not || "-")]]) +
+    `<h1 style="font-size:15px;margin:18px 0 8px">Sipariş Kalemleri</h1>` + tableCard(["Sıra", "Ürün", "Sipariş Adet", "Teslim Edilen", "Kalan", "Birim Fiyat"], kalemRows, infoLine(t.kalemler.length)) +
+    `<h1 style="font-size:15px;margin:18px 0 8px">Hareketler (Teslimat / Ödeme Fişleri)</h1>` + tableCard(["Sıra", "Belge No", "Teslim Edilen", "Ekstra Satış", "Ödeme", "Not", "Tarih"], hareketRows, infoLine(t.hareketler.length));
+}
+function mountTsiparisDetay() {
+  const t = selectedTsiparisId ? findTsiparis(selectedTsiparisId) : null; if (!t) return;
+  const h = document.querySelector('[data-act="hareket"]'); if (h) h.addEventListener("click", () => openTsiparisHareket(t.id));
+  const md = document.querySelector('[data-act="musteriyeDon"]'); if (md) md.addEventListener("click", () => { selectedCustomerId = t.musteriId; navigate("musteri-detay"); });
+  const sil = document.querySelector('[data-act="sil"]');
+  if (sil) sil.addEventListener("click", () => {
+    if (!confirm("Bu toplu sipariş silinsin mi? Teslim edilmiş ürünlerin stoğu geri yüklenir.")) return;
+    t.hareketler.forEach((hr) => { (hr.teslim || []).forEach((k) => stokEkle(k.urunId, k.adet)); (hr.ekstra || []).forEach((k) => stokEkle(k.urunId, k.adet)); });
+    const mid = t.musteriId;
+    store.tsiparisler = store.tsiparisler.filter((x) => x.id !== t.id);
+    saveStore(); selectedCustomerId = mid; navigate("musteri-detay");
+  });
+}
+// Teslimat + ekstra ürün + ödeme — hepsi tek fişte. Teslim edilen adet ile alınan ödeme birbirinden
+// bağımsızdır; kullanıcı o gün ne bıraktıysa, müşteri ne ödediyse onu girer.
+let tsipEkstraDraft = [];
+function openTsiparisHareket(tsipId) {
+  const t = findTsiparis(tsipId); if (!t) return;
+  tsipEkstraDraft = [];
+  const acikKalemler = t.kalemler.filter((k) => tsiparisKalemKalan(t, k.urunId) > 0.001);
+  const kalemInputs = acikKalemler.map((k) => {
+    const kalan = tsiparisKalemKalan(t, k.urunId);
+    return `<div class="field"><label>${esc(k.ad)} — kalan ${num2.format(kalan)}</label><input class="th-teslim" data-urun="${k.urunId}" data-kalan="${kalan}" type="number" step="0.01" placeholder="0" /></div>`;
+  }).join("") || `<p class="hint">Bu siparişteki tüm ürünler teslim edilmiş.</p>`;
+  const prodOpts = `<option value="">Ürün seçin</option>` + store.products.filter((p) => p.gorunur !== false).map((p) => `<option value="${p.id}" data-fiyat="${Number(p.satis) || 0}">${esc(p.ad)}</option>`).join("");
+  const body = `<p class="sub">Bugün siparişten teslim ettiğin ürünleri gir, gerekirse ayrıca ekstra ürün ekle ve/veya alınan ödemeyi yaz. Hepsi tek fişe yansır.</p>
+    <h1 style="font-size:13px;margin:10px 0 6px">Sipariş Teslimatı</h1>
+    <div class="form-grid">${kalemInputs}</div>
+    <h1 style="font-size:13px;margin:14px 0 6px">Ekstra Ürün (siparişe dahil olmayan, o gün ayrıca satılan)</h1>
+    <div class="filters">
+      <div class="field" style="flex:2"><label>Ürün</label><select id="thUrun">${prodOpts}</select></div>
+      <div class="field"><label>Adet</label><input id="thAdet" type="number" step="0.01" value="1" /></div>
+      <div class="field"><label>Birim Fiyat (₺)</label><input id="thFiyat" type="number" step="0.01" /></div>
+      <div class="field"><label>&nbsp;</label><button class="btn soft" id="thEkle" type="button">+ Ekle</button></div>
+    </div>
+    <div id="thList" class="sd-list" style="margin-top:6px"></div>
+    <h1 style="font-size:13px;margin:14px 0 6px">Ödeme</h1>
+    <div class="field"><label>Bugün Alınan Ödeme (₺)</label><input id="thOdeme" type="number" step="0.01" placeholder="0" /></div>
+    <div class="field"><label>Not</label><input id="thNot" placeholder="opsiyonel" /></div>`;
+  openModal(`Teslimat / Ödeme — ${esc(findCustomer(t.musteriId) ? findCustomer(t.musteriId).ad : "")}`, body, {
+    wide: true,
+    okLabel: "Fişi Kaydet",
+    onMount: (ov) => {
+      const draw = () => {
+        ov.querySelector("#thList").innerHTML = tsipEkstraDraft.map((k, i) => `<div class="sd-card"><div class="sd-card-top"><div class="sd-card-name">${esc(k.ad)}</div><b class="sd-card-tot">${money.format(k.adet * k.fiyat)}</b><button class="sd-del" data-thmv="${i}" type="button" aria-label="Kaldır">&times;</button></div><div class="sd-card-sub">${num2.format(k.adet)} × ${money.format(k.fiyat)}</div></div>`).join("") || `<p class="hint">Ekstra ürün eklenmedi.</p>`;
+        ov.querySelectorAll("[data-thmv]").forEach((b) => b.addEventListener("click", () => { tsipEkstraDraft.splice(Number(b.dataset.thmv), 1); draw(); }));
+      };
+      ov.querySelector("#thUrun").addEventListener("change", (e) => { const o = e.target.selectedOptions[0]; ov.querySelector("#thFiyat").value = o ? (o.dataset.fiyat || 0) : ""; });
+      ov.querySelector("#thEkle").addEventListener("click", () => {
+        const pid = ov.querySelector("#thUrun").value, adet = Number(ov.querySelector("#thAdet").value), fiyat = Number(ov.querySelector("#thFiyat").value) || 0;
+        if (!pid || !adet || adet <= 0) { alert("Ürün ve adet girin."); return; }
+        const pr = findProduct(pid); if (!pr) return;
+        const mevcut = tsipEkstraDraft.find((k) => k.urunId === pid);
+        if (mevcut) { mevcut.adet += adet; mevcut.fiyat = fiyat; } else tsipEkstraDraft.push({ urunId: pid, ad: pr.ad, adet, fiyat });
+        ov.querySelector("#thUrun").value = ""; ov.querySelector("#thAdet").value = "1"; ov.querySelector("#thFiyat").value = "";
+        draw();
+      });
+      draw();
+    },
+    onOk: (ov) => {
+      const teslim = [];
+      let asimVar = false;
+      ov.querySelectorAll(".th-teslim").forEach((el) => {
+        const adet = Number(el.value) || 0; if (adet <= 0) return;
+        const kalan = Number(el.dataset.kalan) || 0;
+        if (adet > kalan + 0.001) { asimVar = true; return; }
+        const k = t.kalemler.find((x) => x.urunId === el.dataset.urun);
+        teslim.push({ urunId: el.dataset.urun, ad: k.ad, adet });
+      });
+      if (asimVar) { alert("Teslim edilen miktar siparişteki kalan miktardan fazla olamaz."); return false; }
+      const odeme = Number(ov.querySelector("#thOdeme").value) || 0;
+      if (!teslim.length && !tsipEkstraDraft.length && !odeme) { alert("Teslimat, ekstra ürün veya ödemeden en az birini girin."); return false; }
+      store.counters.tsiparis = (store.counters.tsiparis || 0) + 1;
+      const belgeNo = "TS-" + new Date().getFullYear() + "-" + String(store.counters.tsiparis).padStart(6, "0");
+      const hareket = { id: genId(), belgeNo, tarih: new Date().toISOString(), teslim, ekstra: tsipEkstraDraft.map((k) => Object.assign({}, k)), odeme, not: ov.querySelector("#thNot").value.trim() };
+      teslim.forEach((k) => stokDus(k.urunId, k.adet));
+      tsipEkstraDraft.forEach((k) => stokDus(k.urunId, k.adet));
+      t.hareketler.push(hareket);
+      saveStore();
+      printTsiparisFis(t, hareket);
+      render();
+    },
+  });
+}
+function printTsiparisFis(t, h) {
+  const c = findCustomer(t.musteriId);
+  const st = store.settings;
+  const head = `<h2>${esc(st.fisBaslik || st.firmaAdi)}</h2>${st.fisAdres ? `<div class="c">${esc(st.fisAdres)}</div>` : ""}${st.fisTel ? `<div class="c">Tel: ${esc(st.fisTel)}</div>` : ""}<div class="c">Toplu Sipariş — Teslimat / Ödeme Fişi</div><hr>`;
+  const ekstraRows = (h.ekstra || []).map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${money.format(it.fiyat * it.adet)}</td></tr>`).join("");
+  const ekstraToplam = (h.ekstra || []).reduce((a, it) => a + it.adet * it.fiyat, 0);
+  const teslimRows = (h.teslim || []).map((it) => { const kalan = tsiparisKalemKalan(t, it.urunId); const sip = t.kalemler.find((k) => k.urunId === it.urunId); return `<tr><td>${esc(it.ad)}</td><td class="r">${num2.format(sip ? sip.adet : 0)} - ${num2.format(it.adet)} = ${num2.format(kalan)} kalan</td></tr>`; }).join("");
+  const foot = `<hr><div class="c">${esc(st.fisAltbilgi || "Teşekkür ederiz")}</div>`;
+  openPrint("Toplu Sipariş Fişi " + h.belgeNo, `${head}
+    <div>Belge No: ${h.belgeNo}</div><div>Tarih: ${fmtDate(h.tarih)}</div>${c ? `<div>Müşteri: ${esc(c.ad)}</div>` : ""}<hr>
+    ${ekstraRows ? `<div class="c"><b>Ekstra Ürünler</b></div><table>${ekstraRows}</table><table><tr><td><b>Ekstra Toplam</b></td><td class="r"><b>${money.format(ekstraToplam)}</b></td></tr></table><hr>` : ""}
+    ${teslimRows ? `<div class="c"><b>Toplu Siparişten Bırakılan</b></div><table>${teslimRows}</table><hr>` : ""}
+    <table>${h.odeme ? `<tr><td>Bugün Alınan Ödeme</td><td class="r">${money.format(h.odeme)}</td></tr>` : ""}<tr><td>Sipariş Kalan Tutarı</td><td class="r">${money.format(tsiparisKalanTutar(t))}</td></tr></table>
+    ${h.not ? `<div>Not: ${esc(h.not)}</div>` : ""}${foot}`);
 }
 
 /* ---- Fiyat Listesi (müşteriye WhatsApp metni / PDF olarak gönder) ---- */
@@ -2463,6 +2646,7 @@ const PAGES = {
 
   musteriler: { render: renderMusteriler, mount: mountMusteriler },
   "musteri-detay": { render: renderMusteriDetay, mount: mountMusteriDetay },
+  "tsiparis-detay": { render: renderTsiparisDetay, mount: mountTsiparisDetay },
   servisciler: { render: renderServisciler, mount: mountServisciler },
 
   urunler: { render: renderUrunler, mount: mountUrunler },
@@ -4115,7 +4299,7 @@ function buildMenu() {
 }
 function findMenuIndexByRoute(route) {
   for (let i = 0; i < MENU.length; i++) { const m = MENU[i]; if (m.route === route) return { idx: i }; if (m.children && m.children.some((c) => c.route === route)) return { idx: i, sub: true }; }
-  const alias = { "musteri-detay": "musteriler", "urun-ekle": "urunler", "stok-sayimi-detay": "stok-sayimi", "satis-detay": "satis" };
+  const alias = { "musteri-detay": "musteriler", "tsiparis-detay": "musteriler", "urun-ekle": "urunler", "stok-sayimi-detay": "stok-sayimi", "satis-detay": "satis" };
   if (alias[route]) return findMenuIndexByRoute(alias[route]);
   return null;
 }
