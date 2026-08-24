@@ -534,7 +534,7 @@ function renderMusteriler() {
   const toplamBorc = liste.reduce((s, c) => s + customerBorc(c.id), 0);
   const rows = liste.map((c, i) => {
     const borc = customerBorc(c.id);
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="warn" data-borcekle="${c.id}">Veresiye Borç Ekle</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
   return pageHead("Müşteriler", `${liste.length} kişi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
     tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
@@ -546,7 +546,7 @@ function renderServisciler() {
   const rows = liste.map((c, i) => {
     const borc = customerBorc(c.id);
     const ozelSay = c.ozelFiyatlar ? Object.keys(c.ozelFiyatlar).length : 0;
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td>${ozelSay ? ozelSay + " ürün" : "-"}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td>${ozelSay ? ozelSay + " ürün" : "-"}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="warn" data-borcekle="${c.id}">Veresiye Borç Ekle</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
   return pageHead("Servisçiler (Bayiler)", `${liste.length} servisçi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Servisçi", act: "yeni-servisci" }]) +
     `<p class="hint" style="margin:0 2px 10px">Servisçiler senden toptan/düşük fiyata alan bayiler. Özel fiyatları satış ekranından ürün satırına dokunup "bu fiyatı … için kaydet" ile tanımlanır; dükkan modunda satış onların stoğundan (dükkan) düşer.</p>` +
@@ -558,6 +558,7 @@ function mountServisciler() {
   document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
   document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
   document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
+  document.querySelectorAll("[data-borcekle]").forEach((b) => b.addEventListener("click", () => openBorcEkle(b.dataset.borcekle)));
   wireTableSearch();
 }
 /* ---- Sabah Araç Yükleme: dükkandan araca aktarım ---- */
@@ -739,6 +740,7 @@ function mountMusteriler() {
   document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
   document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
   document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
+  document.querySelectorAll("[data-borcekle]").forEach((b) => b.addEventListener("click", () => openBorcEkle(b.dataset.borcekle)));
   const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportCustomers);
   const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importCustomers));
   const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-musteri-sablon.csv", csvBuild([["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"]])));
@@ -754,6 +756,18 @@ function openOdemeAl(custId) {
     onOk: (ov) => { const t = Number(ov.querySelector("#pTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; } store.payments.push({ id: genId(), musteriId: custId, tutar: t, not: ov.querySelector("#pNot").value.trim(), tarih: new Date().toISOString() }); bayiPuanEkle(c, t); saveStore(); render(); },
   });
 }
+// Yanlışlıkla fazla/az tahsilat girilmesi gibi durumları düzeltmek için müşteri borcuna elle ekleme yapılır.
+// customerBorc negatif tutarlı payments kaydını borç artışı olarak sayar (bkz. customerBorc).
+function openBorcEkle(custId) {
+  const c = findCustomer(custId); if (!c) return;
+  const borc = customerBorc(custId);
+  openModal(`Veresiye Borç Ekle — ${esc(c.ad)}`, `<p class="sub">Kalan borç: <strong>${money.format(borc)}</strong></p>
+    <div class="field"><label>Eklenecek Borç (₺) *</label><input id="bTut" type="number" step="0.01" /></div>
+    <div class="field"><label>Not</label><input id="bNot" placeholder="opsiyonel — ör. hatalı tahsilat düzeltmesi" /></div>`, {
+    okLabel: "Borcu Kaydet",
+    onOk: (ov) => { const t = Number(ov.querySelector("#bTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; } store.payments.push({ id: genId(), musteriId: custId, tutar: -t, not: ov.querySelector("#bNot").value.trim() || "Manuel borç ekleme", tarih: new Date().toISOString() }); saveStore(); render(); },
+  });
+}
 let selectedCustomerId = null;
 function renderMusteriDetay() {
   const c = selectedCustomerId ? findCustomer(selectedCustomerId) : null;
@@ -761,14 +775,15 @@ function renderMusteriDetay() {
   const sales = store.sales.filter((s) => s.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const pays = store.payments.filter((p) => p.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const salesRows = sales.map((s, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${s.items.reduce((a, it) => a + it.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.odeme.acik)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`).join("");
-  const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>Tahsilat</td><td>${esc(p.not || "-")}</td><td>${money.format(p.tutar)}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
+  const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>${p.tutar < 0 ? "Borç Ekleme" : "Tahsilat"}</td><td>${esc(p.not || "-")}</td><td>${money.format(Math.abs(p.tutar))}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
+  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length));
 }
 function mountMusteriDetay() {
   const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(selectedCustomerId));
+  const be = document.querySelector('[data-act="borcekle"]'); if (be) be.addEventListener("click", () => openBorcEkle(selectedCustomerId));
   const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
   const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
   const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
