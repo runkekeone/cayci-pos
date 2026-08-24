@@ -768,9 +768,16 @@ function openOdemeAl(custId) {
   const borc = customerBorc(custId);
   openModal(`Ödeme Al — ${esc(c.ad)}`, `<p class="sub">Kalan borç: <strong>${money.format(borc)}</strong></p>
     <div class="field"><label>Tahsilat Tutarı (₺) *</label><input id="pTut" type="number" step="0.01" value="${borc > 0 ? borc : ""}" /></div>
+    <div class="field"><label>Tarih</label><input id="pTarih" type="date" value="${todayStr()}" /></div>
     <div class="field"><label>Not</label><input id="pNot" placeholder="opsiyonel" /></div>`, {
     okLabel: "Ödemeyi Kaydet",
-    onOk: (ov) => { const t = Number(ov.querySelector("#pTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; } store.payments.push({ id: genId(), musteriId: custId, tutar: t, not: ov.querySelector("#pNot").value.trim(), tarih: new Date().toISOString() }); bayiPuanEkle(c, t); saveStore(); render(); },
+    onOk: (ov) => {
+      const t = Number(ov.querySelector("#pTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; }
+      const tv = ov.querySelector("#pTarih").value;
+      const tarih = tv ? new Date(tv + "T12:00:00").toISOString() : new Date().toISOString();
+      store.payments.push({ id: genId(), musteriId: custId, tutar: t, not: ov.querySelector("#pNot").value.trim(), tarih });
+      bayiPuanEkle(c, t); saveStore(); render();
+    },
   });
 }
 // Yanlışlıkla fazla/az tahsilat girilmesi gibi durumları düzeltmek için müşteri borcuna elle ekleme yapılır.
@@ -780,9 +787,16 @@ function openBorcEkle(custId) {
   const borc = customerBorc(custId);
   openModal(`Veresiye Borç Ekle — ${esc(c.ad)}`, `<p class="sub">Kalan borç: <strong>${money.format(borc)}</strong></p>
     <div class="field"><label>Eklenecek Borç (₺) *</label><input id="bTut" type="number" step="0.01" /></div>
+    <div class="field"><label>Tarih</label><input id="bTarih" type="date" value="${todayStr()}" /></div>
     <div class="field"><label>Not</label><input id="bNot" placeholder="opsiyonel — ör. hatalı tahsilat düzeltmesi" /></div>`, {
     okLabel: "Borcu Kaydet",
-    onOk: (ov) => { const t = Number(ov.querySelector("#bTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; } store.payments.push({ id: genId(), musteriId: custId, tutar: -t, not: ov.querySelector("#bNot").value.trim() || "Manuel borç ekleme", tarih: new Date().toISOString() }); saveStore(); render(); },
+    onOk: (ov) => {
+      const t = Number(ov.querySelector("#bTut").value); if (!t || t <= 0) { alert("Geçerli tutar girin."); return false; }
+      const tv = ov.querySelector("#bTarih").value;
+      const tarih = tv ? new Date(tv + "T12:00:00").toISOString() : new Date().toISOString();
+      store.payments.push({ id: genId(), musteriId: custId, tutar: -t, not: ov.querySelector("#bNot").value.trim() || "Manuel borç ekleme", tarih });
+      saveStore(); render();
+    },
   });
 }
 let selectedCustomerId = null;
