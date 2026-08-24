@@ -1548,6 +1548,7 @@ function finalizeSale(type, odemeAdi) {
   const satilanMus = c.musteriId;
   const { brut, toplam } = cartTotals();
   const odeme = { nakit: 0, pos: 0, acik: 0 };
+  let fazlaOdeme = 0; // satış tutarını aşan kısım — müşterinin eski borcuna tahsilat olarak işlenir
   if (type === "nakit") odeme.nakit = toplam;
   else if (type === "pos") odeme.pos = toplam;
   else if (type === "acik") { if (!c.musteriId) { alert("Açık hesap için önce müşteri seçin (Seç düğmesi)."); return; } odeme.acik = toplam; }
@@ -1557,6 +1558,10 @@ function finalizeSale(type, odemeAdi) {
     const rest = Math.round((toplam - n - p) * 100) / 100;
     odeme.nakit = n; odeme.pos = p;
     if (rest > 0.001) { if (!c.musteriId) { alert("Kalan tutar açık hesaba yazılacak — müşteri seçin."); return; } odeme.acik = rest; }
+    else if (rest < -0.001) {
+      if (!c.musteriId) { alert("Satış tutarından fazla ödeme girdiniz. Fazlayı müşterinin borcundan düşmek için önce müşteri seçin, ya da nakit/POS tutarını satış toplamına eşitleyin."); return; }
+      fazlaOdeme = -rest;
+    }
   }
   const maliyet = c.items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? (Number(pr.alis) || 0) : 0) * i.adet; }, 0);
   // POS cihaz komisyonu: sadece "Pos" ödemede %2 (nakit/havale/açık hariç)
@@ -1565,6 +1570,11 @@ function finalizeSale(type, odemeAdi) {
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
   store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, komisyon, odeme, tarih: new Date().toISOString(), servisGun: localDateStr(new Date()), hafta: haftaNo(new Date()), stokKaynak: stokModu });
   c.items.forEach((i) => stokDus(i.urunId, i.adet)); // aktif moda göre (araç/dükkan) stok düş
+  if (fazlaOdeme > 0.001 && satilanMus) {
+    // Nakit/POS satış tutarını aştı: fazlayı ayrı bir tahsilat kaydı yap ki müşterinin eski borcundan düşsün.
+    store.payments.push({ id: genId(), musteriId: satilanMus, tutar: fazlaOdeme, not: "Satışta fazla ödenen (" + belgeNo + ")", tarih: new Date().toISOString() });
+    const mcFazla = findCustomer(satilanMus); if (mcFazla) bayiPuanEkle(mcFazla, fazlaOdeme);
+  }
   saveStore();
   pos.carts[pos.active] = newCart();
   refreshPOS();
