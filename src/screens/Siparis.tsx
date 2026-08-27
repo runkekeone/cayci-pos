@@ -4,7 +4,7 @@ import { lowStock } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
 import { TOPTANCI_KATALOG } from '../defaults'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
-import { siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
+import { babucoKatalogGetir, siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
 import type { CatalogItem, Item, Order, OrderLine } from '../types'
 
 /** Toptancı-tarafı durum kodu → çay ocağının göreceği etiket. */
@@ -37,8 +37,25 @@ export default function Siparis() {
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
   const [sepetAcik, setSepetAcik] = useState(false) // mobil: alttan açılan sepet paneli
   const [durumlar, setDurumlar] = useState<Record<string, string>>({}) // sipariş id → toptancı durumu
+  const [bulutKatalog, setBulutKatalog] = useState<CatalogItem[] | null>(null) // toptancının kendi panelinden çekilen güncel ürünler
 
-  const katalog = TOPTANCI_KATALOG.filter((k) => k.active)
+  // Toptancının (babuco) buluta yedeklediği ürün listesini çek — o ne satıyorsa katalog bu olsun.
+  // Bulunamazsa (çevrimdışı / henüz senkron olmamış) yerleşik listeye düş.
+  useEffect(() => {
+    let alive = true
+    const cek = async () => {
+      const u = await babucoKatalogGetir()
+      if (alive && u) setBulutKatalog(u)
+    }
+    void cek()
+    const t = setInterval(() => void cek(), 60000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [])
+
+  const katalog = bulutKatalog ?? TOPTANCI_KATALOG.filter((k) => k.active)
   const kategoriler = ['Hepsi', ...new Set(katalog.map((k) => k.category))]
   const shown = katalog.filter(
     (k) =>
@@ -82,11 +99,10 @@ export default function Siparis() {
     }
   }, [s.orders])
 
-  function ekle(k: CatalogItem, birim: 'koli' | 'adet') {
+  function ekle(k: CatalogItem, birim: string, unitPrice: number) {
     const key = `${k.id}|${birim}`
     setSepet((cur) => {
       const mevcut = cur[key]
-      const unitPrice = birim === 'koli' ? k.koliPrice : k.adetPrice
       return {
         ...cur,
         [key]: {
@@ -98,6 +114,17 @@ export default function Siparis() {
         },
       }
     })
+  }
+
+  /** Bir katalog kaleminin sipariş edilebilir birim(ler)i. Koli/adet ayrı fiyatlıysa ikisi de, değilse tek birim. */
+  function secenekler(k: CatalogItem): { birim: string; label: string; price: number }[] {
+    if (k.packSize > 1 && k.koliPrice !== k.adetPrice) {
+      return [
+        { birim: 'koli', label: 'Koli', price: k.koliPrice },
+        { birim: 'adet', label: 'Adet', price: k.adetPrice },
+      ]
+    }
+    return [{ birim: k.buyUnit || 'Adet', label: k.buyUnit || 'Adet', price: k.adetPrice }]
   }
 
   function setQty(key: string, qty: number) {
@@ -206,16 +233,24 @@ export default function Siparis() {
     <>
       <h1>Toptancıdan Sipariş</h1>
       <p className="sub">Eksik/kritik ürünleri toptancından iste. Sipariş QR, WhatsApp veya dosya ile gider.</p>
+      {!bulutKatalog && (
+        <p className="hint" style={{ marginTop: -8, marginBottom: 8 }}>
+          ⚠ Toptancının güncel listesine ulaşılamadı, kayıtlı liste gösteriliyor.
+        </p>
+      )}
 
       {oneriler.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)', marginBottom: 16 }}>
           <strong>⚠ Şunları sipariş etmelisin (stok azaldı)</strong>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            {oneriler.map(({ it, k }) => (
-              <button key={it.id} className="btn sm" onClick={() => ekle(k, 'koli')}>
-                + {k.name} (koli)
-              </button>
-            ))}
+            {oneriler.map(({ it, k }) => {
+              const opt = secenekler(k)[0]
+              return (
+                <button key={it.id} className="btn sm" onClick={() => ekle(k, opt.birim, opt.price)}>
+                  + {k.name} ({opt.label})
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -257,35 +292,37 @@ export default function Siparis() {
           </div>
 
           <div className="katalog-grid">
-            {shown.map((k) => (
-              <div className="kat-kart" key={k.id}>
-                <div className="kk-ad">
-                  <strong>{k.name}</strong>
-                  <span className="hint">
-                    {k.brand} · {k.packSize} {k.unit}/{k.buyUnit}
-                  </span>
+            {shown.map((k) => {
+              const opts = secenekler(k)
+              return (
+                <div className="kat-kart" key={k.id}>
+                  <div className="kk-ad">
+                    <strong>{k.name}</strong>
+                    <span className="hint">
+                      {k.brand} {k.brand ? '· ' : ''}
+                      {opts.length > 1 ? `${k.packSize} ${k.unit}/${k.buyUnit}` : k.buyUnit}
+                    </span>
+                  </div>
+                  <div className="kk-fiyat">
+                    {opts.map((o) => (
+                      <span key={o.birim}>
+                        {o.label} <b>{fmtTL(o.price)}</b>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="kk-butonlar">
+                    {opts.map((o, i) => (
+                      <button key={o.birim} className={`btn sm ${i > 0 ? 'ghost' : ''}`} onClick={() => ekle(k, o.birim, o.price)}>
+                        + {o.label}
+                      </button>
+                    ))}
+                    <button className="btn sm" title="Kendi satış listene ekle" onClick={() => urunumeEkle(k)}>
+                      🛒 Ürünüme
+                    </button>
+                  </div>
                 </div>
-                <div className="kk-fiyat">
-                  <span>
-                    Koli <b>{fmtTL(k.koliPrice)}</b>
-                  </span>
-                  <span>
-                    Adet <b>{fmtTL(k.adetPrice)}</b>
-                  </span>
-                </div>
-                <div className="kk-butonlar">
-                  <button className="btn sm" onClick={() => ekle(k, 'koli')}>
-                    + Koli
-                  </button>
-                  <button className="btn sm ghost" onClick={() => ekle(k, 'adet')}>
-                    + Adet
-                  </button>
-                  <button className="btn sm" title="Kendi satış listene ekle" onClick={() => urunumeEkle(k)}>
-                    🛒 Ürünüme
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {shown.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
           </div>
         </div>

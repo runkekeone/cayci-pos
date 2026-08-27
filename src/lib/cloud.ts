@@ -10,7 +10,7 @@
  * koruma gerektiğinde ileride Supabase Auth + RLS eklenmeli.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Order } from '../types'
+import type { CatalogItem, Order } from '../types'
 
 // Ortam değişkeni varsa onu kullan; yoksa gömülü değer (CI/GitHub Pages için).
 const URL =
@@ -101,6 +101,54 @@ export async function siparisGonderBulut(order: Order): Promise<boolean> {
     return !error
   } catch {
     return false
+  }
+}
+
+// ---- Toptancı kataloğu (babuco panelinde gerçekten satılan ürünler) ----
+// babuco kendi tüm store'unu (ürünler dahil) kv tablosuna "babuco:store" anahtarıyla
+// yedekler (bkz. babuco app.js bulutaYaz/bulutHydrate). Çay ocağı sipariş ekranı bu
+// ürün listesini okuyup katalog olarak gösterir — toptancı ne satıyorsa o görünür.
+
+interface BabucoUrun {
+  id: string
+  ad: string
+  barkod?: string
+  grup?: string
+  alis?: number
+  satis?: number
+  birim?: string
+  gorunur?: boolean
+}
+
+/** Toptancının kendi panelinde tanımladığı, buluttan çekilen güncel ürün kataloğu. Çevrimdışı/veri yoksa null. */
+export async function babucoKatalogGetir(): Promise<CatalogItem[] | null> {
+  const c = client()
+  if (!c) return null
+  try {
+    const { data, error } = await c.from('kv').select('value').eq('key', 'babuco:store').maybeSingle()
+    if (error || !data) return null
+    const urunler = (data.value as { products?: BabucoUrun[] } | null)?.products
+    if (!Array.isArray(urunler) || urunler.length === 0) return null
+    return urunler
+      .filter((u) => u.gorunur !== false && u.ad)
+      .map((u): CatalogItem => {
+        const fiyat = Number(u.satis) || 0
+        return {
+          id: `b-${u.id}`,
+          name: u.ad,
+          category: u.grup || 'Diğer',
+          unit: 'adet',
+          buyUnit: u.birim || 'Adet',
+          packSize: 1,
+          koliPrice: fiyat,
+          adetPrice: fiyat,
+          cost: u.alis || undefined,
+          barcode: u.barkod || undefined,
+          active: true,
+        }
+      })
+  } catch {
+    return null
   }
 }
 

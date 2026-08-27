@@ -217,8 +217,8 @@ export interface CatalogItem {
 export interface OrderLine {
   catalogItemId: string
   name: string
-  /** Sipariş edilen birim: 'koli' | 'adet'. */
-  birim: 'koli' | 'adet'
+  /** Sipariş edilen birim: 'koli' | 'adet' veya toptancının kendi birimi (Kg, Litre, Paket...). */
+  birim: string
   qty: number
   /** O birimin fiyatı (koliPrice veya adetPrice). */
   unitPrice: number
