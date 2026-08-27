@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
 import { lowStock } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
-import { TOPTANCI_KATALOG } from '../defaults'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
 import { babucoKatalogGetir, siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
 import type { CatalogItem, Item, Order, OrderLine } from '../types'
@@ -16,6 +15,8 @@ const DURUM_ETIKET: Record<string, string> = {
 }
 
 type Sepet = Record<string, OrderLine> // key: catalogItemId|birim
+
+const BOS_KATALOG: CatalogItem[] = []
 
 /** Toptancı katalog kategorisini çay ocağı satış kategorisine eşle. */
 function katEsle(cat: string): string {
@@ -38,14 +39,17 @@ export default function Siparis() {
   const [sepetAcik, setSepetAcik] = useState(false) // mobil: alttan açılan sepet paneli
   const [durumlar, setDurumlar] = useState<Record<string, string>>({}) // sipariş id → toptancı durumu
   const [bulutKatalog, setBulutKatalog] = useState<CatalogItem[] | null>(null) // toptancının kendi panelinden çekilen güncel ürünler
+  const [katalogYukleniyor, setKatalogYukleniyor] = useState(true)
 
-  // Toptancının (babuco) buluta yedeklediği ürün listesini çek — o ne satıyorsa katalog bu olsun.
-  // Bulunamazsa (çevrimdışı / henüz senkron olmamış) yerleşik listeye düş.
+  // Katalog SADECE toptancının (babuco) buluta yedeklediği gerçek ürün listesinden gelir —
+  // uydurma/deneme bir yedek liste yok: toptancı panelinde görünmeyen hiçbir şey burada da görünmez.
   useEffect(() => {
     let alive = true
     const cek = async () => {
       const u = await babucoKatalogGetir()
-      if (alive && u) setBulutKatalog(u)
+      if (!alive) return
+      if (u) setBulutKatalog(u)
+      setKatalogYukleniyor(false)
     }
     void cek()
     const t = setInterval(() => void cek(), 60000)
@@ -55,7 +59,7 @@ export default function Siparis() {
     }
   }, [])
 
-  const katalog = bulutKatalog ?? TOPTANCI_KATALOG.filter((k) => k.active)
+  const katalog = bulutKatalog ?? BOS_KATALOG
   const kategoriler = ['Hepsi', ...new Set(katalog.map((k) => k.category))]
   const shown = katalog.filter(
     (k) =>
@@ -233,9 +237,19 @@ export default function Siparis() {
     <>
       <h1>Toptancıdan Sipariş</h1>
       <p className="sub">Eksik/kritik ürünleri toptancından iste. Sipariş QR, WhatsApp veya dosya ile gider.</p>
-      {!bulutKatalog && (
+      {katalogYukleniyor && (
         <p className="hint" style={{ marginTop: -8, marginBottom: 8 }}>
-          ⚠ Toptancının güncel listesine ulaşılamadı, kayıtlı liste gösteriliyor.
+          Toptancının ürün listesi yükleniyor…
+        </p>
+      )}
+      {!katalogYukleniyor && !bulutKatalog && (
+        <p className="hint" style={{ marginTop: -8, marginBottom: 8 }}>
+          ⚠ Toptancının ürün listesine ulaşılamadı (internet yok). Bağlantı gelince liste otomatik yüklenir.
+        </p>
+      )}
+      {!katalogYukleniyor && bulutKatalog && bulutKatalog.length === 0 && (
+        <p className="hint" style={{ marginTop: -8, marginBottom: 8 }}>
+          Toptancı panelinde şu an satışta görünen ürün yok.
         </p>
       )}
 
