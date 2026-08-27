@@ -62,4 +62,4 @@ DAĞITIM: styles.css/index.html değişince **CODER** `cayci-pos/public/toptanci
 DOĞRULAMA: Moderatör 390px playwright ile taşma/görünüm kontrol eder.
 
 ## İSTEKLER (sınır aşan işler — sahibi alır)
-- (boş)
+- **babuco ürün kaydına opsiyonel "birim fiyatı / içerik notu" alanı** — Toptancı (kullanıcı) kolilerini tek fiyattan (koli bazlı) satıyor ama müşteriye (çay ocağına) bilgi amaçlı "koli içi kaç adet, adet başı ne kadar" göstermek istiyor. Şu an babuco'da ürünün tek fiyatı var (`satis`), bunu ürün adının içine yazmak çirkin duruyor ve kullanıcı istemiyor (bkz. cayci-pos oturumu sohbeti). İstenen: ürün kaydına opsiyonel bir alan (ör. `birimNot` / "İçerik / Birim Fiyatı Notu") eklensin, satış fişinde/irsaliyede ilgili satırın altında küçük bir bilgi notu olarak basılsın (fiyat hesaplamasını etkilemesin, salt gösterim). CSV içe aktarmaya da (`importProducts`) bu alan için bir kolon eklenirse iyi olur (toplu ürün yüklerken kullanışlı).
