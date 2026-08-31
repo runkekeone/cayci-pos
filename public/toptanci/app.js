@@ -4,6 +4,8 @@
 const STORE_KEY = "benimpos-app-v1";
 const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
 const num2 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
+// CSV dışa aktarmada para sütunları: hep 2 haneli (1.234,50), Türkçe Excel sayı olarak okusun diye simgesiz.
+const csvTutar = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function emptyStore() {
   return {
@@ -1852,6 +1854,7 @@ function mountReport(route) {
   raporSatisWire();
   const pr = document.querySelector('[data-act="rprint"]'); if (pr) pr.addEventListener("click", () => window.print());
   const bo = document.querySelector('[data-act="bugunozet"]'); if (bo) bo.addEventListener("click", () => navigate("anasayfa"));
+  const uc = document.querySelector('[data-act="urunselCsv"]'); if (uc) uc.addEventListener("click", exportUrunselRapor);
 }
 function salesInRange(route, def) { const f = reportFilters[route] || def; return store.sales.filter((s) => inRange(s.tarih, f.from, f.to)); }
 
@@ -1879,15 +1882,32 @@ function renderRaporTarihsel() {
   return pageHead("Tarihsel Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales);
 }
+let sonUrunselRapor = null; // ekranda duran ürünsel rapor — "Excel'e Aktar" bunu dışa yazar
 function renderRaporUrunsel() {
   const route = "rapor-urunsel", def = { from: monthStartStr(), to: todayStr() };
-  const sales = salesInRange(route, def);
+  const sales = salesInRange(route, def), f = reportFilters[route] || def;
   const agg = {};
   sales.forEach((s) => s.items.forEach((it) => { const pr = findProduct(it.urunId); const k = it.urunId || it.ad; if (!agg[k]) agg[k] = { ad: it.ad, barkod: pr ? pr.barkod : "", adet: 0, tutar: 0, mal: 0, stok: pr ? Number(pr.stok) || 0 : 0, alis: pr ? Number(pr.alis) || 0 : 0 }; agg[k].adet += it.adet; agg[k].tutar += it.fiyat * it.adet; agg[k].mal += (pr ? Number(pr.alis) || 0 : 0) * it.adet; }));
   const list = Object.values(agg).sort((a, b) => b.tutar - a.tutar);
+  sonUrunselRapor = { list, from: f.from, to: f.to };
   const rows = list.map((a) => { const kar = a.tutar - a.mal; return `<tr><td>${esc(a.barkod) || "-"}</td><td>${esc(a.ad)}</td><td>${num2.format(a.adet)}</td><td>${num2.format(a.stok)}</td><td>${money.format(a.alis)}</td><td>${money.format(a.adet ? a.tutar / a.adet : 0)}</td><td>${money.format(a.adet ? kar / a.adet : 0)}</td><td>${money.format(a.tutar)}</td><td class="${kar < 0 ? "borc-red" : ""}">${money.format(kar)}</td></tr>`; }).join("");
-  return pageHead("Ürünsel Rapor") + reportDateBar(route, def) +
+  return pageHead("Ürünsel Rapor", null, [{ label: "⇩ Excel'e Aktar", cls: "softgreen", act: "urunselCsv" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     tableCard(["Ürün Barkodu", "Ürün Adı", "Satış Miktarı", "Kalan Stok", "Ort. Birim Alış", "Ort. Birim Fiyatı", "Ort. Birim Kâr", "Toplam Tutar", "Kâr/Zarar"], rows, infoLine(list.length));
+}
+/* Ürünsel raporu CSV olarak dışa aktar. Türkçe Excel için ondalık virgüllü (csvBuild zaten ; ile ayırıyor). */
+function exportUrunselRapor() {
+  const r = sonUrunselRapor;
+  if (!r || !r.list.length) { alert("Dışa aktarılacak satış yok. Önce tarih aralığını seçip Listele'ye basın."); return; }
+  const n = (v) => num2.format(Number(v) || 0);                                    // miktar: 11
+  const tl = (v) => csvTutar.format(Number(v) || 0);                               // para: 1.234,56
+  const head = ["Ürün Barkodu", "Ürün Adı", "Satış Miktarı", "Kalan Stok", "Ort. Birim Alış", "Ort. Birim Fiyatı", "Ort. Birim Kâr", "Toplam Tutar", "Kâr/Zarar"];
+  const rows = [head].concat(r.list.map((a) => {
+    const kar = a.tutar - a.mal;
+    return [a.barkod || "", a.ad, n(a.adet), n(a.stok), tl(a.alis), tl(a.adet ? a.tutar / a.adet : 0), tl(a.adet ? kar / a.adet : 0), tl(a.tutar), tl(kar)];
+  }));
+  const top = r.list.reduce((o, a) => ({ adet: o.adet + a.adet, tutar: o.tutar + a.tutar, mal: o.mal + a.mal }), { adet: 0, tutar: 0, mal: 0 });
+  rows.push(["", "TOPLAM", n(top.adet), "", "", "", "", tl(top.tutar), tl(top.tutar - top.mal)]);
+  downloadFile("babuco-urunsel-" + r.from + "_" + r.to + ".csv", csvBuild(rows));
 }
 function renderRaporGrupsal() {
   const route = "rapor-grupsal", def = { from: monthStartStr(), to: todayStr() };
