@@ -18,7 +18,23 @@
     if (group === "Soğuk İçecekler" || /aroma|coca-cola|çamlıca|fanta|sarıyer/.test(name)) return "Mesrubatlar";
     return "Yan Urunler";
   }
-  const catalog = (window.BABUCO_CATALOG || []).filter((product) => product.active && product.name).map((product) => ({ ...product, salesCategory: salesCategory(product) }));
+  function productCopy(name) {
+    const match = String(name || "").match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    if (!match) return { title: String(name || ""), detail: "" };
+    // Koli fiyatı karttaki satış fiyatıyla zaten gösteriliyor; içerikte yalnız paket bilgisi kalsın.
+    const detail = match[2].replace(/\s*[·-]?\s*birim fiyatı\s*[^·)]+/i, "").trim();
+    return { title: match[1].trim(), detail };
+  }
+  const catalogMap = new Map();
+  (window.BABUCO_CATALOG || []).filter((product) => product.active && product.name).forEach((product) => {
+    const copy = productCopy(product.name);
+    const prepared = { ...product, ...copy, salesCategory: salesCategory(product) };
+    const key = `${prepared.salesCategory}|${prepared.title}`.toLocaleLowerCase("tr-TR");
+    const previous = catalogMap.get(key);
+    // Aynı ürünün açıklamasız kopyası varsa, paket bilgisini taşıyan kaydı göster.
+    if (!previous || (prepared.detail && !previous.detail)) catalogMap.set(key, prepared);
+  });
+  const catalog = [...catalogMap.values()];
   const sb = window.supabase && window.supabase.createClient
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
     : null;
@@ -56,7 +72,7 @@
     $("#catalogStatus").textContent = `${products.length} urun listeleniyor`;
     $("#products").innerHTML = products.map((product) => {
       const isPriceKnown = Number(product.price) > 0;
-      return `<article class="product"><h3>${escapeHtml(product.name)}</h3><div class="product-bottom"><div class="price">${isPriceKnown ? money.format(product.price) : "Fiyat sorunuz"}<span class="unit">/${escapeHtml(product.unit)}</span></div>${isPriceKnown ? `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.name)} ekle">+</button>` : ""}</div></article>`;
+      return `<article class="product"><h3>${escapeHtml(product.title)}</h3>${product.detail ? `<p class="product-detail">${escapeHtml(product.detail)}</p>` : ""}<div class="product-bottom"><div class="price">${isPriceKnown ? money.format(product.price) : "Fiyat sorunuz"}<span class="unit">/${escapeHtml(product.unit)}</span></div>${isPriceKnown ? `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.title)} ekle">+</button>` : ""}</div></article>`;
     }).join("") || "<p>Aramanizla eslesen urun yok.</p>";
     document.querySelectorAll("[data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
   }
@@ -84,7 +100,7 @@
     $("#cartCount").textContent = String(items.reduce((sum, item) => sum + item.qty, 0));
     $("#emptyCart").hidden = items.length > 0;
     $("#checkout").hidden = items.length === 0;
-    $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div><h3>${escapeHtml(item.name)}</h3><p>${money.format(item.price)} / ${escapeHtml(item.unit)}</p></div><div class="quantity"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">-</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artir">+</button></div></div>`).join("");
+    $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div><h3>${escapeHtml(item.title || item.name)}</h3><p>${item.detail ? `${escapeHtml(item.detail)} · ` : ""}${money.format(item.price)} / ${escapeHtml(item.unit)}</p></div><div class="quantity"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">-</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artir">+</button></div></div>`).join("");
     $("#totals").innerHTML = `<div class="total-row"><span>Urunler toplami</span><b>${money.format(gross())}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi (%5)</span><b>-${money.format(discount())}</b></div>` : ""}<div class="total-row grand-total"><span>Odenecek tutar</span><span>${money.format(total())}</span></div>`;
     document.querySelectorAll("[data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
     document.querySelectorAll("[data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
@@ -103,7 +119,7 @@
     $("#quickOrders").hidden = products.length === 0;
     if (!products.length) return;
     $("#quickOrderDate").textContent = new Date(previous.date).toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
-    $("#quickProducts").innerHTML = products.map((product) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${escapeHtml(product.name)}</span><b>${money.format(product.price)}</b><small>Tekrar ekle</small></button>`).join("");
+    $("#quickProducts").innerHTML = products.map((product) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${escapeHtml(product.title || product.name)}</span><b>${money.format(product.price)}</b><small>Tekrar ekle</small></button>`).join("");
     document.querySelectorAll("[data-quick-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.quickAdd)));
   }
 
