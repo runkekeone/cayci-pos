@@ -118,6 +118,39 @@ export function dayOf(iso: string): string {
   return iso.slice(0, 10)
 }
 
+/**
+ * Kayıt kimliği.
+ *
+ * Eskiden `Math.random().toString(36).slice(2, 10)` idi; Math.random() kısa bir
+ * ondalık üretince (0.5 -> "0.5") id tek karaktere düşebiliyor, iki cihazda aynı
+ * id çıkınca satış/ürün/müşteri birbirinin üzerine yazıyordu. crypto varsa onu
+ * kullan, yoksa eski yönteme düş ama uzunluğu garantile.
+ */
 export function uid(): string {
-  return Math.random().toString(36).slice(2, 10)
+  const c = globalThis.crypto
+  if (c?.randomUUID) return c.randomUUID()
+  if (c?.getRandomValues) {
+    const b = new Uint8Array(8)
+    c.getRandomValues(b)
+    return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  }
+  let out = ''
+  while (out.length < 12) out += Math.random().toString(36).slice(2)
+  return out.slice(0, 12)
+}
+
+/** ISO tarihten şimdiye kaç dakika geçti. Geçersiz/boşsa 0. */
+export function gecenDakika(iso?: string): number {
+  if (!iso) return 0
+  const t = new Date(iso).getTime()
+  if (!Number.isFinite(t)) return 0
+  return Math.max(0, Math.floor((Date.now() - t) / 60000))
+}
+
+/** Dakikayı kısa yazar: 7 dk · 48 dk · 1s 12dk · 3s */
+export function fmtSure(dk: number): string {
+  if (dk < 60) return `${dk} dk`
+  const s = Math.floor(dk / 60)
+  const k = dk % 60
+  return k ? `${s}s ${k}dk` : `${s}s`
 }

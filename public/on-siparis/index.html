@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="description" content="Ozgur Ticaret on siparis formu" />
+    <title>Ozgur Ticaret | Siparis</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand"><img src="../toptanci/logo.png" alt="Ozgur Ticaret" /><span>Ozgur Ticaret</span></div>
+        <button class="cart-button" id="cartButton" type="button" aria-label="Sepeti ac">
+          Sepet <span id="cartCount">0</span>
+        </button>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">ON SIPARIS</p>
+        <h1>Eksiklerinizi secin</h1>
+        <p>Urunleri sepetinize ekleyin, odeme turunu secin. Siparisiniz servis rotasi oncesinde bize iletilir.</p>
+      </section>
+
+      <section class="phone-card" id="phoneCard">
+        <label for="phone">Telefon numaraniz</label>
+        <div class="phone-row">
+          <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="05XX XXX XX XX" maxlength="16" />
+          <button id="startButton" class="primary" type="button">Devam et</button>
+        </div>
+        <p class="hint">Numaraniz mevcut musteri kaydinizla eslestirilir. Kayit bulunamazsa siparisiniz bu numara ile olusturulur.</p>
+        <p class="form-error" id="phoneError" hidden></p>
+      </section>
+
+      <section class="catalog" id="catalog" hidden>
+        <div class="catalog-tools">
+          <label class="search"><span>Urun ara</span><input id="search" type="search" placeholder="Urun veya kategori ara" /></label>
+          <div class="category-scroll" id="categories" aria-label="Kategoriler"></div>
+        </div>
+        <div class="catalog-status" id="catalogStatus"></div>
+        <div class="product-grid" id="products"></div>
+      </section>
+    </main>
+
+    <aside class="cart-drawer" id="cartDrawer" aria-hidden="true">
+      <div class="drawer-head"><div><p class="eyebrow">SIPARISINIZ</p><h2>Sepet</h2></div><button class="icon-button" id="closeCart" type="button" aria-label="Sepeti kapat">x</button></div>
+      <div class="cart-lines" id="cartLines"></div>
+      <div class="checkout" id="checkout" hidden>
+        <label for="note">Siparis notu <span>(istege bagli)</span></label>
+        <textarea id="note" rows="2" placeholder="Teslimatla ilgili notunuz"></textarea>
+        <p class="payment-label">Odeme tipi</p>
+        <div class="payment-options" id="paymentOptions">
+          <button type="button" class="payment-option selected" data-payment="nakit"><b>Nakit</b><small>Yuzde 5 net iskonto</small></button>
+          <button type="button" class="payment-option" data-payment="kart"><b>Kart</b><small>Kapida kart ile odeme</small></button>
+          <button type="button" class="payment-option" data-payment="acik"><b>Acik hesap</b><small>Cari hesaba yazilir</small></button>
+        </div>
+        <div class="totals" id="totals"></div>
+        <button class="primary submit-order" id="submitOrder" type="button">Siparisi gonder</button>
+        <p class="form-error" id="submitError" hidden></p>
+      </div>
+      <div class="empty-cart" id="emptyCart">Henuz urun eklemediniz.</div>
+    </aside>
+    <div class="backdrop" id="backdrop" hidden></div>
+
+    <section class="receipt" id="receipt" hidden>
+      <div class="receipt-card">
+        <p class="receipt-mark">Siparis alindi</p>
+        <h2>Siparisiniz bize ulasti</h2>
+        <p id="receiptText"></p>
+        <div class="receipt-summary" id="receiptSummary"></div>
+        <button class="primary" id="newOrder" type="button">Yeni siparis olustur</button>
+      </div>
+    </section>
+
+    <script src="../toptanci/vendor/supabase.js"></script>
+    <script src="catalog.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

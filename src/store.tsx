@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,8 +23,8 @@ import type {
   Table,
   Variant,
 } from './types'
-import { applyStock, unitCost, variantCost } from './lib/cost'
-import { today, uid } from './lib/units'
+import { applyStock, applyStockRaw, unitCost, variantCost, variantExplode } from './lib/cost'
+import { round, today, uid } from './lib/units'
 import { bosState } from './seed'
 import { dataKey } from './auth'
 import { URUNLER } from './defaults'
@@ -43,39 +44,43 @@ function cesitleriTamamla(items: Item[]): Item[] {
   })
 }
 
-// Ürün olarak girilmesi gereken sarf malzemeleri — aylık sabit giderden tek sefer temizlenir.
-const SARF_GIDERLER = [
-  'Peçete',
-  'Temizlik / deterjan',
-  'Çöp poşeti',
-  'Kırılan bardak / fincan',
-  'Kayıp şişe (depozito kesintisi)',
-]
+// NOT: Burada bir zamanlar `sarfGideriTemizle` vardı — adı sabit bir listeyle
+// eşleşen aylık giderleri (Peçete, Çöp poşeti, ...) sormadan ve haber vermeden
+// siliyordu. Kullanıcının KENDİ girdiği gider de bu adlardan biriyse siliniyor,
+// sabit gider payı düşüyor ve geçmiş dahil bütün günlerin net kârı sessizce
+// yükseliyordu. Göç zaten tüm kurulumlarda bir kez çalıştı; kaldırıldı.
+// `settings.sarfTemizlendi` alanı eski kayıtlarda duruyor, okunmuyor.
 
-/** Eski kayıtta aylık sabit gidere düşmüş sarf malzemelerini tek sefer temizle. */
-function sarfGideriTemizle(st: State): State {
-  if (st.settings?.sarfTemizlendi) return st
-  return {
-    ...st,
-    expenses: st.expenses.filter((e) => !(e.kind === 'aylik' && SARF_GIDERLER.includes(e.name))),
-    settings: { ...st.settings, sarfTemizlendi: true },
-  }
-}
-
-/** Ham State'i (yerel ya da buluttan) güncel şemaya normalize et. */
-function normalize(raw: State): State {
+/**
+ * Ham State'i (yerel, buluttan ya da yedek dosyasından) güncel şemaya normalize et.
+ * Yedek geri yükleme de bunu kullanmak zorunda: eski bir yedekte `settings` gibi
+ * alanlar hiç olmayabiliyor ve uygulama açılışta patlıyordu.
+ */
+export function normalize(raw: State): State {
   const st = { ...bosState, ...raw }
-  return sarfGideriTemizle({ ...st, items: cesitleriTamamla(st.items) })
+  return { ...st, items: cesitleriTamamla(st.items) }
 }
+
+/**
+ * Son `load()` çağrısında yerel kayıt okunamadı mı.
+ *
+ * Bozuk bir kayıtta boş state'e düşülüyor, sonra o boş state "yerel daha yeni"
+ * sayılıp buluta itiliyor ve buluttaki gerçek veri de siliniyordu. Bu bayrak
+ * açıkken hydrate yereli kaynak kabul etmez, bulutu benimser.
+ */
+let yerelKayitBozuk = false
 
 function load(userId: string): State {
+  yerelKayitBozuk = false
+  const raw = localStorage.getItem(dataKey(userId))
+  if (!raw) return bosState
   try {
-    const raw = localStorage.getItem(dataKey(userId))
-    if (raw) return normalize(JSON.parse(raw) as State)
-  } catch {
-    // bozuk kayıt: boş başla
+    return normalize(JSON.parse(raw) as State)
+  } catch (err) {
+    console.error('Yerel kayıt bozuk, buluttan kurtarılmaya çalışılacak:', err)
+    yerelKayitBozuk = true
+    return bosState
   }
-  return bosState
 }
 
 /** İşletmenin toptancı puanını buluttan (bayi_puan:<tel>) authoritative olarak düş — ödül alırken. */
@@ -175,34 +180,100 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   // Bulut çekilene kadar buluta YAZMA — yoksa yeni cihazda boş state buluttaki
   // gerçek veriyi ezer. hydrate bitince true olur.
   const hydrated = useRef(false)
+  // Son state'e her yerden erişim (bekleyen yazmayı boşaltmak ve hydrate sırasında
+  // "kullanıcı bu arada işlem yaptı mı" kontrolü için).
+  const sRef = useRef(s)
+  sRef.current = s
+  const userIdRef = useRef(userId)
+  userIdRef.current = userId
+  const bekleyen = useRef(false)
+  const kotaUyarildi = useRef(false)
+
+  /** Bekleyen değişikliği hemen buluta it. Debounce'u beklemez. */
+  const itHemen = useCallback(() => {
+    if (!hydrated.current || !bekleyen.current) return
+    bekleyen.current = false
+    const k = dataKey(userIdRef.current)
+    const ts = new Date().toISOString()
+    try {
+      localStorage.setItem(k + ':ts', ts)
+    } catch {
+      // kota dolu — aşağıdaki yazma zaten uyarıyor
+    }
+    void cloudSet(k, sRef.current, ts)
+  }, [])
 
   // Her değişimde yerele yaz (kaynak). hydrate sonrası buluta da it (debounce).
   useEffect(() => {
     const k = dataKey(userId)
-    localStorage.setItem(k, JSON.stringify(s))
+    try {
+      localStorage.setItem(k, JSON.stringify(s))
+    } catch (err) {
+      // Kota dolduğunda (büyük logo + uzun satış geçmişi) bu satır patlıyor ve
+      // uygulama beyaz ekrana düşüyordu. Artık ayakta kalıyor ve bir kez uyarıyor.
+      console.error('Yerel kayıt yazılamadı:', err)
+      if (!kotaUyarildi.current) {
+        kotaUyarildi.current = true
+        alert(
+          'Telefonun deposu doldu — son değişiklikler bu cihaza KAYDEDİLEMEDİ. ' +
+            'Profil > Yedekleme bölümünden yedek al, sonra eski verini temizle ' +
+            '(çok büyük bir işletme logosu yüklediysen onu kaldırmayı dene).',
+        )
+      }
+    }
     if (!hydrated.current) return
-    const t = setTimeout(() => {
-      const ts = new Date().toISOString()
-      localStorage.setItem(k + ':ts', ts)
-      void cloudSet(k, s, ts)
-    }, 800)
+    bekleyen.current = true
+    const t = setTimeout(itHemen, 800)
     return () => clearTimeout(t)
-  }, [s, userId])
+  }, [s, userId, itHemen])
+
+  // Sayfa/uygulama kapanırken ya da arka plana geçerken bekleyen yazmayı boşalt.
+  // Eskiden son satışı yapıp hemen çıkan kullanıcının işlemi buluta hiç gitmiyor,
+  // sonra diğer cihazın "daha yeni" sürümü tarafından siliniyordu.
+  useEffect(() => {
+    const f = () => itHemen()
+    window.addEventListener('pagehide', f)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') itHemen()
+    })
+    return () => {
+      window.removeEventListener('pagehide', f)
+      itHemen() // kullanıcı değişimi / çıkış: unmount olurken de boşalt
+    }
+  }, [itHemen])
 
   // Açılış: buluttan çek. Bulut daha yeniyse benimse; yerel daha yeni ya da
   // bulut boşsa yereli buluta it. Çevrimdışıysa sessizce yerelle devam.
   useEffect(() => {
     let alive = true
     const k = dataKey(userId)
+    // Bulut cevabı beklenirken kullanıcı satış yapabiliyor. Cevap gelince state'i
+    // koşulsuz ezmek o satışları siliyordu (yerel :ts damgası hydrate bitene kadar
+    // ilerlemediği için "bulut daha yeni" görünüyordu). Referansı kıyaslıyoruz.
+    const acilisState = sRef.current
     void (async () => {
-      const localTs = localStorage.getItem(k + ':ts') ?? ''
+      // Yerel kayıt bozuksa yereli "yeni" saymayız — bulut ne diyorsa o.
+      const localTs = yerelKayitBozuk ? '' : (localStorage.getItem(k + ':ts') ?? '')
       const cloud = await cloudGet(k)
       if (!alive) return
+      const kullaniciDegistirdi = sRef.current !== acilisState
+      if (kullaniciDegistirdi) {
+        // Yereli kaynak kabul et ve buluta it; bulutu uygulama.
+        const ts = new Date().toISOString()
+        try {
+          localStorage.setItem(k + ':ts', ts)
+        } catch {
+          /* kota — yazma effect'i zaten uyardı */
+        }
+        void cloudSet(k, sRef.current, ts)
+        hydrated.current = true
+        return
+      }
       if (cloud && cloud.value && (!localTs || cloud.updatedAt > localTs)) {
         localStorage.setItem(k, JSON.stringify(cloud.value))
         localStorage.setItem(k + ':ts', cloud.updatedAt)
         setS(normalize(cloud.value as State))
-      } else if (!cloud || (localTs && localTs > cloud.updatedAt)) {
+      } else if (!yerelKayitBozuk && (!cloud || (localTs && localTs > cloud.updatedAt))) {
         const ts = localTs || new Date().toISOString()
         localStorage.setItem(k + ':ts', ts)
         const raw = localStorage.getItem(k)
@@ -283,6 +354,20 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       }
     }
 
+    /** Satırların hangi ham maddeden ne kadar götürdüğü — satış anındaki tarifle. */
+    const hamDusum = (items: Item[], lines: SaleLine[]): { itemId: string; qty: number }[] => {
+      const harita = new Map<string, number>()
+      for (const l of lines) {
+        const v = l.variantId
+          ? items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+          : undefined
+        for (const [id, q] of variantExplode(l.itemId, l.qty, items, v)) {
+          harita.set(id, (harita.get(id) ?? 0) + q)
+        }
+      }
+      return [...harita].map(([itemId, qty]) => ({ itemId, qty }))
+    }
+
     /** Satırın çeşidini ürün kartından bul — stok düşerken lazım. */
     const variantOf = (items: Item[], l: SaleLine): Variant | undefined =>
       l.variantId
@@ -299,7 +384,10 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     ): State => {
       if (lines.length === 0 || parts.length === 0) return st
 
+      // Stok düşerken NE kadar düştüğünü de kaydediyoruz; iptal/düzenlemede
+      // tarif değişmiş olsa bile birebir aynı miktar geri yüklensin.
       let items = st.items
+      const stokDusum = hamDusum(st.items, lines)
       for (const l of lines) items = applyStock(items, l.itemId, l.qty, variantOf(st.items, l))
 
       const total = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
@@ -310,7 +398,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       for (const p of parts) {
         if (p.payment !== 'veresiye' || !p.customerId) continue
         customers = customers.map((c) =>
-          c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+          c.id === p.customerId ? { ...c, balance: round(c.balance + p.amount) } : c,
         )
       }
 
@@ -334,6 +422,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             tableId,
             tableName,
             bizDay: aktifOturum(st)?.date ?? today(),
+            stokDusum,
           },
         ],
       }
@@ -502,12 +591,18 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           const sale = st.sales.find((x) => x.id === saleId)
           if (!sale) return st
 
+          // Kayıtlı düşüm varsa onunla geri yükle (tarif değişmiş olabilir);
+          // eski satışlarda kayıt yok, tarife düşülür.
           let items = st.items
-          for (const l of sale.lines) {
-            const v = l.variantId
-              ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
-              : undefined
-            items = applyStock(items, l.itemId, -l.qty, v)
+          if (sale.stokDusum?.length) {
+            items = applyStockRaw(items, sale.stokDusum.map((d) => ({ ...d, qty: -d.qty })))
+          } else {
+            for (const l of sale.lines) {
+              const v = l.variantId
+                ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+                : undefined
+              items = applyStock(items, l.itemId, -l.qty, v)
+            }
           }
 
           // Parçalı ödemede her veresiye parçası ayrı müşteriden düşer.
@@ -536,15 +631,20 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           const sale = st.sales.find((x) => x.id === saleId)
           if (!sale) return st
 
-          // 1) Eski satırların stoğunu geri yükle.
+          // 1) Eski satırların stoğunu geri yükle — mümkünse satış anındaki kayıtla.
           let items = st.items
-          for (const l of sale.lines) {
-            const v = l.variantId
-              ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
-              : undefined
-            items = applyStock(items, l.itemId, -l.qty, v)
+          if (sale.stokDusum?.length) {
+            items = applyStockRaw(items, sale.stokDusum.map((d) => ({ ...d, qty: -d.qty })))
+          } else {
+            for (const l of sale.lines) {
+              const v = l.variantId
+                ? st.items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
+                : undefined
+              items = applyStock(items, l.itemId, -l.qty, v)
+            }
           }
-          // 2) Yeni satırların stoğunu düş.
+          // 2) Yeni satırların stoğunu düş ve ne düştüğünü kaydet.
+          const yeniDusum = hamDusum(items, newLines)
           for (const l of newLines) {
             const v = l.variantId
               ? items.find((i) => i.id === l.itemId)?.variants?.find((x) => x.id === l.variantId)
@@ -569,25 +669,49 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             )
           }
 
-          // 4) Yeni parçalar: eski oranlar korunur, tutarlar yeni toplama göre ölçeklenir.
+          // 4) Yeni parçalar.
+          //
+          // Eskiden bütün parçalar aynı oranla ölçekleniyordu; bu, müşterinin
+          // FİİLEN ödediği nakdi geriye dönük değiştiriyordu: 100 ₺ nakit +
+          // 100 ₺ veresiye bir hesaptan 50 ₺'lik satır çıkarılınca 75 + 75
+          // oluyordu. Oysa nakit 100 ₺ verilmişti; doğrusu 100 nakit + 50 veresiye.
+          // Kural: ödenmiş parçalar (nakit/kart) korunur, fark veresiyeye yazılır.
           let newParts: PaymentPart[]
-          if (oldTotal > 0) {
-            const k = newTotal / oldTotal
-            newParts = oldParts.map((p) => ({ ...p, amount: Math.round(p.amount * k * 100) / 100 }))
-            // Yuvarlama sapması ilk parçaya yazılır.
-            const drift = Math.round((newTotal - newParts.reduce((a, p) => a + p.amount, 0)) * 100) / 100
-            if (newParts.length) {
-              newParts[0] = { ...newParts[0], amount: Math.round((newParts[0].amount + drift) * 100) / 100 }
-            }
-          } else {
+          if (oldTotal <= 0) {
             newParts = [{ payment: sale.payment, amount: newTotal, customerId: sale.customerId }]
+          } else {
+            const odenen = oldParts.filter((p) => p.payment !== 'veresiye')
+            const veresiye = oldParts.filter((p) => p.payment === 'veresiye')
+            const odenenToplam = round(odenen.reduce((a, p) => a + p.amount, 0))
+
+            if (veresiye.length && newTotal >= odenenToplam) {
+              const kalan = round(newTotal - odenenToplam)
+              const eskiVeresiye = round(veresiye.reduce((a, p) => a + p.amount, 0))
+              newParts = [
+                ...odenen,
+                ...veresiye.map((p) => ({
+                  ...p,
+                  amount: eskiVeresiye > 0 ? round((p.amount / eskiVeresiye) * kalan) : kalan,
+                })),
+              ]
+            } else {
+              // Veresiye yok ya da yeni toplam ödenenin de altına düştü: oransal
+              // ölçekle (fazla alınan para elden iade ediliyor demektir).
+              const k = newTotal / oldTotal
+              newParts = oldParts.map((p) => ({ ...p, amount: round(p.amount * k) }))
+            }
+            // Kuruş sapması ilk parçaya yazılır.
+            const drift = round(newTotal - newParts.reduce((a, p) => a + p.amount, 0))
+            if (newParts.length && drift !== 0) {
+              newParts[0] = { ...newParts[0], amount: round(newParts[0].amount + drift) }
+            }
           }
 
           // 5) Yeni veresiye borçlarını uygula.
           for (const p of newParts) {
             if (p.payment !== 'veresiye' || !p.customerId) continue
             customers = customers.map((c) =>
-              c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+              c.id === p.customerId ? { ...c, balance: round(c.balance + p.amount) } : c,
             )
           }
 
@@ -600,6 +724,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             payment: newParts[0].payment,
             payments: newParts.length > 1 ? newParts : undefined,
             customerId: veresiyeParca?.customerId,
+            stokDusum: yeniDusum,
           }
 
           return { ...st, items, customers, sales: st.sales.map((x) => (x.id === saleId ? updated : x)) }
@@ -610,8 +735,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
         set((st) => {
           if (st.sales.some((x) => x.id === sale.id)) return st
 
+          // Geri getirirken de aynı miktar düşsün — iptalde geri yüklenenle simetrik.
           let items = st.items
-          for (const l of sale.lines) items = applyStock(items, l.itemId, l.qty, variantOf(st.items, l))
+          if (sale.stokDusum?.length) {
+            items = applyStockRaw(items, sale.stokDusum)
+          } else {
+            for (const l of sale.lines) {
+              items = applyStock(items, l.itemId, l.qty, variantOf(st.items, l))
+            }
+          }
 
           const parts = sale.payments ?? [
             { payment: sale.payment, amount: sale.total, customerId: sale.customerId },
@@ -620,7 +752,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           for (const p of parts) {
             if (p.payment !== 'veresiye' || !p.customerId) continue
             customers = customers.map((c) =>
-              c.id === p.customerId ? { ...c, balance: c.balance + p.amount } : c,
+              c.id === p.customerId ? { ...c, balance: round(c.balance + p.amount) } : c,
             )
           }
 
@@ -661,8 +793,10 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       collect: (customerId, amount, method) =>
         set((st) => ({
           ...st,
+          // round: kuruşun altındaki artık, bakiyeyi 0,004 gibi bir değerde
+          // bırakıp müşteriyi sonsuza dek "açık hesap" listesinde tutuyordu.
           customers: st.customers.map((c) =>
-            c.id === customerId ? { ...c, balance: c.balance - amount } : c,
+            c.id === customerId ? { ...c, balance: round(c.balance - amount) } : c,
           ),
           payments: [
             ...st.payments,
@@ -721,7 +855,16 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             cashDays: varMi
               ? st.cashDays.map((c) =>
                   c.date === d
-                    ? { ...c, opening: openingCash, openedAt: now, closedAt: undefined }
+                    ? {
+                        ...c,
+                        // Gün zaten bir kez açılmışsa GERÇEK açılış nakdi ilk
+                        // girilendir; ikinci açılışta üstüne yazmak kasayı şişiriyordu.
+                        opening: c.openedAt ? c.opening : openingCash,
+                        openedAt: c.openedAt ?? now,
+                        closedAt: undefined,
+                        // Gün yeniden açıldıysa eski kapanış sayımı artık geçersiz.
+                        counted: undefined,
+                      }
                     : c,
                 )
               : [...st.cashDays, { date: d, opening: openingCash, openedAt: now }],
@@ -735,10 +878,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           const now = new Date().toISOString()
           return {
             ...st,
+            // Sayım yalnız kapatılan güne yazılır; ama açıkta kalmış BAŞKA oturum
+            // varsa (bulut birleşmesi / çift startDay) o da kapatılır — eskiden
+            // yalnız ilki kapandığı için "Günü Başlat" ekranı bir daha hiç çıkmıyordu.
             cashDays: st.cashDays.map((c) =>
               c.date === acik.date
                 ? { ...c, closedAt: now, counted: counted ?? c.counted }
-                : c,
+                : c.openedAt && !c.closedAt
+                  ? { ...c, closedAt: now }
+                  : c,
             ),
           }
         }),

@@ -46,6 +46,9 @@ export default function GunSonu({ gun, onKapat }: { gun: string; onKapat: () => 
     onKapat()
   }
 
+  /** Düşülen kalem: sıfırsa "−0,00 ₺" yerine düz "0,00 ₺". */
+  const eksi = (n: number) => (n === 0 ? fmtTL(0) : `−${fmtTL(n)}`)
+
   const Satir = ({ ad, deger, iyi }: { ad: string; deger: string; iyi?: boolean }) => (
     <div className="row" style={{ justifyContent: 'space-between', padding: '6px 0' }}>
       <span className="hint">{ad}</span>
@@ -73,16 +76,39 @@ export default function GunSonu({ gun, onKapat }: { gun: string; onKapat: () => 
 
         {/* ---- özet ---- */}
         <div className="card" style={{ background: 'var(--bg)', marginBottom: 14 }}>
+          {/* Satış ve tahsilat — bunlar ne geldiğini söyler, kâr hesabı aşağıda. */}
           <Satir ad="Ciro (toplam satış)" deger={fmtTL(r.ciro)} />
           <Satir ad="Nakit satış" deger={fmtTL(r.nakitSatis)} />
           <Satir ad="Kart satış" deger={fmtTL(r.kartSatis)} />
           <Satir ad="Veresiye satış" deger={fmtTL(r.veresiyeSatis)} />
-          <Satir ad="Tahsil edilen borç" deger={fmtTL(r.tahsilat)} />
-          <Satir ad="Günlük gider" deger={fmtTL(r.gunlukGider)} />
-          <Satir ad="Fire + ikram maliyeti" deger={fmtTL(r.fireIkramMaliyeti)} />
+          <Satir ad="Tahsil edilen eski borç" deger={fmtTL(r.tahsilat)} />
+
+          {/* KÂR HESABI — satırların toplamı net kârı BİREBİR vermeli.
+              Eskiden sabit gider payı satırı yoktu; kullanıcı ekrandaki rakamlarla
+              net kârı tutturamıyordu (Rapor ve Takvim ekranları bu satırı gösteriyor). */}
           <div style={{ borderTop: '1px solid var(--line)', margin: '6px 0' }} />
-          <Satir ad="Brüt kâr" deger={fmtTL(r.brutKar)} iyi={r.brutKar >= 0} />
+          <Satir
+            ad="Brüt kâr (satış − ürün maliyeti)"
+            deger={`+${fmtTL(r.brutKar)}`}
+            iyi={r.brutKar >= 0}
+          />
+          <Satir ad="Günlük giderler" deger={eksi(r.gunlukGider)} iyi={r.gunlukGider === 0} />
+          <Satir
+            ad="Sabit gider payı (aylık ÷ 30)"
+            deger={eksi(r.sabitGiderPayi)}
+            iyi={r.sabitGiderPayi === 0}
+          />
+          <Satir
+            ad="Fire + ikram maliyeti"
+            deger={eksi(r.fireIkramMaliyeti)}
+            iyi={r.fireIkramMaliyeti === 0}
+          />
           <Satir ad="NET KÂR" deger={fmtTL(r.netKar)} iyi={r.netKar >= 0} />
+          <p className="hint" style={{ margin: '2px 0 0', fontSize: 11 }}>
+            Tahsil edilen eski borç kâra girmez — o satış zaten yazıldığı gün ciroya
+            yazılmıştı; buraya sadece kasaya giren nakit olarak yansır.
+          </p>
+
           <div style={{ borderTop: '1px solid var(--line)', margin: '6px 0' }} />
           <Satir ad="Açılış nakdi" deger={fmtTL(r.acilisNakit)} />
           <Satir ad="Kasada olması gereken" deger={fmtTL(r.beklenenNakit)} />

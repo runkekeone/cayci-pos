@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { dayReport } from '../lib/report'
 import { fmtTL, today } from '../lib/units'
+import { CizgiGrafik } from '../lib/Grafik'
 
 const AYLAR = [
   'Ocak',
@@ -69,6 +70,22 @@ export default function Takvim() {
         <span className="hint">{acikGunler.length} gün açık</span>
       </div>
 
+      {/* Ay içi seyir — takvim kareleri tek tek okunmadan gidişat görünsün. */}
+      {acikGunler.length >= 2 && (
+        <div className="grafik-izgara" style={{ marginTop: 0, marginBottom: 20 }}>
+          <CizgiGrafik
+            key={`ciro-${yil}-${ay}`}
+            baslik={`${AYLAR[ay]} ciro seyri`}
+            veri={acikGunler.map((g) => ({ etiket: `${g.gun} ${AYLAR[ay]}`, deger: g.r.ciro }))}
+          />
+          <CizgiGrafik
+            key={`net-${yil}-${ay}`}
+            baslik={`${AYLAR[ay]} net kâr seyri`}
+            veri={acikGunler.map((g) => ({ etiket: `${g.gun} ${AYLAR[ay]}`, deger: g.r.netKar }))}
+          />
+        </div>
+      )}
+
       <div
         style={{
           display: 'grid',
@@ -103,7 +120,13 @@ export default function Takvim() {
                 cursor: 'pointer',
                 borderColor: bugun ? 'var(--accent)' : undefined,
                 borderWidth: bugun ? 2 : 1,
-                background: satisVar ? (kar ? '#f2f9f5' : '#fdf2f2') : 'var(--panel)',
+                // Sabit açık renkler koyu modda okunmuyordu (metin --ink ile açık).
+                // --good-soft/--bad-soft iki temada da tanımlı.
+                background: satisVar
+                  ? kar
+                    ? 'var(--good-soft)'
+                    : 'var(--bad-soft)'
+                  : 'var(--panel)',
                 opacity: satisVar ? 1 : 0.6,
               }}
             >
@@ -192,7 +215,7 @@ export default function Takvim() {
                 <table>
                   <tbody>
                     {secR.topProducts.map((p) => (
-                      <tr key={p.name}>
+                      <tr key={p.itemId}>
                         <td>{p.name}</td>
                         <td className="num">{p.qty} adet</td>
                         <td className="num">{fmtTL(p.ciro)}</td>

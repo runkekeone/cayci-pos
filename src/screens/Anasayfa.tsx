@@ -74,7 +74,10 @@ export default function Anasayfa() {
 
   return (
     <>
-      <h1>{s.business.name || 'Çay Ocağı'}</h1>
+      <h1 className="anasayfa-baslik">
+        {s.business.logo && <img className="baslik-logo" src={s.business.logo} alt="" />}
+        {s.business.name || 'Çay Ocağı'}
+      </h1>
       <p className="sub">Günlük özet, duyurular ve kampanyalar.</p>
 
       {/* ---- Bugün net kartı (mockup üst blok) ---- */}

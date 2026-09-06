@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useStore } from '../store'
+import { useEffect, useState } from 'react'
+import { normalize, useStore } from '../store'
 import { today } from '../lib/units'
 import type { User } from '../auth'
 import type { Business } from '../types'
@@ -14,6 +14,11 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
   const [biz, setBiz] = useState<Business>(s.business)
   const [kayitli, setKayitli] = useState(false)
 
+  // Buluttan yeni işletme bilgisi gelirse formu tazele. Eskiden `biz` yalnız
+  // mount'ta okunuyordu; Profil açıkken senkron olursa "Kaydet" buluttan geleni
+  // sessizce geri alıyordu.
+  useEffect(() => setBiz(s.business), [s.business])
+
   function isletmeKaydet() {
     set((st) => ({ ...st, business: biz }))
     setKayitli(true)
@@ -27,6 +32,65 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
   // ---- Toptancı (babu.co) puanı: store buluttan telefonla çekip s.isletmePuan'a yazar. ----
   const tel = (s.business.phone ?? '').replace(/\D/g, '')
   const toptanciPuan = s.isletmePuan ?? 0
+
+  /**
+   * Logo seçilince tarayıcıda 256 px'e küçültülüp data URL olarak saklanır.
+   *
+   * Neden bu kadar uğraşıyoruz: logo tüm State'in içinde saklanıyor, State her
+   * değişimde localStorage'a yazılıp buluta gönderiliyor. Fotoğrafın PNG'si
+   * 100–450 kB tutuyor ve 5 MB'lık depo kotasını satış geçmişiyle birlikte
+   * patlatabiliyordu. O yüzden: PNG dene, büyükse beyaz zemin üstünde JPEG'e düş.
+   */
+  const LOGO_EN_BOY = 256
+  const LOGO_SINIR = 60_000 // data URL karakter sayısı (~45 kB veri)
+
+  function logoSec(file: File) {
+    const okuyucu = new FileReader()
+    okuyucu.onerror = () => alert('Dosya okunamadı.')
+    okuyucu.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        if (!img.width || !img.height) {
+          alert('Bu görselin boyutu okunamadı — PNG ya da JPG bir dosya dene.')
+          return
+        }
+        const olcek = Math.min(1, LOGO_EN_BOY / Math.max(img.width, img.height))
+        const c = document.createElement('canvas')
+        c.width = Math.max(1, Math.round(img.width * olcek))
+        c.height = Math.max(1, Math.round(img.height * olcek))
+        const ctx = c.getContext('2d')
+        if (!ctx) {
+          alert('Görsel işlenemedi.')
+          return
+        }
+        ctx.drawImage(img, 0, 0, c.width, c.height)
+
+        let kucuk = c.toDataURL('image/png')
+        if (kucuk.length > LOGO_SINIR) {
+          // JPEG'in saydamlığı yok: önce beyaz zemin boya, sonra logoyu üstüne çiz.
+          ctx.globalCompositeOperation = 'destination-over'
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, c.width, c.height)
+          ctx.globalCompositeOperation = 'source-over'
+          kucuk = c.toDataURL('image/jpeg', 0.82)
+        }
+        if (kucuk.length > 400_000) {
+          alert('Bu görsel çok büyük. Daha küçük ya da daha sade bir logo dene.')
+          return
+        }
+        setBiz((b) => ({ ...b, logo: kucuk }))
+        set((st) => ({ ...st, business: { ...st.business, logo: kucuk } }))
+      }
+      img.onerror = () => alert('Görsel okunamadı.')
+      img.src = String(okuyucu.result)
+    }
+    okuyucu.readAsDataURL(file)
+  }
+
+  function logoSil() {
+    setBiz((b) => ({ ...b, logo: undefined }))
+    set((st) => ({ ...st, business: { ...st.business, logo: undefined } }))
+  }
 
   function yedekAl() {
     const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' })
@@ -45,7 +109,9 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
         const veri = JSON.parse(String(reader.result))
         if (!veri.items || !veri.sales) throw new Error('geçersiz')
         if (confirm('Yedekteki veri şu anki verinin ÜZERİNE yazılacak. Devam edilsin mi?')) {
-          set(() => veri)
+          // normalize şart: eski yedeklerde settings/tables gibi alanlar eksik olabiliyor,
+          // ham hâliyle uygulanırsa uygulama açılışta patlıyor.
+          set(() => normalize(veri))
         }
       } catch {
         alert('Dosya okunamadı — geçerli bir yedek dosyası değil.')
@@ -155,6 +221,82 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
             Kaydet
           </button>
           {kayitli && <span className="hint v good">✓ Kaydedildi</span>}
+        </div>
+      </div>
+
+      {/* ---- Görünüm ---- */}
+      <div className="section-title">Görünüm</div>
+      <div className="card">
+        <strong>Tema</strong>
+        <span className="hint" style={{ display: 'block', marginBottom: 8 }}>
+          "Sistem" seçiliyse telefonun kendi ayarına uyar — akşam koyuya geçer.
+        </span>
+        <div className="tema-secim">
+          {(
+            [
+              { id: 'sistem', ad: 'Sistem', ic: '📱' },
+              { id: 'acik', ad: 'Açık', ic: '☀️' },
+              { id: 'koyu', ad: 'Koyu', ic: '🌙' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              className={`tema-pil ${(s.settings.tema ?? 'sistem') === t.id ? 'on' : ''}`}
+              onClick={() => ayar({ tema: t.id })}
+            >
+              <span className="tema-ic">{t.ic}</span>
+              {t.ad}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--line)', margin: '14px 0' }} />
+
+        <label className="row" style={{ cursor: 'pointer', gap: 10, justifyContent: 'space-between' }}>
+          <span>
+            <strong>Büyük yazı</strong>
+            <span className="hint" style={{ display: 'block' }}>
+              Ürün, masa ve tutar yazılarını büyütür — tezgâhtan uzaktan okumak için.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={s.settings.buyukYazi ?? false}
+            onChange={(e) => ayar({ buyukYazi: e.target.checked })}
+            style={{ width: 20, height: 20 }}
+          />
+        </label>
+
+        <div style={{ borderTop: '1px solid var(--line)', margin: '14px 0' }} />
+
+        <strong>İşletme logosu</strong>
+        <span className="hint" style={{ display: 'block', marginBottom: 8 }}>
+          Menü başlığında ve fişte görünür. Kare bir görsel en iyi durur.
+        </span>
+        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+          {s.business.logo ? (
+            <img className="logo-onizleme" src={s.business.logo} alt="İşletme logosu" />
+          ) : (
+            <div className="logo-onizleme bos">🍵</div>
+          )}
+          <label className="btn" style={{ cursor: 'pointer' }}>
+            {s.business.logo ? 'Değiştir' : 'Logo seç'}
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) logoSec(f)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          {s.business.logo && (
+            <button className="btn" onClick={logoSil}>
+              Kaldır
+            </button>
+          )}
         </div>
       </div>
 

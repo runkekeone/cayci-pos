@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore, aktifOturum } from '../store'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { dayOf, fmtTL, round, today } from '../lib/units'
+import { OdemeGrafik, SaatGrafik, UrunGrafik, type SaatDilim } from '../lib/Grafik'
 
 /** Kutucuk: solda ikon, sağda başlık ve tutar. */
 function Kutu({
@@ -45,8 +46,19 @@ export default function Rapor() {
   const alimlar = s.purchases
     .filter((p) => (p.bizDay ?? dayOf(p.date)) === date)
     .reduce((n, p) => n + p.total, 0)
-  const fisSayisi = s.sales.filter((x) => (x.bizDay ?? dayOf(x.date)) === date).length
+  const gunSatislari = s.sales.filter((x) => (x.bizDay ?? dayOf(x.date)) === date)
+  const fisSayisi = gunSatislari.length
   const karOran = r.ciro > 0 ? (r.brutKar / r.ciro) * 100 : 0
+
+  // Saatlik yoğunluk: fişin saati satış tarihinden okunur (24 kova, boşlar grafikte kırpılır).
+  const saatlik: SaatDilim[] = Array.from({ length: 24 }, (_, saat) => ({ saat, ciro: 0, fis: 0 }))
+  for (const x of gunSatislari) {
+    const h = new Date(x.date).getHours()
+    if (h >= 0 && h < 24) {
+      saatlik[h].ciro += x.total
+      saatlik[h].fis += 1
+    }
+  }
 
   return (
     <>
@@ -60,39 +72,39 @@ export default function Rapor() {
 
       <div className="rgrid">
         {/* Her zaman görünen 4 kutu: para nereden geldi */}
-        <Kutu ikon="💵" renk="#e6f4ec" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
-        <Kutu ikon="💳" renk="#e9ecf7" baslik="POS / Kart" tutar={r.kartSatis} />
-        <Kutu ikon="📒" renk="#fbeaea" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
-        <Kutu ikon="🧾" renk="#e9f0fb" baslik="Toplam Ciro" tutar={r.ciro} />
+        <Kutu ikon="💵" renk="var(--good-soft)" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
+        <Kutu ikon="💳" renk="var(--kutu-bilgi)" baslik="POS / Kart" tutar={r.kartSatis} />
+        <Kutu ikon="📒" renk="var(--bad-soft)" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
+        <Kutu ikon="🧾" renk="var(--kutu-bilgi)" baslik="Toplam Ciro" tutar={r.ciro} />
 
         {detay && (
           <>
             {/* --- para nereye gitti --- */}
-            <Kutu ikon="🤝" renk="#e6f4ec" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
-            <Kutu ikon="🚚" renk="#f4eee6" baslik="Bugünkü alımlar" tutar={alimlar} />
+            <Kutu ikon="🤝" renk="var(--good-soft)" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
+            <Kutu ikon="🚚" renk="var(--kutu-notr)" baslik="Bugünkü alımlar" tutar={alimlar} />
             <Kutu
               ikon="💸"
-              renk="#fbeaea"
+              renk="var(--bad-soft)"
               baslik="Giderler"
               tutar={r.gunlukGider + r.sabitGiderPayi}
               ton="bad"
             />
-            <Kutu ikon="🗑️" renk="#fbeaea" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
+            <Kutu ikon="🗑️" renk="var(--bad-soft)" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
 
             {/* --- sonuç --- */}
-            <Kutu ikon="🏦" renk="#e9f0fb" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
+            <Kutu ikon="🏦" renk="var(--kutu-bilgi)" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
             <Kutu
               ikon="📈"
-              renk="#e6f4ec"
+              renk="var(--good-soft)"
               baslik="Brüt kâr"
               tutar={r.brutKar}
               ek={r.ciro > 0 ? `(%${round(karOran, 1)})` : undefined}
               ton="good"
             />
-            <Kutu ikon="📦" renk="#f4eee6" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
+            <Kutu ikon="📦" renk="var(--kutu-notr)" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
             <Kutu
               ikon="🎯"
-              renk={r.netKar >= 0 ? '#e6f4ec' : '#fbeaea'}
+              renk={r.netKar >= 0 ? 'var(--good-soft)' : 'var(--bad-soft)'}
               baslik="NET KÂR"
               tutar={r.netKar}
               ton={r.netKar >= 0 ? 'good' : 'bad'}
@@ -104,6 +116,21 @@ export default function Rapor() {
       <button className="btn" style={{ marginTop: 12 }} onClick={() => setDetay((d) => !d)}>
         {detay ? '▴ Detayı gizle' : '▾ Detaylı'}
       </button>
+
+      <div className="grafik-izgara">
+        <SaatGrafik key={date} veri={saatlik} />
+        <OdemeGrafik nakit={r.nakitSatis} kart={r.kartSatis} veresiye={r.veresiyeSatis} />
+        <UrunGrafik
+          baslik="En çok satanlar"
+          birim="adet"
+          veri={r.topProducts.map((p) => ({ id: p.itemId, ad: p.name, deger: p.qty }))}
+        />
+        <UrunGrafik
+          baslik="Ciroya katkı"
+          birim="TL"
+          veri={r.topProducts.map((p) => ({ id: p.itemId, ad: p.name, deger: p.ciro }))}
+        />
+      </div>
 
       <div className="row" style={{ alignItems: 'flex-start', gap: 16, marginTop: 20 }}>
         <div className="card" style={{ flex: 1, minWidth: 300 }}>
@@ -185,7 +212,7 @@ export default function Rapor() {
           </thead>
           <tbody>
             {r.topProducts.map((p) => (
-              <tr key={p.name}>
+              <tr key={p.itemId}>
                 <td>
                   <strong>{p.name}</strong>
                 </td>

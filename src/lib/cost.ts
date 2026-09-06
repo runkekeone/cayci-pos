@@ -108,6 +108,13 @@ export function applyStock(items: Item[], itemId: string, qty: number, v?: Varia
   return items.map((i) => (needs.has(i.id) ? { ...i, stock: i.stock - needs.get(i.id)! } : i))
 }
 
+/** Kaydedilmiş ham miktarları stoğa uygula (işaret çağıranda: düşmek için +, geri yüklemek için −). */
+export function applyStockRaw(items: Item[], dusum: { itemId: string; qty: number }[]): Item[] {
+  const harita = new Map<string, number>()
+  for (const d of dusum) harita.set(d.itemId, (harita.get(d.itemId) ?? 0) + d.qty)
+  return items.map((i) => (harita.has(i.id) ? { ...i, stock: i.stock - harita.get(i.id)! } : i))
+}
+
 /** Eldeki hammaddeyle bu üründen kaç adet çıkar. Stok uyarısı için. */
 export function availableQty(itemId: string, items: Item[]): number {
   const needs = explode(itemId, 1, items)

@@ -106,6 +106,15 @@ export interface Sale {
   tableName?: string
   /** Ait olduğu iş günü oturumu (YYYY-MM-DD). Gece yarısını aşan gün için takvim gününden farklı olabilir. */
   bizDay?: string
+  /**
+   * Satış anında stoktan fiilen düşen ham miktarlar.
+   *
+   * İptal/düzenlemede stok bununla geri yüklenir. Tarif üzerinden yeniden
+   * hesaplanırsa, aradan geçen sürede tarif (gramaj/verim) değiştiyse geri
+   * yüklenen miktar düşülenden farklı oluyor ve stok kalıcı olarak sapıyordu.
+   * Eski kayıtlarda yok — o zaman tarif üzerinden hesaplamaya düşülür.
+   */
+  stokDusum?: { itemId: string; qty: number }[]
 }
 
 export interface Table {
@@ -186,6 +195,8 @@ export interface Business {
   vergiDairesi?: string
   /** Vergi numarası. */
   vergiNo?: string
+  /** İşletme logosu — data URL (küçültülmüş PNG). Menüde ve fişte çıkar. */
+  logo?: string
 }
 
 // ---- Toptancı (B2B) katmanı ----
@@ -276,5 +287,13 @@ export interface State {
   /** Kurulum sihirbazı tamamlandı mı. Tamamlanmadan uygulamaya girilemez. */
   setupDone: boolean
   /** otoGun: açılış/kapanış saatine göre günü otomatik başlat/bitir. Şimdilik kapalı, ileride açılacak. */
-  settings: { showImages: boolean; otoGun?: boolean; sarfTemizlendi?: boolean }
+  settings: {
+    showImages: boolean
+    otoGun?: boolean
+    sarfTemizlendi?: boolean
+    /** Görünüm teması. Tanımsız = 'sistem' (telefonun kendi ayarı). */
+    tema?: 'acik' | 'koyu' | 'sistem'
+    /** Büyük yazı modu — tezgâh başında uzaktan okumak için. */
+    buyukYazi?: boolean
+  }
 }

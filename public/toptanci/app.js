@@ -6,6 +6,17 @@ const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY
 const num2 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 // CSV dışa aktarmada para sütunları: hep 2 haneli (1.234,50), Türkçe Excel sayı olarak okusun diye simgesiz.
 const csvTutar = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/* Para hesaplarını kuruşa yuvarla. Kayan noktalı toplamlar 1848.1499999999996 gibi
+   artıklar bırakıyor; bakiye/ödeme hesapları bundan geçirilir. */
+function kurus(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+const yuzde1 = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/* Kâr marjı: kârın ciroya oranı — "100 ₺ sattım, kaçı kâr kaldı".
+   Ciro yoksa yüzde anlamsız, "—" döner (sıfıra bölme de olmaz). */
+function karOrani(ciro, maliyet) {
+  const c = Number(ciro) || 0;
+  if (c <= 0) return "—";
+  return "%" + yuzde1.format(((c - (Number(maliyet) || 0)) / c) * 100);
+}
 
 function emptyStore() {
   return {
@@ -102,7 +113,9 @@ function customerBorc(id) {
   let b = Number(c.acilis) || 0;
   store.sales.forEach((s) => { if (s.musteriId === id) b += Number(s.odeme.acik) || 0; });
   store.payments.forEach((p) => { if (p.musteriId === id) b -= Number(p.tutar) || 0; });
-  return b;
+  // Kuruşa yuvarla: yüzlerce kalem toplanınca bakiye 1848.1499999999996 gibi
+  // kalıyor ve müşteri "0,00 ₺ borçlu" olarak açık hesap listesinde takılıyordu.
+  return kurus(b);
 }
 function customerSalesCount(id) { return store.sales.filter((s) => s.musteriId === id).length; }
 
@@ -1550,15 +1563,38 @@ function finalizeSale(type, odemeAdi) {
   const satilanMus = c.musteriId;
   const { brut, toplam } = cartTotals();
   const odeme = { nakit: 0, pos: 0, acik: 0 };
+  // Satış tutarını aşan ödeme: satışa değil, müşterinin borcuna yazılır (aşağıda).
+  let fazlaTahsilat = 0;
   if (type === "nakit") odeme.nakit = toplam;
   else if (type === "pos") odeme.pos = toplam;
   else if (type === "acik") { if (!c.musteriId) { alert("Açık hesap için önce müşteri seçin (Seç düğmesi)."); return; } odeme.acik = toplam; }
   else if (type === "parcali") {
-    const n = Number(prompt("Nakit tutar:", num2.format(toplam))) || 0;
-    const p = Number(prompt("POS (kart) tutar:", "0")) || 0;
-    const rest = Math.round((toplam - n - p) * 100) / 100;
-    odeme.nakit = n; odeme.pos = p;
-    if (rest > 0.001) { if (!c.musteriId) { alert("Kalan tutar açık hesaba yazılacak — müşteri seçin."); return; } odeme.acik = rest; }
+    // Öntanımlı değer DÜZ sayı olmalı: num2.format(1850) "1.850" veriyordu ve hem
+    // Number() hem num() bunu 1,85 okuyordu (tek başına binlik ayracı ayırt edilemiyor).
+    // Kasiyer hazır değeri onaylayınca 1.850 ₺ satış 1,85 ₺ nakit + 1.848,15 ₺ borç
+    // olarak kaydediliyordu. Elle yazılan "1.850,00" / "1850,50" için num() doğru.
+    const n = num(prompt("Nakit tutar:", toplam.toFixed(2)));
+    const p = num(prompt("POS (kart) tutar:", "0"));
+    const rest = kurus(toplam - n - p);
+    if (rest > 0.001) {
+      // Eksik ödeme: kalanı açık hesaba yaz (eski davranış).
+      if (!c.musteriId) { alert("Kalan tutar açık hesaba yazılacak — müşteri seçin."); return; }
+      odeme.nakit = n; odeme.pos = p; odeme.acik = rest;
+    } else if (rest < -0.001) {
+      // FAZLA ödeme: eskiden bu dal hiç yoktu — fazlalık satışa nakit olarak yazılıyor,
+      // borçtan düşülmüyordu. Artık satışa yalnız tutarı kadarı işlenir, üstü
+      // müşterinin borcuna tahsilat olarak geçer (kayıt aşağıda, satıştan sonra).
+      if (!c.musteriId) {
+        alert("Girdiğin tutar satış tutarından fazla.\n\nFazlası müşterinin borcuna sayılacak — önce müşteri seçin.\nPara üstü vereceksen satış tutarını gir.");
+        return;
+      }
+      const posUygulanan = Math.min(p, toplam);
+      const nakitUygulanan = kurus(toplam - posUygulanan);
+      odeme.nakit = nakitUygulanan; odeme.pos = posUygulanan;
+      fazlaTahsilat = kurus(n - nakitUygulanan + (p - posUygulanan));
+    } else {
+      odeme.nakit = n; odeme.pos = p;
+    }
   }
   const maliyet = c.items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? (Number(pr.alis) || 0) : 0) * i.adet; }, 0);
   // POS cihaz komisyonu: sadece "Pos" ödemede %2 (nakit/havale/açık hariç)
@@ -1567,6 +1603,13 @@ function finalizeSale(type, odemeAdi) {
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
   store.sales.push({ id: genId(), belgeNo, musteriId: c.musteriId, personelId: pos.personelId, not: ((document.getElementById("posNot") || {}).value || ""), odemeAdi: odemeAdi || null, items: c.items.map((i) => ({ urunId: i.urunId, ad: i.ad, barkod: i.barkod || "", kdv: Number(i.kdv) || 0, fiyat: Number(i.fiyat) || 0, adet: Number(i.adet) || 0, iskyuzde: Number(i.iskyuzde) || 0 })), brut, iskonto: Number(c.iskonto) || 0, toplam, maliyet, komisyon, odeme, tarih: new Date().toISOString(), servisGun: localDateStr(new Date()), hafta: haftaNo(new Date()), stokKaynak: stokModu });
   c.items.forEach((i) => stokDus(i.urunId, i.adet)); // aktif moda göre (araç/dükkan) stok düş
+  // Satış tutarını aşan kısım borç tahsilatı olarak kaydedilir — eskiden hiçbir yere
+  // yazılmadığı için kasaya giren para müşterinin borcundan düşmüyordu.
+  if (fazlaTahsilat > 0.001 && satilanMus) {
+    store.payments.push({ id: genId(), musteriId: satilanMus, tutar: fazlaTahsilat, not: "Satış üstü fazla ödeme → borca sayıldı (Belge " + belgeNo + ")", tarih: new Date().toISOString() });
+    const mc = findCustomer(satilanMus);
+    if (mc && typeof bayiPuanEkle === "function") bayiPuanEkle(mc, fazlaTahsilat);
+  }
   saveStore();
   pos.carts[pos.active] = newCart();
   refreshPOS();
@@ -1724,7 +1767,7 @@ function renderAnasayfa() {
   return pageHead("Bugünün Özeti", null, [{ label: "📈 Raporlar", cls: "soft", route: "rapor-gunluk" }]) +
     grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
     `<div style="height:14px"></div>` +
-    grid([["Nakit Kasa", money.format(nakit + tahsilat + gelir - gider), "green"], ["Gider (bugün)", money.format(gider)], ["Kâr (bugün)", money.format(ciro - maliyet), "green"], ["Toplam Alacak", money.format(toplamBorc)]]) +
+    grid([["Nakit Kasa", money.format(nakit + tahsilat + gelir - gider), "green"], ["Gider (bugün)", money.format(gider)], ["Kâr (bugün)", money.format(ciro - maliyet), "green"], ["Kâr Oranı", karOrani(ciro, maliyet), "green"], ["Toplam Alacak", money.format(toplamBorc)]]) +
     `<h1 style="font-size:16px;margin:18px 0 10px">Bugünün Satışları (${today.length})</h1>` + (son.length ? sonSatisListesi(son) : `<div class="card"><p class="sub">Bugün henüz satış yok.</p></div>`) +
     `<h1 style="font-size:16px;margin:18px 0 10px">Kritik Stok (${kritik.length})</h1>` + tableCard(["Ürün", "Kalan Stok", "Kritik"], kritikRows, infoLine(kritik.length));
 }
@@ -1855,9 +1898,28 @@ function mountReport(route) {
   const pr = document.querySelector('[data-act="rprint"]'); if (pr) pr.addEventListener("click", () => window.print());
   const bo = document.querySelector('[data-act="bugunozet"]'); if (bo) bo.addEventListener("click", () => navigate("anasayfa"));
   const uc = document.querySelector('[data-act="urunselCsv"]'); if (uc) uc.addEventListener("click", exportUrunselRapor);
+  const gc = document.querySelector('[data-act="gunlukCsv"]'); if (gc) gc.addEventListener("click", exportGunlukSatisListesi);
 }
 function salesInRange(route, def) { const f = reportFilters[route] || def; return store.sales.filter((s) => inRange(s.tarih, f.from, f.to)); }
 
+let sonGunlukRapor = null; // ekranda duran gunluk rapor — "Satis Listesi (Excel)" bunu disa yazar
+/* Gunluk satis listesi: satilan her urun icin tek satir — "adet + urun adi". 150 kalem urun = 150 satir. */
+function exportGunlukSatisListesi() {
+  const r = sonGunlukRapor;
+  if (!r || !r.sales.length) { alert("Dışa aktarılacak satış yok. Önce tarih aralığını seçip Listele'ye basın."); return; }
+  const agg = {};
+  r.sales.forEach((s) => s.items.forEach((it) => {
+    const k = it.urunId || it.ad;
+    if (!agg[k]) agg[k] = { ad: it.ad, adet: 0 };
+    agg[k].adet += Number(it.adet) || 0;
+  }));
+  const list = Object.values(agg).sort((a, b) => b.adet - a.adet || a.ad.localeCompare(b.ad, "tr"));
+  const n = (v) => num2.format(Number(v) || 0);
+  const rows = [["Adet", "Ürün"]].concat(list.map((a) => [n(a.adet), a.ad]));
+  rows.push([n(list.reduce((t, a) => t + a.adet, 0)), "TOPLAM (" + list.length + " kalem)"]);
+  const ad = r.from === r.to ? "babuco-gunluk-satis-" + r.from + ".csv" : "babuco-gunluk-satis-" + r.from + "_" + r.to + ".csv";
+  downloadFile(ad, csvBuild(rows));
+}
 function renderRaporGunluk() {
   const route = "rapor-gunluk", def = { from: todayStr(), to: todayStr() };
   const sales = salesInRange(route, def), f = reportFilters[route] || def;
@@ -1868,13 +1930,20 @@ function renderRaporGunluk() {
   const tahsilat = store.payments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const firmaOde = store.firmaPayments.filter((p) => inRange(p.tarih, f.from, f.to)).reduce((a, p) => a + Number(p.tutar || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
-  return pageHead("Günlük Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
-    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) +
+  sonGunlukRapor = { sales, from: f.from, to: f.to };
+  // Ödeme kırılımı ciroyu tutmalı. Tutmuyorsa kayıtta bir tuhaflık var (ör. satış
+  // tutarını aşan nakit eskiden satışa yazılıyordu) — sessizce basmak yerine söyle.
+  const odemeFarki = kurus(nakit + pos_ + acik - ciro);
+  const odemeUyari = Math.abs(odemeFarki) > 0.01
+    ? `<div class="rapor-uyari">⚠ Ödeme kırılımı ciroyu tutmuyor — fark <b>${money.format(odemeFarki)}</b>. Nakit + Pos + Açık Hesap toplamı Ciro'ya eşit olmalı.</div>`
+    : "";
+  return pageHead("Günlük Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "⇩ Satış Listesi (Excel)", cls: "softgreen", act: "gunlukCsv" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) + odemeUyari +
     grid([["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"]]) +
     `<div style="height:14px"></div>` +
     grid([["Alınan Ödemeler", money.format(tahsilat)], ["Firma Ödemeleri", money.format(firmaOde)], ["Giderler", money.format(gider)], ["Gelirler", money.format(gelir)]]) +
     `<div style="height:14px"></div>` +
-    grid([["Nakit Kasa Raporu", money.format(nakitKasa), "green"], ["Kâr", money.format(ciro - mal), "green"], ["Ciro", money.format(ciro), "blue"], ["Ürün Maliyeti", money.format(mal)]]);
+    grid([["Nakit Kasa Raporu", money.format(nakitKasa), "green"], ["Kâr", money.format(ciro - mal), "green"], ["Kâr Oranı", karOrani(ciro, mal), "green"], ["Ciro", money.format(ciro), "blue"], ["Ürün Maliyeti", money.format(mal)]]);
 }
 function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
@@ -2319,14 +2388,21 @@ async function cayPullSupabase() {
       if (store.gelenSiparisler.some((o) => o.orderId === row.id)) continue; // zaten alınmış
       const order = row.payload || {};
       const lines = Array.isArray(order.lines) ? order.lines : [];
-      const items = lines.map((l) => ({ ad: l.name, birim: l.birim, adet: Number(l.qty) || 0, fiyat: Number(l.unitPrice) || 0 }));
-      const toplam = items.reduce((n, l) => n + l.adet * l.fiyat, 0);
+      // Internetten gelen fiyatı güncel panel kataloğundan tekrar kur; istemci fiyatı değiştirilemez.
+      const items = lines.map((l) => {
+        const pr = store.products.find((p) => p.id === l.catalogItemId) || store.products.find((p) => p.ad.trim().toLowerCase() === String(l.name || "").trim().toLowerCase());
+        return { urunId: pr ? pr.id : (l.catalogItemId || ""), ad: pr ? pr.ad : l.name, birim: pr ? (pr.birim || l.birim) : l.birim, adet: Number(l.qty) || 0, fiyat: pr ? (Number(pr.satis) || 0) : (Number(l.unitPrice) || 0) };
+      });
+      const brut = kurus(items.reduce((n, l) => n + l.adet * l.fiyat, 0));
+      const odemeTuru = order.paymentType === "nakit" ? "nakit" : order.paymentType === "kart" ? "kart" : "bakiye";
+      const iskonto = odemeTuru === "nakit" ? kurus(brut * 0.05) : 0;
+      const toplam = kurus(brut - iskonto);
       store.gelenSiparisler.push({
         id: genId(), orderId: row.id,
         dealer: row.cay_ocagi || (order.from && order.from.name) || "Bilinmeyen bayi",
         dealerTel: row.cay_tel || (order.from && order.from.phone) || "",
         not: order.note || "", tarih: order.date || row.created_at || new Date().toISOString(),
-        alindi: new Date().toISOString(), durum: "yeni", items, toplam,
+        alindi: new Date().toISOString(), durum: "yeni", items, brut, iskonto, toplam, odemeTuru,
         teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "",
       });
       degisti = true;
@@ -2476,7 +2552,7 @@ function cayGonder(o) {
 }
 function cayTeslim(o, odemeTuru) {
   if (o.saleId) { alert("Bu sipariş zaten teslim edilip rapora işlendi."); return; }
-  odemeTuru = odemeTuru || "bakiye";
+  odemeTuru = odemeTuru || o.odemeTuru || "bakiye";
   // Bayiyi müşteri olarak eşle/oluştur (cari borç). Önce TELEFON (kararlı), sonra isim.
   const dtel = (o.dealerTel || "").replace(/\D/g, "");
   let cust = (dtel && store.customers.find((c) => (c.telefon || "").replace(/\D/g, "") === dtel))
@@ -2486,10 +2562,12 @@ function cayTeslim(o, odemeTuru) {
   cust.cayOcagi = true;
   if (!cust.telefon && o.dealerTel) cust.telefon = o.dealerTel;
   const items = o.items.map((l) => {
-    const pr = store.products.find((p) => p.ad.trim().toLowerCase() === (l.ad || "").trim().toLowerCase());
+    const pr = store.products.find((p) => p.id === l.urunId) || store.products.find((p) => p.ad.trim().toLowerCase() === (l.ad || "").trim().toLowerCase());
     return { urunId: pr ? pr.id : "", ad: l.ad, barkod: pr ? pr.barkod || "" : "", kdv: pr ? Number(pr.kdv) || 0 : 0, fiyat: Number(l.fiyat) || 0, adet: Number(l.adet) || 0, iskyuzde: 0 };
   });
-  const toplam = items.reduce((s, i) => s + i.fiyat * i.adet, 0);
+  const brut = kurus(items.reduce((s, i) => s + i.fiyat * i.adet, 0));
+  const iskonto = kurus(Number(o.iskonto) || 0);
+  const toplam = kurus(Number(o.toplam) || (brut - iskonto));
   const maliyet = items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? Number(pr.alis) || 0 : 0) * i.adet; }, 0);
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
@@ -2498,7 +2576,7 @@ function cayTeslim(o, odemeTuru) {
     : odemeTuru === "kart" ? { nakit: 0, pos: toplam, acik: 0 }
     : { nakit: 0, pos: 0, acik: toplam };
   const odemeAdi = odemeTuru === "nakit" ? "Nakit" : odemeTuru === "kart" ? "Kart" : "Açık Hesap";
-  const sale = { id: genId(), belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi, items, brut: toplam, iskonto: 0, toplam, maliyet, odeme, tarih: new Date().toISOString() };
+  const sale = { id: genId(), belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi, items, brut, iskonto, toplam, maliyet, odeme, tarih: new Date().toISOString() };
   store.sales.push(sale);
   items.forEach((i) => { const pr = findProduct(i.urunId); if (pr) pr.stok = (Number(pr.stok) || 0) - i.adet; });
   o.durum = "teslim"; o.saleId = sale.id; o.odemeTuru = odemeTuru;
@@ -2509,7 +2587,8 @@ function cayTeslim(o, odemeTuru) {
 /* Teslim ödeme seçimi — nakit / kart / bakiye (açık hesap) */
 function cayTeslimOde(o) {
   if (o.saleId) { alert("Bu sipariş zaten teslim edilip rapora işlendi."); return; }
-  const body = `<p class="sub" style="margin:0 0 12px">Ödeme türünü seç. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.</p>
+  const secilen = o.odemeTuru === "nakit" ? "Nakit" : o.odemeTuru === "kart" ? "Kart" : "Açık Hesap";
+  const body = `<p class="sub" style="margin:0 0 12px">Müşterinin seçimi: <b>${secilen}</b>. Teslimatta gerekirse değiştirebilirsin. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.</p>
     <div class="cay-ode-tut">Tutar <b>${money.format(o.toplam)}</b></div>
     <div class="cay-ode-sec">
       <button class="btn cay-ode" type="button" data-ode="nakit">💵 Nakit</button>
@@ -2530,7 +2609,7 @@ function cayDoc(o, tur) {
   openPrint(tur + " " + o.dealer, `<h2>${esc(st.fisBaslik || st.firmaAdi)}</h2><div class="c">${tur.toUpperCase()}</div><hr>
     <div>Bayi: ${esc(o.dealer)}</div>${o.dealerTel ? `<div>Tel: ${esc(o.dealerTel)}</div>` : ""}${no}${tesl}<hr>
     <table>${rows}</table><hr>
-    <table><tr><td><b>TOPLAM</b></td><td class="r"><b>${money.format(o.toplam)}</b></td></tr></table><hr>
+    <table>${o.iskonto ? `<tr><td>Nakit indirimi</td><td class="r">-${money.format(o.iskonto)}</td></tr>` : ""}<tr><td><b>TOPLAM</b></td><td class="r"><b>${money.format(o.toplam)}</b></td></tr></table><hr>
     <div class="c">${esc(st.fisAltbilgi || "Teşekkür ederiz")}</div>`);
 }
 
@@ -2551,7 +2630,7 @@ function cayUrunModal(o) {
     <span class="cay-utut">${money.format(l.fiyat * l.adet)}</span>
   </div>`).join("");
   const body = `<div class="cay-ulist">${rows}</div>
-    <div class="cay-utoplam"><span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
+    <div class="cay-utoplam">${o.iskonto ? `<span>Nakit indirimi</span><span>-${money.format(o.iskonto)}</span>` : ""}<span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
     ${o.not ? `<div class="cay-unot">Not: ${esc(o.not)}</div>` : ""}`;
   openModal(`${esc(o.dealer)} — Ürünler`, body, { noFoot: true });
 }
@@ -2606,7 +2685,8 @@ function cayOrderModal(o) {
       <div><span>Durum</span><b><span class="cay-badge ${a.badge}">${esc(a.ad)}</span></b></div>
     </div>
     <div class="cay-ulist">${rows}</div>
-    <div class="cay-utoplam"><span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
+    <div class="cay-utoplam">${o.iskonto ? `<span>Nakit indirimi</span><span>-${money.format(o.iskonto)}</span>` : ""}<span>TOPLAM</span><span>${money.format(o.toplam)}</span></div>
+    <div class="cay-sub">Ödeme: ${esc(o.odemeTuru === "nakit" ? "Nakit" : o.odemeTuru === "kart" ? "Kart" : "Açık Hesap")}</div>
     ${o.not ? `<div class="cay-unot">Not: ${esc(o.not)}</div>` : ""}
     ${tesl}
     <div class="cay-modal-act">${btns.join("")}</div>`;
@@ -4396,6 +4476,9 @@ function mobilTabloEtiketle() {
 /* ---- Mobil alt sekme çubuğu ---- */
 const MOBILBAR = [
   { ico: "🚗", label: "Rota", route: "rota" },
+  // Satış Yap en çok kullanılan ekran; eskiden yalnız çekmeceden (51 hedef
+  // arasından) ya da Dükkan > +Satış ile iki dokunuşta gidiliyordu.
+  { ico: "🖊", label: "Satış", route: "satis" },
   { ico: "🏪", label: "Dükkan", route: "dukkan" },
   { ico: "📈", label: "Rapor", route: "rapor-gunluk" },
   { ico: "☰", label: "Menü", act: "menu" },

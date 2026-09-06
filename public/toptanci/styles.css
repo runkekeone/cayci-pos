@@ -280,7 +280,7 @@ body.rail .brand { justify-content: center; padding: 0; }
   display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
   margin-bottom: 22px;
 }
-.pg-back { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--brand-dark); font-size: 22px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; }
+.pg-back { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--brand-dark); font-size: 22px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; }
 .pg-back:active { background: var(--brand-soft); }
 .page-head h1 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -0.4px; color: var(--brand-dark); }
 .aa-al { width: 66px; }
@@ -598,10 +598,18 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 }
 .pay-btn:hover { box-shadow: var(--shadow); }
 .pay-btn:active { transform: scale(0.97); }
-.pay-btn.nakit { border-color: #bfe6cd; color: var(--green-d); background: #f4fbf6; }
-.pay-btn.pos { border-color: #c6ddf7; color: var(--brand-dark); background: #f1f7fe; }
-.pay-btn.acik { border-color: #f3ddb4; color: var(--accent-ink); background: #fdf6ea; }
-.pay-btn.parcali { border-color: #c6ddf7; color: var(--value); background: #f1f7fe; }
+/* Ödeme düğmeleri bu ekranın ASIL işi — eskiden soluk pastel çipler gibi
+   duruyordu ve ekrandaki en baskın öge "Müşteri 1" sekmesiydi. Renk kodu
+   korunuyor ama kontrast, kenar kalınlığı ve gölge ile öne çıkarıldı.
+   Hangisinin birincil olduğu (nakit mi açık hesap mı) kullanıcıya sorulacak;
+   şimdilik dördü de eşit ağırlıkta ve hepsi net okunuyor. */
+.pay-btn { border-width: 2px; }
+/* Nakit birincil — satışların çoğu nakit (kullanıcı söyledi): dolu düğme. */
+.pay-btn.nakit { border-color: #157f45; color: #fff; background: linear-gradient(135deg, #1c9a53 0%, #157f45 100%); box-shadow: 0 4px 12px rgba(21, 127, 69, 0.35); }
+.pay-btn.pos { border-color: #4a8ee8; color: #10306e; background: #e9f2fe; }
+.pay-btn.acik { border-color: #e0a13a; color: #7a4204; background: #fdf1dc; }
+.pay-btn.parcali { border-color: #3f9bb0; color: #0b4c5c; background: #e6f5f8; }
+.pay-btn:active { transform: scale(0.97); }
 
 /* Kategori şeridi: tek satır, yatay kaydırılabilir pill'ler (Getir tarzı) */
 .cat-tabs { display: flex; flex-wrap: nowrap; gap: 8px; padding: 2px 0 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -1223,27 +1231,39 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   table.grid td.m-title br { display: none; }
 
   /* Aksiyon satırı: kart altında kompakt tek satır, gerekirse yatay kaydır */
+  /* Aksiyon satırı: sığmazsa YATAY KAYDIRMA DEĞİL, alt satıra sar.
+     Eskiden td'de justify-content:flex-end + overflow-x:auto vardı; flex kutusu
+     flex-end iken taşma başlangıç tarafına olur ve scrollWidth==clientWidth
+     kaldığı için kaydırılamaz — ilk düğme (Düzenle) ekranın solunda kalıp
+     kalıcı olarak erişilemez oluyordu. */
   table.grid td.m-act, table.grid td.act-cell, table.grid td:has(.act-btns) {
     justify-content: flex-end; padding: 9px 0 2px; border-bottom: 0;
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
   }
   table.grid td.m-act::before { content: ""; display: none; }
 
   .empty-row td { display: block; text-align: center; font-weight: 500; color: var(--muted); font-family: var(--font-body); }
   .empty-row td::before { content: ""; }
-  .act-btns { justify-content: flex-end; flex-wrap: nowrap; }
+  .act-btns { justify-content: flex-end; flex-wrap: wrap; }
+  /* Etiket kendi içinde sarmasın ("Veresiye Borç Ekle" 3 satıra iniyordu);
+     sarma gerekiyorsa satırın tamamı alta insin. */
+  .act-btns button { white-space: nowrap; }
 
-  /* --- Özet kartları: satırda 4'lü kompakt tile --- */
-  .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .stat { padding: 9px 8px; border-radius: var(--radius-md); gap: 3px; align-items: stretch; overflow: hidden; }
-  .stat .s-label { font-size: 9.5px; letter-spacing: 0.2px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stat .s-value { font-size: 13px; letter-spacing: -0.4px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* --- Özet kartları: telefonda 2 sütun ---
+     4 sütunda kart başına ~85px kalıyordu: etiketler 9,5px ve kırpık
+     ("ALINAN ODE…"), tutarlar 13px ve ellipsis'li — "₺138.845,00" kesiliyordu.
+     Panel yalnız telefonda kullanılıyor, bu ekran da panelin ana ekranı. */
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat { padding: 12px 12px; border-radius: var(--radius-md); gap: 4px; align-items: stretch; overflow: hidden; }
+  .stat .s-label { font-size: 12px; letter-spacing: 0.2px; line-height: 1.25; }
+  /* Tutar ASLA kırpılmaz: gerekirse yazı küçülür ama ellipsis yok. */
+  .stat .s-value { font-size: 19px; letter-spacing: -0.4px; line-height: 1.2; white-space: nowrap; }
   .stat .s-trend { position: static; margin-top: 2px; align-self: flex-start; font-size: 9px; padding: 1px 5px; }
 
   /* --- Başlık + aksiyonlar: temiz, sarılabilir --- */
   .page-head .sub { width: 100%; }
   .page-head .actions { gap: 6px; }
-  .page-head .actions .btn { flex: 0 1 auto; justify-content: center; font-size: 11.5px; font-weight: 700; padding: 7px 11px; min-height: 34px; box-shadow: 0 1px 3px rgba(30, 64, 175, 0.22); }
+  /* Android dokunma hedefi minimumu 48dp — bunlar 34px'ti. */
+  .page-head .actions .btn { flex: 0 1 auto; justify-content: center; font-size: 13px; font-weight: 700; padding: 11px 14px; min-height: 48px; box-shadow: 0 1px 3px rgba(30, 64, 175, 0.22); }
 
   /* --- Rozetler: biraz daha ferah --- */
   .badge, .badge-green, .badge-amber { font-size: 11.5px; padding: 3px 10px; }
@@ -1252,9 +1272,16 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   /* Tüm form alanları 16px → iOS otomatik zoom yapmaz */
   input, select, textarea { font-size: 16px; }
   .btn { padding: 12px 18px; font-size: 15px; min-height: 44px; }
-  .act-btns button { padding: 11px 14px; font-size: 14px; min-height: 40px; }
+  .act-btns button { padding: 12px 14px; font-size: 14px; min-height: 44px; }
   .act-btns { gap: 8px; }
   .cart-qty button { width: 44px; height: 44px; font-size: 18px; }
+  /* Taban CSS'te 30-40px kalmış tekil hedefler — panel yalnız telefonda
+     kullanıldığı için hepsi en az 44px olmalı. */
+  .btn.bundle-add, .btn.aa-btn, .aa-in, .ay-in,
+  .satis-appbar .sab-back, .sk-adet { min-height: 44px; }
+  .btn.ajan-al.sm, .rota-kayit-satir .btn.sm { min-height: 44px; padding: 10px 14px; font-size: 13px; }
+  .dk-not .edit, .ss-fin { min-height: 44px; }
+  .modal-head .x { min-height: 44px; min-width: 44px; }
   .cart-del { padding: 11px 14px; font-size: 16px; min-height: 44px; }
   .row-in { padding: 10px; font-size: 16px; }
   .qty-in { width: 66px; } .price-in { width: 94px; } .isk-in { width: 62px; }
@@ -1273,7 +1300,8 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .menu-item > a { padding: 14px 16px; min-height: 48px; }
   .submenu a { padding: 13px 18px 13px 52px; min-height: 46px; }
   .searchbox input { padding: 7px 4px; font-size: 13.5px; }
-  .link-btn { padding: 6px 2px; min-height: 40px; display: inline-flex; align-items: center; }
+  /* Müşteri/ürün adı satırın asıl dokunma hedefi — 44px altında kalmasın. */
+  .link-btn { padding: 8px 2px; min-height: 44px; display: inline-flex; align-items: center; text-align: left; }
   /* Üst bar dropdown öğeleri */
   .dropdown a { padding: 13px 18px; min-height: 46px; }
 
@@ -1301,7 +1329,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .pos-search .bar-go { min-height: 44px; min-width: 44px; }
   .pos-note-row { flex-wrap: wrap; }
   .pos-onay { gap: 12px 16px; padding: 4px 2px; }
-  .pos-onay label { min-height: 32px; }
+  .pos-onay label { min-height: 44px; }
 
   /* Yüzen "Tara" butonu — sağ alt, mobilbar üstünde */
   .pos-tara {
@@ -1342,7 +1370,7 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .prod-card .p-name { font-size: 11.5px; min-height: 28px; }
   .prod-card .p-price { font-size: 13px; }
   /* Kategori pill'leri: tek satır kaydırılabilir şerit, dokunma hedefi 44px */
-  .cat-tab, .cat-tab.on { padding: 6px 12px; font-size: 12px; min-height: 34px; display: inline-flex; align-items: center; }
+  .cat-tab, .cat-tab.on { padding: 8px 14px; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; }
 
   /* FİŞ + ÖDEME = alttan yukarı açılan sabit panel (bottom sheet) */
   .pos-sheet {
@@ -1378,9 +1406,9 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
   .pos-sheet .card:last-child { margin-bottom: 0; }
   /* Ödeme: 4 buton 390px'de tek satırda sığsın — kompakt */
   .pay-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .pay-btn { padding: 12px 3px; font-size: 13px; min-height: 56px; }
+  .pay-btn { padding: 14px 4px; font-size: 15px; min-height: 64px; }
   .pay-btn small { font-size: 9.5px; }
-  .cust-tab { padding: 10px 14px; font-size: 13px; min-height: 40px; }
+  .cust-tab { padding: 12px 14px; font-size: 13px; min-height: 44px; }
 
   /* Örtü — panel açıkken arka planı karart, tıklayınca kapat */
   .pos-backdrop {
@@ -1459,12 +1487,13 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
     flex: 1; min-width: 0; border: 0; background: none; cursor: pointer; color: #939aa5;
     display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0;
   }
+  /* 5 slot: ikon kabı biraz daralır ama dokunma hedefi (buton) hâlâ ~74x60px */
   .mobilbar .mb-ico {
-    font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
-    width: 48px; height: 32px; border-radius: var(--radius-pill);
+    font-size: 19px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 30px; border-radius: var(--radius-pill);
     transition: background .18s ease, color .18s ease;
   }
-  .mobilbar .mb-lbl { font-size: 11px; font-weight: 600; letter-spacing: -0.1px; }
+  .mobilbar .mb-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -0.2px; white-space: nowrap; }
   .mobilbar button.on { color: var(--brand); }
   .mobilbar button.on .mb-ico { background: var(--brand-soft); color: var(--brand); }
   .mobilbar button.on .mb-lbl { font-weight: 700; }
@@ -1474,15 +1503,16 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 @media (max-width: 420px) {
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .pos-tot .v { font-size: 13px; }
+  /* .stat .s-value burada 11,5px'e düşürülüyordu — tutarı okunmaz yapıyordu, kaldırıldı */
 }
 @media (max-width: 360px) {
   /* Çok dar ekranda ürün kartları 3 sütun */
   .prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  /* Özet 4'lü kalsın ama daha da kompakt (taşma yok) */
-  .summary-grid { gap: 4px; }
-  .stat { padding: 8px 5px; }
-  .stat .s-label { font-size: 8.5px; letter-spacing: 0; }
-  .stat .s-value { font-size: 11.5px; }
+  /* Çok dar ekranda da 2 sütun; sadece boşluk ve yazı bir tık küçülür */
+  .summary-grid { gap: 8px; }
+  .stat { padding: 10px 10px; }
+  .stat .s-label { font-size: 11.5px; letter-spacing: 0; }
+  .stat .s-value { font-size: 17px; }
 }
 
 /* ===== Anasayfa — Son Satışlar kompakt liste ===== */
@@ -1583,3 +1613,26 @@ td.ay-num { font-weight: 700; text-align: center; white-space: nowrap; }
 .hr-rozet { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
 .hr-rozet.ok { background: #dcfce7; color: var(--green-d); }
 .hr-rozet.uyari { background: #fef3c7; color: #92400e; }
+
+/* Günlük Rapor: ödeme kırılımı ciroyu tutmuyorsa uyarı şeridi.
+   Nakit + Pos + Açık Hesap = Ciro olmalı; olmuyorsa kayıtta tuhaflık var. */
+.rapor-uyari {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1.5px solid #e0a13a;
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: #fdf1dc;
+  color: #7a4204;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.rapor-uyari b {
+  font-family: var(--font-num);
+  white-space: nowrap;
+}

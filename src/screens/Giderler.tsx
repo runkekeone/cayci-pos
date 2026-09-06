@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../store'
+import { aktifOturum, useStore } from '../store'
 import { dailyFixedShare } from '../lib/report'
 import { fmtTL, today, uid } from '../lib/units'
 import type { Expense } from '../types'
@@ -11,6 +11,11 @@ export default function Giderler() {
   const [kind, setKind] = useState<Expense['kind']>('gunluk')
   const [paidCash, setPaidCash] = useState(true)
 
+  // Gider, takvim gününe değil AÇIK İŞ GÜNÜNE yazılır. Diğer bütün kayıtlar
+  // (satış, tahsilat, fire, alış) böyle yazılıyordu; sadece bu ekran today()
+  // kullandığı için gece yarısını aşan işletmede gider rapordan düşüyordu.
+  const isGunu = aktifOturum(s)?.date ?? today()
+
   const aylik = s.expenses.filter((e) => e.kind === 'aylik')
   const gunlukSabit = s.expenses.filter((e) => e.kind === 'gunluk-sabit')
   const gunluk = s.expenses.filter((e) => e.kind === 'gunluk')
@@ -20,12 +25,13 @@ export default function Giderler() {
   function ekle() {
     const e: Expense = {
       id: uid(),
-      date: kind === 'gunluk' ? today() : '',
+      // 'gunluk' için o günün kendisi; 'gunluk-sabit' ve 'aylik' için YÜRÜRLÜK
+      // BAŞLANGICI — bu tarihten önceki günlerin raporunu artık değiştirmezler.
+      date: isGunu,
       name: name.trim(),
       amount,
       kind,
-      // Yevmiye gibi her gün tekrar eden giderler nakit çıkar sayılır.
-      paidCash: kind === 'gunluk' ? paidCash : kind === 'gunluk-sabit',
+      paidCash: kind === 'aylik' ? false : paidCash,
     }
     saveExpense(e)
     setName('')
@@ -47,7 +53,7 @@ export default function Giderler() {
         </div>
         <div className="stat">
           <div className="k">Aylığın günlük payı</div>
-          <div className="v bad">−{fmtTL(dailyFixedShare(s))}</div>
+          <div className="v bad">−{fmtTL(dailyFixedShare(s, isGunu))}</div>
         </div>
         <div className="stat">
           <div className="k">Günlük zorunlu gider</div>
@@ -55,7 +61,7 @@ export default function Giderler() {
         </div>
         <div className="stat" style={{ borderColor: 'var(--bad)' }}>
           <div className="k">Gün kaç ₺ eksiyle başlıyor</div>
-          <div className="v bad">−{fmtTL(dailyFixedShare(s) + gunlukSabitToplam)}</div>
+          <div className="v bad">−{fmtTL(dailyFixedShare(s, isGunu) + gunlukSabitToplam)}</div>
         </div>
       </div>
 
@@ -85,7 +91,7 @@ export default function Giderler() {
               <option value="aylik">Aylık sabit</option>
             </select>
           </div>
-          {kind === 'gunluk' && (
+          {kind !== 'aylik' && (
             <div className="field" style={{ width: 130 }}>
               <label>Ödeme</label>
               <select

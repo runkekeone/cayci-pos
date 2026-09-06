@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { availableQty, lowStock, unitCost, variantCost } from '../lib/cost'
 import { urunGorsel } from '../lib/urunGorsel'
-import { fmtTL, uid } from '../lib/units'
+import { fmtSure, fmtTL, gecenDakika, uid } from '../lib/units'
 import { extract } from '../lib/ocr'
 import type { Business, Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
+
+/** Bu kadar dakikadır açık duran masa şeritte uyarı rengine döner. */
+const UZUN_MASA_DK = 45
 
 /**
  * Adet kutusu. Doğrudan store'a yazan input, kutu boşaltılınca (5 sil → 12 yaz)
@@ -39,6 +42,18 @@ function QtyInput({ qty, onQty }: { qty: number; onQty: (n: number) => void }) {
   )
 }
 
+/**
+ * Masa süreleri canlı kalsın diye dakikada bir yeniden çizdirir.
+ * Tek sayaç, 60 sn — telefonda pil dostu.
+ */
+function useDakikaTiki() {
+  const [, setTik] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTik((x) => x + 1), 60_000)
+    return () => clearInterval(t)
+  }, [])
+}
+
 export default function Satis() {
   const {
     s,
@@ -56,7 +71,11 @@ export default function Satis() {
     saveCustomer,
   } = useStore()
 
+  useDakikaTiki()
+  // Ödeme düğmesine art arda basılmasını engelleyen kilit (çift satış koruması).
+  const odemeKilit = useRef(false)
   const [target, setTarget] = useState<Target>({ kind: 'hizli' })
+  const [sadeceDolu, setSadeceDolu] = useState(false) // masa şeridini dolulara indirger
   const [quick, setQuick] = useState<SaleLine[]>([])
   const [customerId, setCustomerId] = useState('')
   const [cat, setCat] = useState('Hepsi')
@@ -212,12 +231,17 @@ export default function Satis() {
   }
 
   function ode(payment: Payment) {
+    // Android'de yavaş render sırasında ikinci dokunuş hâlâ eski sepeti görüyor
+    // ve aynı adisyon iki kez kaydediliyordu (stok da iki kez düşüyordu).
+    if (odemeKilit.current) return
     if (payment === 'veresiye' && !aktifMusteri) {
       // Müşteri yoksa uyarıp bırakmak yerine seçiciyi aç — akış kesilmesin.
       setMusteriSor(true)
       return
     }
     const tutar = total
+    odemeKilit.current = true
+    setTimeout(() => (odemeKilit.current = false), 1200)
     if (target.kind === 'masa') {
       closeTable(target.id, payment, payment === 'veresiye' ? aktifMusteri : undefined)
     } else {
@@ -271,12 +295,33 @@ export default function Satis() {
   }, [])
 
   function parcaliOde(parts: PaymentPart[]) {
+    if (odemeKilit.current) return
+    odemeKilit.current = true
+    setTimeout(() => (odemeKilit.current = false), 1200)
     paySplit(lines, parts, target.kind === 'masa' ? target.id : undefined)
     if (target.kind === 'hizli') setQuick([])
     setCustomerId('')
     setParcali(false)
     setSepetAcik(false)
   }
+
+  // Masa şeridi özeti — telefonda tek bakışta: kaç masa dolu, ne kadar açık hesap,
+  // en uzun süredir bekleyen masa kaç dakikadır açık.
+  const doluMasalar = s.tables.filter((t) => t.lines.length > 0)
+  const acikTutar = doluMasalar.reduce(
+    (n, t) => n + t.lines.reduce((m, l) => m + l.qty * l.unitPrice, 0),
+    0,
+  )
+  const enUzunDk = doluMasalar.reduce((n, t) => Math.max(n, gecenDakika(t.openedAt)), 0)
+  // Filtre açıkken hepsi boşalırsa şerit boş kalmasın diye tüm masalara dönülür.
+  // Seçili masa boşalsa bile şeritte kalır: ödemesi alınan masa gözden kaybolup
+  // "Masa 3 adisyonu açık" yazısı ortada kalmasın, kullanıcı ona geri dönebilsin.
+  const gorunenMasalar =
+    sadeceDolu && doluMasalar.length
+      ? s.tables.filter(
+          (t) => t.lines.length > 0 || (target.kind === 'masa' && target.id === t.id),
+        )
+      : s.tables
 
   return (
     <>
@@ -305,34 +350,86 @@ export default function Satis() {
       {/* ---- masalar ----
            Kategori sırasıyla üst üste iki benzer pil şeridi oluşuyordu ve hangisinin
            ne olduğu anlaşılmıyordu. Artık her şerit ne seçtiğini söylüyor. */}
-      <div className="serit-etiket">Masa seçin</div>
+      <div className="masa-baslik">
+        <span className="serit-etiket">Masa seçin</span>
+        {/* Filtre açıkken pil kaybolursa kullanıcı filtreyi kapatamaz — o yüzden
+            dolu masa kalmasa bile açık filtre için pil görünmeye devam eder. */}
+        {(doluMasalar.length > 0 || sadeceDolu) && (
+          <button
+            className={`masa-filtre ${sadeceDolu ? 'on' : ''}`}
+            onClick={() => setSadeceDolu(!sadeceDolu)}
+          >
+            {sadeceDolu ? '✓ ' : ''}Sadece dolu ({doluMasalar.length})
+          </button>
+        )}
+      </div>
+
+      {/* Masa durumu özeti — telefonda şeridi kaydırmadan görünen tek satır. */}
+      {doluMasalar.length > 0 && (
+        <div className="masa-ozet">
+          <span className="mo-par">
+            <b>{doluMasalar.length}</b> masa dolu
+          </span>
+          <span className="mo-par">
+            <b>{fmtTL(acikTutar)}</b> açık hesap
+          </span>
+          {enUzunDk >= UZUN_MASA_DK && (
+            <span className="mo-par uyari">⏱ en uzun {fmtSure(enUzunDk)}</span>
+          )}
+        </div>
+      )}
+
       <div className="tables">
         <button
-          className={`table-btn ${target.kind === 'hizli' ? 'on' : ''}`}
+          className={`table-btn hizli ${target.kind === 'hizli' ? 'on' : ''}`}
           onClick={() => setTarget({ kind: 'hizli' })}
         >
-          <div className="t-ic">⚡</div>
+          <div className="t-ust">
+            <span className="t-ic">⚡</span>
+          </div>
           <div className="nm">Hızlı</div>
           <div className="am">tezgâh</div>
         </button>
 
-        {s.tables.map((t) => {
+        {gorunenMasalar.map((t) => {
           const amt = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-          const dolu = amt > 0
+          const adet = t.lines.reduce((n, l) => n + l.qty, 0)
+          // Ölçüt tutarın değil satırın varlığı — yalnız ikram verilmiş masa da açıktır
+          // (özet satırı da aynı ölçütü kullanıyor, ikisi artık aynı şeyi sayıyor).
+          const dolu = t.lines.length > 0
+          const dk = dolu ? gecenDakika(t.openedAt) : 0
+          const uzun = dolu && dk >= UZUN_MASA_DK
           const on = target.kind === 'masa' && target.id === t.id
           const musteri = s.customers.find((c) => c.id === t.customerId)
           return (
             <button
               key={t.id}
-              className={`table-btn ${dolu ? 'busy' : ''} ${on ? 'on' : ''}`}
+              className={`table-btn ${dolu ? 'busy' : ''} ${uzun ? 'uzun' : ''} ${on ? 'on' : ''}`}
               onClick={() => setTarget({ kind: 'masa', id: t.id })}
               onDoubleClick={() => setAdlandir(t.id)}
-              title="Çift tıkla: isim ver"
+              title={
+                dolu
+                  ? `${t.name} — ${adet} ürün, ${fmtSure(dk)}tır açık. Çift tıkla: isim ver`
+                  : 'Çift tıkla: isim ver'
+              }
             >
-              <div className="t-ic">🪑</div>
+              <div className="t-ust">
+                {dolu ? (
+                  <span className="t-sure">{fmtSure(dk)}</span>
+                ) : (
+                  <span className="t-ic">🪑</span>
+                )}
+              </div>
               <div className="nm">{t.name}</div>
               <div className="am">{dolu ? fmtTL(amt) : 'boş'}</div>
-              {musteri && <div className="t-count">{musteri.name}</div>}
+              {dolu ? (
+                <div className="t-count">
+                  {adet} ürün
+                  {musteri ? ` · ${musteri.name}` : ''}
+                </div>
+              ) : (
+                musteri && <div className="t-count">{musteri.name}</div>
+              )}
             </button>
           )
         })}
@@ -529,7 +626,7 @@ export default function Satis() {
           <div className="cart-lines">
             {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
             {lines.map((l, idx) => (
-              <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}`}>
+              <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}>
                 {urunGorsel(l.itemId) && <img className="cl-img" src={urunGorsel(l.itemId)!} alt="" />}
                 <button className="x" onClick={() => azalt(idx)} title="Bir azalt">
                   −
@@ -1259,11 +1356,17 @@ function ParcaliModal({
 
   function boluntu(adet: number) {
     setN(adet)
+    // Her parçayı ayrı ayrı yuvarlamak artık kuruşu düşürüyordu: 10,00 ₺ üçe
+    // bölününce 3,33 × 3 = 9,99 kalıyor, "0,01 ₺ eksik dağıtıldı" deyip ödeme
+    // düğmesi kilitleniyordu. Kuruş üzerinden bölüp artığı ilk parçalara dağıtıyoruz.
+    const toplamKurus = Math.round(toplam * 100)
+    const taban = Math.floor(toplamKurus / adet)
+    const artik = toplamKurus - taban * adet
     setParts(
       Array.from({ length: adet }, (_, i) => ({
         payment: parts[i]?.payment ?? ('nakit' as Payment),
         customerId: parts[i]?.customerId,
-        amount: Math.round((toplam / adet) * 100) / 100,
+        amount: (taban + (i < artik ? 1 : 0)) / 100,
       })),
     )
   }

@@ -3,7 +3,8 @@ import { StoreProvider, useStore, aktifOturum } from './store'
 import { currentUser, logout, syncUsers, type User } from './auth'
 import { cloudPing } from './lib/cloud'
 import { dayReport } from './lib/report'
-import { fmtTL } from './lib/units'
+import { useTema } from './lib/tema'
+import { fmtTL, today } from './lib/units'
 import Giris from './screens/Giris'
 import Kurulum from './screens/Kurulum'
 import GunBaslat from './screens/GunBaslat'
@@ -94,6 +95,10 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
     }
   }, [])
 
+  // Tema/yazı boyutu <html> niteliklerine yazılır — erken çıkışlardan ÖNCE,
+  // yoksa Kurulum ve Gün Başlat ekranları temasız kalırdı.
+  useTema(s.settings)
+
   // Kurulum bitmeden uygulamaya girilemez.
   if (!s.setupDone) return <Kurulum businessName={user.businessName} />
 
@@ -115,11 +120,21 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
     setSayfa(id)
   }
 
+  function gunAdi(d: string) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('tr-TR', {
+      day: 'numeric',
+      month: 'long',
+    })
+  }
+
   return (
     <div className="app">
       <aside className="side">
         <div className="brand">
-          {s.business.name || user.businessName}
+          <span className="brand-ust">
+            {s.business.logo && <img className="brand-logo" src={s.business.logo} alt="" />}
+            {s.business.name || user.businessName}
+          </span>
           <small>çay ocağı POS</small>
         </div>
 
@@ -223,6 +238,20 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
       </aside>
 
       <main className="main">
+        {/* Gün kapatılmadan ertesi gün çalışılırsa BÜTÜN satışlar hâlâ eski
+            iş gününe yazılır ve o günün raporu şişer. Otomatik kapatmak riskli
+            (kasa sayımı kullanıcıdan alınıyor), o yüzden görünür şekilde uyarıyoruz. */}
+        {aktif.date !== today() && (
+          <div className="eski-gun">
+            <span>
+              <strong>{gunAdi(aktif.date)} günü hâlâ açık.</strong> Bugün yaptığın satışlar
+              o günün raporuna yazılıyor. Gün Sonu yapıp yeni günü başlat.
+            </span>
+            <button className="btn sm" onClick={() => setGunSonu(true)}>
+              Gün Sonu yap
+            </button>
+          </div>
+        )}
         {sayfa === 'profil' ? <Profil user={user} onOut={onOut} /> : <Ekran />}
       </main>
 

@@ -14,9 +14,27 @@ import { dayOf } from './units'
  *    − o gün girilen günlük giderler
  *    − fire ve ikramın maliyeti
  */
-export function dailyFixedShare(s: State): number {
-  const monthly = s.expenses.filter((e) => e.kind === 'aylik').reduce((n, e) => n + e.amount, 0)
+/**
+ * Aylık sabit giderlerin bir güne düşen payı.
+ *
+ * `date` verilirse yalnız o tarihte YÜRÜRLÜKTE olan giderler sayılır: giderin
+ * `date` alanı başlangıç tarihidir. Eskiden tarih hiç bakılmıyordu, bu yüzden
+ * bugün girilen bir kira üç ay önceki günün net kârını da değiştiriyordu.
+ * Tarihi olmayan eski kayıtlar (date: '') her zaman geçerli sayılır — geriye
+ * dönük uyumluluk.
+ */
+export function dailyFixedShare(s: State, date?: string): number {
+  const monthly = s.expenses
+    .filter((e) => e.kind === 'aylik' && yururlukte(e, date))
+    .reduce((n, e) => n + e.amount, 0)
   return monthly / 30
+}
+
+/** Gider o gün yürürlükte mi — başlangıç tarihi yoksa (eski kayıt) hep evet. */
+function yururlukte(e: { date: string }, date?: string): boolean {
+  if (!e.date) return true
+  if (!date) return true
+  return e.date <= date
 }
 
 export interface DayReport {
@@ -39,15 +57,20 @@ export interface DayReport {
   beklenenNakit: number
   sayilanNakit?: number
   kasaFarki?: number
-  topProducts: { name: string; qty: number; ciro: number; kar: number }[]
+  topProducts: { itemId: string; name: string; qty: number; ciro: number; kar: number }[]
 }
 
 export function dayReport(s: State, date: string): DayReport {
   // İş günü oturumu: işlem bizDay ile etiketliyse ona, değilse takvim gününe bakılır.
   const sales = s.sales.filter((x) => (x.bizDay ?? dayOf(x.date)) === date)
   // O güne yazılan giderler + her gün tekrar eden sabit günlük giderler (yevmiye gibi).
+  // 'gunluk' o güne özeldir; 'gunluk-sabit' (yevmiye gibi) her gün tekrar eder ama
+  // ancak girildiği günden İTİBAREN — eskiden tarih bakılmadığı için bugün eklenen
+  // yevmiye geçmiş bütün günlerin kârından da düşülüyordu.
   const expenses = s.expenses.filter(
-    (e) => (e.kind === 'gunluk' && e.date === date) || e.kind === 'gunluk-sabit',
+    (e) =>
+      (e.kind === 'gunluk' && e.date === date) ||
+      (e.kind === 'gunluk-sabit' && yururlukte(e, date)),
   )
   const payments = s.payments.filter((p) => (p.bizDay ?? dayOf(p.date)) === date)
   const wastes = s.wastes.filter((w) => (w.bizDay ?? dayOf(w.date)) === date)
@@ -69,7 +92,7 @@ export function dayReport(s: State, date: string): DayReport {
   const nakitGider = expenses.filter((e) => e.paidCash).reduce((n, e) => n + e.amount, 0)
   // Kasadan nakit ödenen stok alışları da çekmeceden çıkar.
   const nakitAlis = purchases.filter((p) => p.paidCash).reduce((n, p) => n + p.total, 0)
-  const sabitGiderPayi = dailyFixedShare(s)
+  const sabitGiderPayi = dailyFixedShare(s, date)
   const fireIkramMaliyeti = wastes.reduce((n, w) => n + w.cost, 0)
 
   const netKar = brutKar - gunlukGider - sabitGiderPayi - fireIkramMaliyeti
@@ -80,11 +103,14 @@ export function dayReport(s: State, date: string): DayReport {
   const acilisNakit = cashDay?.opening ?? 0
   const beklenenNakit = acilisNakit + by('nakit') + nakitTahsilat - nakitGider - nakitAlis
 
-  // Ürün kırılımı
-  const map = new Map<string, { name: string; qty: number; ciro: number; kar: number }>()
+  // Ürün kırılımı. Satırlar itemId ile birleşiyor ama ad, satırın kendi adından
+  // (çeşit/ikram etiketi taşıyor: "Çay (İkram)") DEĞİL üründen okunuyor — yoksa
+  // günün ilk çayı ikramsa o günün bütün çayları "Çay (İkram)" görünüyordu.
+  const map = new Map<string, { itemId: string; name: string; qty: number; ciro: number; kar: number }>()
   for (const sale of sales) {
     for (const l of sale.lines) {
-      const cur = map.get(l.itemId) ?? { name: l.name, qty: 0, ciro: 0, kar: 0 }
+      const urunAdi = s.items.find((i) => i.id === l.itemId)?.name ?? l.name
+      const cur = map.get(l.itemId) ?? { itemId: l.itemId, name: urunAdi, qty: 0, ciro: 0, kar: 0 }
       cur.qty += l.qty
       cur.ciro += l.qty * l.unitPrice
       cur.kar += l.qty * (l.unitPrice - l.unitCost)

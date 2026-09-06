@@ -199,6 +199,19 @@ function MusteriKarti({
             className="btn primary"
             disabled={tutar <= 0}
             onClick={() => {
+              // Borçtan fazla tahsilat bakiyeyi eksiye düşürüyor ve hiçbir yerde
+              // takip edilmiyordu (totalVeresiye eksiyi yok sayıyor). Yanlış
+              // basılan bir hane geri alınamıyordu — önce sor.
+              if (
+                tutar > c.balance &&
+                !confirm(
+                  `Borç ${fmtTL(Math.max(0, c.balance))}, sen ${fmtTL(tutar)} giriyorsun.
+
+` +
+                    'Fazlası müşterinin alacağı olarak eksi bakiyede kalır. Devam edilsin mi?',
+                )
+              )
+                return
               onCollect(tutar, yontem)
               onClose()
             }}
