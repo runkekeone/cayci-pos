@@ -84,6 +84,7 @@
     item.qty += 1;
     cart.set(id, item);
     renderCart();
+    openCart(true);
   }
 
   function changeQty(id, delta) {
@@ -110,6 +111,21 @@
     $("#cartDrawer").classList.toggle("open", open);
     $("#cartDrawer").setAttribute("aria-hidden", String(!open));
     $("#backdrop").hidden = !open;
+  }
+
+  function startNewOrder() {
+    cart.clear();
+    phone = "";
+    payment = "nakit";
+    $("#note").value = "";
+    $("#phone").value = "";
+    $("#phoneCard").hidden = false;
+    $("#catalog").hidden = true;
+    $("#quickOrders").hidden = true;
+    $("#receipt").hidden = true;
+    openCart(false);
+    renderCart();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function renderQuickOrder() {
@@ -157,6 +173,8 @@
       const { error } = await sb.from("siparisler").upsert({ id: order.id, toptanci: "babuco", cay_ocagi: order.from.name, cay_tel: order.from.phone, payload: order, durum: "yeni", updated_at: new Date().toISOString() });
       if (error) throw error;
       saveLastOrder(order);
+      cart.clear();
+      renderCart();
       openCart(false);
       $("#receiptText").textContent = `Siparisiniz ${formatPhone(phone)} numarasi ile kaydedildi. Servis ekibi teslimat oncesi siparisinizi gorur.`;
       $("#receiptSummary").innerHTML = `<div class="total-row"><span>Odeme</span><b>${payment === "nakit" ? "Nakit" : payment === "kart" ? "Kart" : "Acik hesap"}</b></div><div class="total-row"><span>Kalem sayisi</span><b>${items.length}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi</span><b>-${money.format(discount())}</b></div>` : ""}<div class="total-row"><span>Toplam</span><b>${money.format(total())}</b></div>`;
@@ -185,6 +203,7 @@
     renderCart();
   });
   $("#submitOrder").addEventListener("click", submitOrder);
-  $("#newOrder").addEventListener("click", () => window.location.reload());
+  $("#newOrder").addEventListener("click", startNewOrder);
+  $("#closeReceipt").addEventListener("click", startNewOrder);
   renderCategories(); renderProducts(); renderCart();
 })();

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f766e" />
     <meta name="description" content="Ozgur Ticaret on siparis formu" />
     <title>Ozgur Ticaret | Siparis</title>
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <main class="shell">
@@ -69,6 +69,7 @@
 
     <section class="receipt" id="receipt" hidden>
       <div class="receipt-card">
+        <button class="receipt-close" id="closeReceipt" type="button" aria-label="Sipariş sonucunu kapat">x</button>
         <p class="receipt-mark">Siparis alindi</p>
         <h2>Siparisiniz bize ulasti</h2>
         <p id="receiptText"></p>
@@ -79,6 +80,6 @@
 
     <script src="../toptanci/vendor/supabase.js"></script>
     <script src="catalog.js"></script>
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
   </body>
 </html>
