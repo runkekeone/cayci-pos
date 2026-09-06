@@ -388,6 +388,25 @@
   }
   .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
   .drop strong { font-weight: 600; font-size: var(--step-0); }
+  .drop:focus-within { border-color: var(--accent); }
+  .drop input[type="file"] {
+    margin-top: 8px;
+    max-width: 100%;
+    font-size: var(--step--1);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .drop input[type="file"]::file-selector-button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 7px 13px;
+    margin-right: 10px;
+    cursor: pointer;
+  }
 
   .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
   .thumb {
@@ -584,11 +603,11 @@
         </select>
       </div>
       <div class="panel-body">
-        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Referans görsel ekle">
+        <label class="drop" id="drop" for="fileInput">
           <strong>Referans görseli buraya bırak</strong>
-          <span class="hint">tıkla, sürükle ya da <b>Ctrl/⌘+V</b> ile yapıştır</span>
-        </div>
-        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+          <span class="hint">sürükle · <b>Ctrl/⌘+V</b> ile yapıştır · ya da aşağıdan dosya seç</span>
+          <input type="file" id="fileInput" accept="image/*" multiple>
+        </label>
         <div class="thumbs" id="thumbs"></div>
 
         <div>
@@ -1370,11 +1389,10 @@
   });
 
   var drop = $("drop");
-  drop.addEventListener("click", function () { $("fileInput").click(); });
-  drop.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); }
+  $("fileInput").addEventListener("change", function (e) {
+    addFiles(e.target.files);
+    e.target.value = "";
   });
-  $("fileInput").addEventListener("change", function (e) { addFiles(e.target.files); e.target.value = ""; });
   ["dragenter", "dragover"].forEach(function (ev) {
     drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
   });
@@ -1502,7 +1520,6 @@
       return s.limits().then(function (l) {
         state.imgLimits = l && l.images ? l.images : null;
         if (state.imgLimits) {
-          $("fileInput").accept = state.imgLimits.mediaTypes.join(",");
           noteEl.textContent = "En fazla " + state.imgLimits.maxCount + " referans görsel.";
         } else {
           noteEl.textContent = "Bu görünümde görsel gönderilemiyor — alanları elle doldur.";
