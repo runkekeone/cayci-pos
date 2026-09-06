@@ -1,5 +1,6 @@
 :root { --ink:#17201f; --muted:#65726f; --line:#d8e0dd; --paper:#fff; --ground:#f3f6f4; --brand:#0f766e; --brand-dark:#0b5f59; --soft:#e3f2ee; --gold:#b45309; --danger:#b42318; }
 * { box-sizing:border-box; }
+[hidden] { display:none !important; }
 body { margin:0; background:var(--ground); color:var(--ink); font:16px/1.45 Arial, Helvetica, sans-serif; }
 button,input,textarea { font:inherit; }
 button { cursor:pointer; }
