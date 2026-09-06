@@ -290,7 +290,7 @@
   }
   textarea.mono, .mono { font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); line-height: 1.62; }
 
-  .tpl-body { min-height: 260px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+  .tpl-body { min-height: 300px; white-space: pre-wrap; word-break: break-word; }
 
   .preview {
     background: var(--surface-2);
@@ -642,7 +642,10 @@
 
   var SLOT_RE = /\{\{\s*([A-Za-z0-9_\-çğıöşüÇĞİÖŞÜ]+)\s*\}\}/g;
 
-  var SEED_BODY = [
+  var SEED_ID = "kit-neo-psychedelic";
+
+  /* İlk sürümdeki demo kalıbı — kullanıcı hiç dokunmadıysa temizlenir. */
+  var LEGACY_BODY = [
     "[STİL — SABİT]",
     "Hand-drawn vector illustration, flat 2D, bold uniform outlines (2.5 px),",
     "limited palette of five colors, subtle paper grain, no gradients.",
@@ -659,22 +662,33 @@
     "Mood: {{ruh_hali}}"
   ].join("\n");
 
-  var SEED_HINTS = {
-    konu: "ana karakter veya nesne, kısa tanımıyla",
-    aksiyon: "ne yapıyor / duruşu",
-    mekan: "geçtiği yer, arka plan",
-    objeler: "sahnedeki 2-4 belirgin obje",
-    renk_vurgusu: "öne çıkan 2-3 renk",
-    ruh_hali: "sahnenin duygusu, tek kelime-iki kelime"
-  };
+  var SEED_BODY = [
+    "A vintage screen-printed t-shirt illustration in neo-psychedelic tattoo-flash style. " +
+    "{{ana_konu}} rendered as a perfectly symmetrical, mirrored composition on a central " +
+    "vertical axis, enclosed in a tall art-nouveau {{cerceve}} frame with a thin black keyline " +
+    "border. Bold, uniform-weight black contour linework; all shading built exclusively from " +
+    "hand-stippled dotwork and hatching — no soft gradients, no airbrush. Flat spot-color " +
+    "separations, strictly limited palette: {{palet}}, deep midnight navy-black, on a cream " +
+    "off-white paper ground. Celestial motifs woven in: {{gok_motifi}}, moon-phase spheres " +
+    "arcing along the frame, tiny four-point stars, curling smoke/liquid tendrils. Radiating " +
+    "triangular light beams from the center. Heavy display serif wordmark \"{{marka}}\" beneath, " +
+    "plus a small arched outline-sans tagline \"{{slogan}}\" and \"EST. {{yil}}\". Riso/silkscreen " +
+    "texture, subtle halftone grain, slight ink misregistration, aged paper fibers. Flat 2D, " +
+    "no perspective, no photorealism, poster-flat depth. --ar 4:5 --style raw --stylize 250",
+    "",
+    "———",
+    "NEGATİF: photorealistic, 3D render, soft gradients, airbrush, drop shadows, glossy,",
+    "asymmetry, cluttered background, watermark, blurry, more than 5 colors, gradient mesh"
+  ].join("\n");
 
-  var SEED_VALUES = {
-    konu: "a street tea vendor with a moustache",
-    aksiyon: "carrying a swinging tray of tulip glasses",
-    mekan: "a narrow old-town alley with awnings",
-    objeler: "tulip tea glasses, brass tray, wooden stool, cat",
-    renk_vurgusu: "brick red, brass yellow, deep teal",
-    ruh_hali: "warm and busy"
+  var SEED_HINTS = {
+    ana_konu: "merkezdeki ana motif — aynalanmış/simetrik biçimde, İngilizce (ör. two mirrored wolf heads howling)",
+    cerceve: "çerçeve biçimi: tombstone arch / ogee arch / hexagon / circular medallion",
+    palet: "lacivert-siyah dışındaki 3 spot renk (ör. sage green, rust orange, bone white)",
+    gok_motifi: "merkezdeki gök cismi (ör. a rayed sun with a serene sleeping face)",
+    marka: "üstteki serif wordmark — görselde yazı varsa oku, yoksa boş bırak",
+    slogan: "küçük kavisli slogan satırı — görselde yoksa boş bırak",
+    yil: "EST. yılı — görselde yoksa boş bırak"
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -725,6 +739,8 @@
   }
 
   function deleteTemplate(id) {
+    var removed = LS.read("removed", []);
+    if (removed.indexOf(id) === -1) { removed.push(id); LS.write("removed", removed); }
     state.templates = state.templates.filter(function (t) { return t.id !== id; });
     LS.write("templates", state.templates);
     if (caps.db) caps.db.doc("templates/" + id).delete().catch(function () {});
@@ -899,7 +915,7 @@
       ta.className = "text";
       ta.rows = 1;
       ta.value = state.values[key] || "";
-      ta.placeholder = hintFor(tpl, key) || "değer";
+      ta.placeholder = "değer";
       ta.setAttribute("aria-label", key + " değeri");
       ta.addEventListener("input", function () {
         state.values[key] = ta.value;
@@ -922,8 +938,8 @@
         queueTemplateSave();
       });
 
-      vb.appendChild(ta);
       vb.appendChild(hi);
+      vb.appendChild(ta);
       row.appendChild(kb);
       row.appendChild(vb);
       host.appendChild(row);
@@ -1116,9 +1132,9 @@
       "Sen deneyimli bir görsel yönetmenisin. Aşağıda bir görsel üretim promptunun SABİT kalıbı var.",
       "Kalıptaki stil, teknik ve kalite satırları asla değişmez; sadece {{...}} ile işaretli alanlar değişir.",
       "",
-      "Sana verilen referans görsel(ler)i incele ve YALNIZCA konu, sahne ve içerik bilgisini çıkar.",
-      "Çizim tekniği, stil, çizgi kalınlığı, render kalitesi, kamera veya palet hakkında yorum yapma —",
-      "bunlar kalıpta zaten sabittir ve senin değerlerinde geçmemeli.",
+      "Sana verilen referans görsel(ler)i incele ve SADECE aşağıda listelenen alanları doldur.",
+      "Her alan için ipucunda ne isteniyorsa onu yaz. Kalıpta zaten geçen sabit cümleleri",
+      "(teknik, render, kalite, doku tarifleri) değerlerin içinde tekrar etme.",
       "",
       "SABİT KALIP (sadece bağlam için):",
       tpl.body,
@@ -1392,30 +1408,60 @@
 
   function seedTemplate() {
     return {
-      id: uid(),
-      name: "Düz vektör illüstrasyon",
+      id: SEED_ID,
+      name: "Neo-psychedelic tattoo-flash tişört",
       body: SEED_BODY,
       hints: Object.assign({}, SEED_HINTS),
-      lastValues: Object.assign({}, SEED_VALUES),
+      lastValues: {},
       lang: "İngilizce"
     };
   }
 
+  function dropRemote(id) {
+    if (caps.db) caps.db.doc("templates/" + id).delete().catch(function () {});
+  }
+
+  /* Kaydedilmiş listeyi temizler ve kit kalıbının hep var olmasını sağlar. */
+  function withSeed(list) {
+    var out = [];
+    (list || []).forEach(function (t) {
+      if (!t || !t.id || typeof t.body !== "string") return;
+      if (t.body === LEGACY_BODY) { dropRemote(t.id); return; }
+      out.push(t);
+    });
+    var removed = LS.read("removed", []);
+    var has = out.some(function (t) { return t.id === SEED_ID; });
+    if (!has && removed.indexOf(SEED_ID) === -1) {
+      out.unshift(seedTemplate());
+      pendingSeedSave = true;
+    }
+    return out.length ? out : [seedTemplate()];
+  }
+
+  var pendingSeedSave = false;
+
   function boot(templates, hist) {
-    state.templates = templates && templates.length ? templates : [seedTemplate()];
+    pendingSeedSave = false;
+    state.templates = withSeed(templates);
     var wanted = LS.read("activeId", null);
     var found = state.templates.filter(function (t) { return t.id === wanted; })[0];
     state.activeId = (found || state.templates[0]).id;
     var tpl = active();
     state.values = Object.assign({}, (tpl && tpl.lastValues) || {});
     if (tpl && tpl.lang) $("lang").value = tpl.lang;
-    history = hist || [];
+    history = (hist || []).filter(function (h) { return h && h.id; });
 
     renderTemplateList();
     renderTemplate();
     renderSlots();
     renderOutput();
     renderHistory();
+
+    if (pendingSeedSave) {
+      pendingSeedSave = false;
+      var seed = state.templates.filter(function (t) { return t.id === SEED_ID; })[0];
+      if (seed) saveTemplate(seed);
+    }
   }
 
   boot(LS.read("templates", null), LS.read("history", []));
@@ -1437,9 +1483,9 @@
         var hist = res[1].docs.map(function (d) { return d.data(); })
           .filter(function (h) { return h && h.id; });
         if (tpls.length || hist.length) {
-          LS.write("templates", tpls);
-          LS.write("history", hist);
           boot(tpls, hist);
+          LS.write("templates", state.templates);
+          LS.write("history", history);
         } else {
           state.templates.forEach(function (t) { saveTemplate(t); });
         }

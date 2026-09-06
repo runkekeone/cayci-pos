@@ -16,6 +16,14 @@ kaydedilir; her yeni iş için sadece değişen konu-konsept alanları doldurulu
 
 Alan değerleri İngilizce veya Türkçe üretilebilir (üst sağdaki `Değerler` seçimi).
 
+## Yüklü kalıp
+
+`kit-neo-psychedelic.md` — Neo-psychedelic tattoo-flash tişört kiti. Uygulamaya varsayılan
+kalıp olarak gömülü, slotları boş gelir: `ana_konu`, `cerceve`, `palet`, `gok_motifi`,
+`marka`, `slogan`, `yil`. Stili tutan beş kritik öbek (dotwork, flat spot-color, simetri,
+art-nouveau çerçeve, silkscreen dokusu), Midjourney parametreleri ve negatif prompt sabit
+blokta durur.
+
 ## Dosya
 
 Tek dosyalık statik sayfa: `index.html`. Claude Artifact olarak yayımlanır; kalıplar ve
