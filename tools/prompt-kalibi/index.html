@@ -1,0 +1,1479 @@
+<title>Prompt Kalıbı</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg: #eef0f4;
+    --surface: #ffffff;
+    --surface-2: #f5f6f9;
+    --ink: #14161c;
+    --ink-2: #3c4354;
+    --muted: #656d80;
+    --line: #d7dbe3;
+    --line-soft: #e6e9ef;
+    --accent: #2743c8;
+    --accent-ink: #ffffff;
+    --accent-soft: #e6eaf9;
+    --slot: #9a5c0a;
+    --slot-bg: #fbf1de;
+    --slot-line: #e8d3ab;
+    --ok: #1c7a5b;
+    --warn: #a8531c;
+    --danger: #a3231c;
+    --danger-bg: #fbeceb;
+    --danger-line: #e6b6b2;
+    --shadow: 0 1px 2px rgba(20, 22, 28, .06), 0 8px 24px -16px rgba(20, 22, 28, .35);
+
+    --step-0: 0.9375rem;
+    --step--1: 0.8125rem;
+    --step--2: 0.6875rem;
+    --step-1: 1.0625rem;
+    --step-2: 1.375rem;
+    --radius: 10px;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1116;
+      --surface: #171a22;
+      --surface-2: #1d212b;
+      --ink: #e8eaf0;
+      --ink-2: #c3c8d4;
+      --muted: #949cae;
+      --line: #2a2f3b;
+      --line-soft: #232833;
+      --accent: #8098ff;
+      --accent-ink: #10131c;
+      --accent-soft: #1e2440;
+      --slot: #e5b571;
+      --slot-bg: #2c2416;
+      --slot-line: #4a3c22;
+      --ok: #57c39c;
+      --warn: #e0a06b;
+      --danger: #f0a8a2;
+      --danger-bg: #2a1614;
+      --danger-line: #5b2a26;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .9);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0f1116;
+    --surface: #171a22;
+    --surface-2: #1d212b;
+    --ink: #e8eaf0;
+    --ink-2: #c3c8d4;
+    --muted: #949cae;
+    --line: #2a2f3b;
+    --line-soft: #232833;
+    --accent: #8098ff;
+    --accent-ink: #10131c;
+    --accent-soft: #1e2440;
+    --slot: #e5b571;
+    --slot-bg: #2c2416;
+    --slot-line: #4a3c22;
+    --ok: #57c39c;
+    --warn: #e0a06b;
+    --danger: #f0a8a2;
+    --danger-bg: #2a1614;
+    --danger-line: #5b2a26;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .display {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  button, input, textarea, select { font: inherit; color: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ---------- header ---------- */
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .topbar-in {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    margin-right: auto;
+  }
+
+  .brand .mark {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--slot);
+    background: var(--slot-bg);
+    border: 1px solid var(--slot-line);
+    border-radius: 5px;
+    padding: 2px 6px;
+    letter-spacing: -0.03em;
+  }
+
+  .brand h1 { font-size: var(--step-1); }
+
+  .picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  select.tpl {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    max-width: 260px;
+    box-shadow: var(--shadow);
+  }
+
+  .status {
+    font-size: var(--step--2);
+    font-family: "IBM Plex Mono", monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    min-width: 92px;
+    text-align: right;
+  }
+  .status[data-tone="ok"] { color: var(--ok); }
+  .status[data-tone="warn"] { color: var(--warn); }
+
+  /* ---------- buttons ---------- */
+
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 7px 12px;
+    font-size: var(--step--1);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background .12s ease, border-color .12s ease, transform .06s ease;
+  }
+  .btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--muted); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+    border-color: color-mix(in srgb, var(--accent) 86%, var(--ink));
+  }
+
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); border-color: transparent; }
+
+  .btn.danger:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); background: transparent; }
+
+  /* ---------- layout ---------- */
+
+  main {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 18px 20px 72px;
+    display: grid;
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  @media (max-width: 980px) {
+    main { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel + .panel { margin-top: 18px; }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .panel-head h2 { font-size: var(--step-0); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--2);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .panel-head .spacer { margin-left: auto; }
+
+  .panel-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+
+
+  /* ---------- template editor ---------- */
+
+  .field-label {
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--2);
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  input.text, textarea.text, select.text {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    resize: vertical;
+  }
+  textarea.mono, .mono { font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); line-height: 1.62; }
+
+  .tpl-body { min-height: 260px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+
+  .preview {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 600px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+
+  .slot {
+    color: var(--slot);
+    background: var(--slot-bg);
+    border-bottom: 1.5px solid var(--slot-line);
+    padding: 0 2px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .fill { color: var(--slot); font-weight: 500; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .hint { font-size: var(--step--1); color: var(--muted); margin: 0; }
+
+  /* ---------- slot list ---------- */
+
+  .slots { display: flex; flex-direction: column; gap: 10px; }
+
+  .slot-row {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+  @media (max-width: 560px) { .slot-row { grid-template-columns: minmax(0, 1fr); } }
+
+  .slot-key {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--2);
+    color: var(--slot);
+    background: var(--slot-bg);
+    border: 1px solid var(--slot-line);
+    border-radius: 6px;
+    padding: 7px 8px;
+    word-break: break-all;
+    line-height: 1.3;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .slot-key .ai {
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .slot-val { display: flex; flex-direction: column; gap: 4px; }
+  .slot-val textarea { min-height: 38px; }
+  .slot-val .hintline {
+    font-size: var(--step--2);
+    color: var(--muted);
+    font-style: italic;
+  }
+  .slot-val input.hint-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    border-radius: 0;
+    padding: 3px 2px;
+    font-size: var(--step--2);
+    color: var(--muted);
+    width: 100%;
+  }
+
+  /* ---------- dropzone ---------- */
+
+  .drop {
+    border: 1.5px dashed var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    padding: 22px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { font-weight: 600; font-size: var(--step-0); }
+
+  .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+  .thumb {
+    position: relative;
+    width: 92px;
+    height: 92px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(10, 12, 18, .72);
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+  }
+
+  /* ---------- output ---------- */
+
+  .out {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    max-height: 460px;
+    overflow: auto;
+  }
+
+  .meta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--2);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+  .meta .warn { color: var(--warn); }
+
+  /* ---------- history ---------- */
+
+  .hist { display: flex; flex-direction: column; }
+  .hist-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 16px;
+    border-top: 1px solid var(--line-soft);
+    text-align: left;
+  }
+  .hist-item:first-child { border-top: none; }
+  .hist-item .t { min-width: 0; }
+  .hist-item .t b { display: block; font-weight: 500; font-size: var(--step--1); }
+  .hist-item .t span {
+    display: block;
+    color: var(--muted);
+    font-size: var(--step--2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .empty { color: var(--muted); font-size: var(--step--1); padding: 16px; }
+
+  /* ---------- misc ---------- */
+
+  .banner {
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: var(--step--1);
+    border: 1px solid var(--slot-line);
+    background: var(--slot-bg);
+    color: var(--slot);
+  }
+  .banner.err { border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger); }
+
+  .spin {
+    width: 13px; height: 13px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: sp .7s linear infinite;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spin { animation-duration: 2.4s; }
+    * { transition-duration: .01ms !important; }
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: var(--step--1);
+    font-weight: 500;
+    box-shadow: var(--shadow);
+    z-index: 60;
+  }
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <span class="mark">{{ }}</span>
+      <h1>Prompt Kalıbı</h1>
+    </div>
+    <div class="picker">
+      <label class="field-label" for="tplSelect" style="margin:0">Kalıp</label>
+      <select id="tplSelect" class="tpl" aria-label="Kalıp seç"></select>
+      <button class="btn" id="newTpl" title="Yeni kalıp oluştur">+ Yeni</button>
+    </div>
+    <span class="status" id="status" role="status" aria-live="polite"></span>
+  </div>
+</div>
+
+<main>
+  <div class="col-left">
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">Sabit</span>
+        <h2 id="tplTitle">Kalıp</h2>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="toggleEdit">Düzenle</button>
+      </div>
+
+      <div class="panel-body">
+        <div id="tplRead">
+          <pre class="preview mono" id="tplPreview"></pre>
+        </div>
+
+        <div id="tplEdit" hidden>
+          <label class="field-label" for="tplName">Kalıp adı</label>
+          <input class="text" id="tplName" type="text" autocomplete="off">
+
+          <label class="field-label" for="tplBody" style="margin-top:14px">Kalıp metni — değişkenleri <span class="slot">{{böyle}}</span> yaz</label>
+          <textarea class="text mono tpl-body" id="tplBody" spellcheck="false"></textarea>
+
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="autoSlots">Değişkenleri bul</button>
+            <button class="btn ghost danger" id="delTpl">Kalıbı sil</button>
+          </div>
+          <p class="hint" style="margin-top:8px">
+            Prompt dosyanı olduğu gibi yapıştır, sonra <b>Değişkenleri bul</b> ile
+            değişen kısımları Claude işaretlesin. Stil / teknik satırlar sabit kalır.
+          </p>
+        </div>
+
+        <div id="tplBanner"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">Arşiv</span>
+        <h2>Son promptlar</h2>
+      </div>
+      <div class="hist" id="hist"></div>
+    </section>
+  </div>
+
+  <div class="col-right">
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">1 · Referans</span>
+        <h2>Görseli bırak, konuyu okusun</h2>
+        <span class="spacer"></span>
+        <select class="text" id="lang" style="width:auto" aria-label="Alan değerlerinin dili">
+          <option value="İngilizce">Değerler: EN</option>
+          <option value="Türkçe">Değerler: TR</option>
+        </select>
+      </div>
+      <div class="panel-body">
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Referans görsel ekle">
+          <strong>Referans görseli buraya bırak</strong>
+          <span class="hint">tıkla, sürükle ya da <b>Ctrl/⌘+V</b> ile yapıştır</span>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+
+        <div>
+          <label class="field-label" for="note">Ek not <span style="text-transform:none;letter-spacing:0">— görselde olmayan ya da üstüne yazmak istediğin şeyler</span></label>
+          <textarea class="text" id="note" rows="2" placeholder="ör. karakter kadın olsun, arka plan sade kalsın"></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="extract" disabled>Referanstan doldur</button>
+          <button class="btn ghost" id="clearVals">Alanları temizle</button>
+          <span id="extractNote" class="hint"></span>
+        </div>
+        <div id="exBanner"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">2 · Değişkenler</span>
+        <h2>Değişen kısımlar</h2>
+        <span class="spacer"></span>
+        <span class="meta"><span id="slotCount"></span></span>
+      </div>
+      <div class="panel-body">
+        <div class="slots" id="slots"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">3 · Çıktı</span>
+        <h2>Hazır prompt</h2>
+        <span class="spacer"></span>
+        <button class="btn primary" id="copy">Kopyala</button>
+      </div>
+      <div class="panel-body">
+        <pre class="out mono" id="out"></pre>
+        <div class="meta">
+          <span><b id="charCount">0</b> karakter</span>
+          <span><b id="wordCount">0</b> kelime</span>
+          <span id="emptyCount"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var SLOT_RE = /\{\{\s*([A-Za-z0-9_\-çğıöşüÇĞİÖŞÜ]+)\s*\}\}/g;
+
+  var SEED_BODY = [
+    "[STİL — SABİT]",
+    "Hand-drawn vector illustration, flat 2D, bold uniform outlines (2.5 px),",
+    "limited palette of five colors, subtle paper grain, no gradients.",
+    "Lighting: flat ambient, one soft drop shadow at 135°.",
+    "Composition: centered subject, generous negative space, square 1:1 frame.",
+    "Render: 4k, clean edges, print-ready, no text, no watermark.",
+    "",
+    "[KONU — DEĞİŞKEN]",
+    "Subject: {{konu}}",
+    "Action: {{aksiyon}}",
+    "Setting: {{mekan}}",
+    "Key props: {{objeler}}",
+    "Color accents: {{renk_vurgusu}}",
+    "Mood: {{ruh_hali}}"
+  ].join("\n");
+
+  var SEED_HINTS = {
+    konu: "ana karakter veya nesne, kısa tanımıyla",
+    aksiyon: "ne yapıyor / duruşu",
+    mekan: "geçtiği yer, arka plan",
+    objeler: "sahnedeki 2-4 belirgin obje",
+    renk_vurgusu: "öne çıkan 2-3 renk",
+    ruh_hali: "sahnenin duygusu, tek kelime-iki kelime"
+  };
+
+  var SEED_VALUES = {
+    konu: "a street tea vendor with a moustache",
+    aksiyon: "carrying a swinging tray of tulip glasses",
+    mekan: "a narrow old-town alley with awnings",
+    objeler: "tulip tea glasses, brass tray, wooden stool, cat",
+    renk_vurgusu: "brick red, brass yellow, deep teal",
+    ruh_hali: "warm and busy"
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var state = {
+    templates: [],
+    activeId: null,
+    values: {},
+    aiKeys: {},
+    images: [],
+    imgLimits: null,
+    editing: false
+  };
+
+  var caps = { db: null, sample: null };
+  var history = [];
+
+  /* ---------------- storage ---------------- */
+
+  var LS = {
+    read: function (name, fallback) {
+      try {
+        var raw = localStorage.getItem("promptkalibi:" + name);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) { return fallback; }
+    },
+    write: function (name, value) {
+      try { localStorage.setItem("promptkalibi:" + name, JSON.stringify(value)); } catch (e) {}
+    }
+  };
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function saveTemplate(tpl) {
+    tpl.updatedAt = new Date().toISOString();
+    LS.write("templates", state.templates);
+    if (caps.db) {
+      caps.db.doc("templates/" + tpl.id).set(tpl).then(function () {
+        setStatus("Kaydedildi", "ok");
+      }, function () {
+        setStatus("Sadece bu cihazda", "warn");
+      });
+    } else {
+      setStatus("Kaydedildi", "ok");
+    }
+  }
+
+  function deleteTemplate(id) {
+    state.templates = state.templates.filter(function (t) { return t.id !== id; });
+    LS.write("templates", state.templates);
+    if (caps.db) caps.db.doc("templates/" + id).delete().catch(function () {});
+  }
+
+  function saveHistory(entry) {
+    history.unshift(entry);
+    history = history.slice(0, 30);
+    LS.write("history", history);
+    if (caps.db) caps.db.doc("history/" + entry.id).set(entry).catch(function () {});
+    renderHistory();
+  }
+
+  var statusTimer = null;
+  function setStatus(text, tone) {
+    var el = $("status");
+    el.textContent = text;
+    el.dataset.tone = tone || "";
+    clearTimeout(statusTimer);
+    if (tone === "ok") {
+      statusTimer = setTimeout(function () {
+        if (el.textContent === text) { el.textContent = ""; el.dataset.tone = ""; }
+      }, 2200);
+    }
+  }
+
+  function toast(msg) {
+    var t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 1800);
+  }
+
+  function banner(hostId, msg, kind) {
+    var host = $(hostId);
+    host.innerHTML = "";
+    if (!msg) return;
+    var d = document.createElement("div");
+    d.className = "banner" + (kind === "err" ? " err" : "");
+    d.textContent = msg;
+    host.appendChild(d);
+  }
+
+  /* ---------------- template model ---------------- */
+
+  function slotKeys(body) {
+    var keys = [];
+    var m;
+    SLOT_RE.lastIndex = 0;
+    while ((m = SLOT_RE.exec(body)) !== null) {
+      if (keys.indexOf(m[1]) === -1) keys.push(m[1]);
+    }
+    return keys;
+  }
+
+  function active() {
+    for (var i = 0; i < state.templates.length; i++) {
+      if (state.templates[i].id === state.activeId) return state.templates[i];
+    }
+    return state.templates[0] || null;
+  }
+
+  function hintFor(tpl, key) {
+    return (tpl.hints && tpl.hints[key]) || "";
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function buildPrompt(tpl, values) {
+    SLOT_RE.lastIndex = 0;
+    return tpl.body.replace(SLOT_RE, function (whole, key) {
+      var v = (values[key] || "").trim();
+      return v || whole;
+    });
+  }
+
+  function buildPromptHTML(tpl, values) {
+    SLOT_RE.lastIndex = 0;
+    var out = "";
+    var last = 0;
+    var m;
+    while ((m = SLOT_RE.exec(tpl.body)) !== null) {
+      out += esc(tpl.body.slice(last, m.index));
+      var v = (values[m[1]] || "").trim();
+      out += v
+        ? '<span class="fill">' + esc(v) + "</span>"
+        : '<span class="slot">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+    }
+    out += esc(tpl.body.slice(last));
+    return out;
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function renderTemplateList() {
+    var sel = $("tplSelect");
+    sel.innerHTML = "";
+    state.templates.forEach(function (t) {
+      var o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.name;
+      sel.appendChild(o);
+    });
+    sel.value = state.activeId;
+  }
+
+  function renderTemplate() {
+    var tpl = active();
+    if (!tpl) return;
+    $("tplTitle").textContent = tpl.name;
+    $("tplPreview").innerHTML = highlightBody(tpl.body);
+    if (!state.editing) {
+      $("tplName").value = tpl.name;
+      $("tplBody").value = tpl.body;
+    }
+  }
+
+  function highlightBody(body) {
+    SLOT_RE.lastIndex = 0;
+    var out = "";
+    var last = 0;
+    var m;
+    while ((m = SLOT_RE.exec(body)) !== null) {
+      out += esc(body.slice(last, m.index));
+      out += '<span class="slot">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+    }
+    out += esc(body.slice(last));
+    return out;
+  }
+
+  function renderSlots() {
+    var tpl = active();
+    var host = $("slots");
+    host.innerHTML = "";
+    if (!tpl) return;
+    var keys = slotKeys(tpl.body);
+    $("slotCount").textContent = keys.length + " alan";
+
+    if (!keys.length) {
+      var e = document.createElement("p");
+      e.className = "hint";
+      e.textContent = "Bu kalıpta henüz değişken yok. Kalıbı düzenleyip {{konu}} gibi alanlar ekle ya da “Değişkenleri bul”a bas.";
+      host.appendChild(e);
+      return;
+    }
+
+    keys.forEach(function (key) {
+      var row = document.createElement("div");
+      row.className = "slot-row";
+
+      var kb = document.createElement("div");
+      kb.className = "slot-key";
+      var kn = document.createElement("span");
+      kn.textContent = key;
+      kb.appendChild(kn);
+      if (state.aiKeys[key]) {
+        var ai = document.createElement("span");
+        ai.className = "ai";
+        ai.textContent = "referanstan";
+        kb.appendChild(ai);
+      }
+
+      var vb = document.createElement("div");
+      vb.className = "slot-val";
+
+      var ta = document.createElement("textarea");
+      ta.className = "text";
+      ta.rows = 1;
+      ta.value = state.values[key] || "";
+      ta.placeholder = hintFor(tpl, key) || "değer";
+      ta.setAttribute("aria-label", key + " değeri");
+      ta.addEventListener("input", function () {
+        state.values[key] = ta.value;
+        delete state.aiKeys[key];
+        grow(ta);
+        renderOutput();
+        queueValueSave();
+      });
+
+      var hi = document.createElement("input");
+      hi.className = "hint-input";
+      hi.type = "text";
+      hi.value = hintFor(tpl, key);
+      hi.placeholder = "Claude bu alanda ne arasın? (isteğe bağlı)";
+      hi.setAttribute("aria-label", key + " için ipucu");
+      hi.addEventListener("input", function () {
+        var t = active();
+        t.hints = t.hints || {};
+        t.hints[key] = hi.value;
+        queueTemplateSave();
+      });
+
+      vb.appendChild(ta);
+      vb.appendChild(hi);
+      row.appendChild(kb);
+      row.appendChild(vb);
+      host.appendChild(row);
+      grow(ta);
+    });
+  }
+
+  function grow(ta) {
+    ta.style.height = "auto";
+    ta.style.height = Math.max(38, ta.scrollHeight + 2) + "px";
+  }
+
+  function renderOutput() {
+    var tpl = active();
+    if (!tpl) return;
+    $("out").innerHTML = buildPromptHTML(tpl, state.values);
+    var text = buildPrompt(tpl, state.values);
+    $("charCount").textContent = text.length;
+    $("wordCount").textContent = text.trim() ? text.trim().split(/\s+/).length : 0;
+    var keys = slotKeys(tpl.body);
+    var empty = keys.filter(function (k) { return !(state.values[k] || "").trim(); });
+    $("emptyCount").innerHTML = empty.length
+      ? '<span class="warn"><b>' + empty.length + "</b> alan boş</span>"
+      : "<b>tam</b>";
+  }
+
+  function renderHistory() {
+    var host = $("hist");
+    host.innerHTML = "";
+    if (!history.length) {
+      var e = document.createElement("p");
+      e.className = "empty";
+      e.textContent = "Kopyaladığın promptlar buraya düşer, tek tıkla geri yüklersin.";
+      host.appendChild(e);
+      return;
+    }
+    history.slice(0, 12).forEach(function (h) {
+      var item = document.createElement("div");
+      item.className = "hist-item";
+
+      var t = document.createElement("div");
+      t.className = "t";
+      var b = document.createElement("b");
+      b.textContent = h.title || h.templateName || "prompt";
+      var s = document.createElement("span");
+      s.textContent = new Date(h.createdAt).toLocaleString("tr-TR") + " · " + h.templateName;
+      t.appendChild(b);
+      t.appendChild(s);
+
+      var btn = document.createElement("button");
+      btn.className = "btn ghost";
+      btn.textContent = "Geri yükle";
+      btn.addEventListener("click", function () {
+        var tpl = state.templates.filter(function (x) { return x.id === h.templateId; })[0];
+        if (tpl) { state.activeId = tpl.id; renderTemplateList(); renderTemplate(); }
+        state.values = Object.assign({}, h.values);
+        state.aiKeys = {};
+        renderSlots();
+        renderOutput();
+        toast("Değerler geri yüklendi");
+      });
+
+      item.appendChild(t);
+      item.appendChild(btn);
+      host.appendChild(item);
+    });
+  }
+
+  /* ---------------- debounced saves ---------------- */
+
+  var tplTimer = null;
+  function queueTemplateSave() {
+    setStatus("Kaydediliyor…");
+    clearTimeout(tplTimer);
+    tplTimer = setTimeout(function () {
+      var tpl = active();
+      if (tpl) saveTemplate(tpl);
+    }, 700);
+  }
+
+  var valTimer = null;
+  function queueValueSave() {
+    clearTimeout(valTimer);
+    valTimer = setTimeout(function () {
+      var tpl = active();
+      if (!tpl) return;
+      tpl.lastValues = Object.assign({}, state.values);
+      saveTemplate(tpl);
+    }, 1200);
+  }
+
+  /* ---------------- images ---------------- */
+
+  function addFiles(list) {
+    var files = Array.prototype.slice.call(list).filter(function (f) {
+      return f && /^image\//.test(f.type);
+    });
+    if (!files.length) return;
+    var max = (state.imgLimits && state.imgLimits.maxCount) || 4;
+    var maxBytes = (state.imgLimits && state.imgLimits.maxInputBytes) || 5 * 1024 * 1024;
+    var rejected = 0;
+    files.forEach(function (f) {
+      if (state.images.length >= max) { rejected++; return; }
+      if (f.size > maxBytes) { rejected++; return; }
+      state.images.push(f);
+    });
+    if (rejected) {
+      banner("exBanner", rejected + " görsel eklenmedi: en fazla " + max +
+        " görsel, her biri " + Math.round(maxBytes / 1048576) + " MB'a kadar.", "err");
+    } else {
+      banner("exBanner", "");
+    }
+    renderThumbs();
+  }
+
+  function renderThumbs() {
+    var host = $("thumbs");
+    host.innerHTML = "";
+    state.images.forEach(function (f, i) {
+      var d = document.createElement("div");
+      d.className = "thumb";
+      var img = document.createElement("img");
+      img.src = URL.createObjectURL(f);
+      img.alt = "Referans görsel " + (i + 1);
+      img.addEventListener("load", function () { URL.revokeObjectURL(img.src); });
+      var x = document.createElement("button");
+      x.type = "button";
+      x.textContent = "×";
+      x.title = "Kaldır";
+      x.setAttribute("aria-label", "Görseli kaldır");
+      x.addEventListener("click", function () {
+        state.images.splice(i, 1);
+        renderThumbs();
+        updateExtractButton();
+      });
+      d.appendChild(img);
+      d.appendChild(x);
+      host.appendChild(d);
+    });
+    updateExtractButton();
+  }
+
+  function updateExtractButton() {
+    var btn = $("extract");
+    if (!caps.sample) { btn.disabled = true; return; }
+    btn.disabled = state.images.length === 0;
+  }
+
+  /* ---------------- Claude calls ---------------- */
+
+  function errText(e) {
+    var code = e && e.code;
+    if (code === "not_granted") return "Claude erişimi verilmedi. Alanları elle doldurabilirsin.";
+    if (code === "rate_limited") return "Çok hızlı gittik — bir dakika bekleyip tekrar dene.";
+    if (code === "images_unavailable") return "Bu görünümde görsel gönderilemiyor. Alanları elle doldur.";
+    if (code === "image_rejected") return "Görsel kabul edilmedi: dosya tipi ya da boyutu uygun değil.";
+    if (code === "invalid_json") return "Yanıt okunamadı. Tekrar dene ya da alan ipuçlarını netleştir.";
+    if (code === "cancelled") return "";
+    if (code === "prompt_too_large") return "Kalıp çok uzun. Biraz kısalt.";
+    return (e && e.message) || "Bir şeyler ters gitti. Tekrar dene.";
+  }
+
+  function busy(btn, on, label) {
+    btn.disabled = on;
+    if (on) {
+      btn.dataset.label = btn.textContent;
+      btn.innerHTML = '<span class="spin"></span>' + (label || "Çalışıyor…");
+    } else {
+      btn.textContent = btn.dataset.label || label || "Tamam";
+    }
+  }
+
+  function extract() {
+    var tpl = active();
+    if (!tpl || !caps.sample) return;
+    var keys = slotKeys(tpl.body);
+    if (!keys.length) {
+      banner("exBanner", "Önce kalıba değişken ekle — sonra referanstan doldurabilirim.", "err");
+      return;
+    }
+    var lang = $("lang").value;
+    var note = $("note").value.trim();
+
+    var fieldLines = keys.map(function (k) {
+      var h = hintFor(tpl, k);
+      return "- " + k + (h ? ": " + h : "");
+    }).join("\n");
+
+    var prompt = [
+      "Sen deneyimli bir görsel yönetmenisin. Aşağıda bir görsel üretim promptunun SABİT kalıbı var.",
+      "Kalıptaki stil, teknik ve kalite satırları asla değişmez; sadece {{...}} ile işaretli alanlar değişir.",
+      "",
+      "Sana verilen referans görsel(ler)i incele ve YALNIZCA konu, sahne ve içerik bilgisini çıkar.",
+      "Çizim tekniği, stil, çizgi kalınlığı, render kalitesi, kamera veya palet hakkında yorum yapma —",
+      "bunlar kalıpta zaten sabittir ve senin değerlerinde geçmemeli.",
+      "",
+      "SABİT KALIP (sadece bağlam için):",
+      tpl.body,
+      "",
+      "DOLDURULACAK ALANLAR:",
+      fieldLines,
+      "",
+      "Kurallar:",
+      "- Her değer " + lang + " dilinde olsun.",
+      "- Kısa ve promptun içine doğrudan girecek biçimde yaz: 1-12 kelime, cümle kurma, sonuna nokta koyma.",
+      "- Görselde karşılığı yoksa alanı boş string bırak, uydurma.",
+      note ? "- KULLANICI NOTU (bu, görselden okuduğunun önüne geçer): " + note : "",
+      "",
+      'Sadece şu biçimde tek bir JSON nesnesi döndür — başka hiçbir şey yazma:',
+      '{' + keys.map(function (k) { return '"' + k + '": "..."'; }).join(", ") + '}'
+    ].filter(Boolean).join("\n");
+
+    var btn = $("extract");
+    busy(btn, true, "Görsel okunuyor…");
+    banner("exBanner", "");
+
+    caps.sample.json(prompt, { images: state.images, modelTier: "default" })
+      .then(function (data) {
+        if (!data || typeof data !== "object") throw { code: "invalid_json" };
+        var filled = 0;
+        keys.forEach(function (k) {
+          var v = data[k];
+          if (typeof v === "string" && v.trim()) {
+            state.values[k] = v.trim();
+            state.aiKeys[k] = true;
+            filled++;
+          }
+        });
+        renderSlots();
+        renderOutput();
+        queueValueSave();
+        banner("exBanner", filled
+          ? filled + " alan referanstan dolduruldu. İstediğini elle düzeltebilirsin."
+          : "Görselden alan çıkarılamadı. İpuçlarını netleştirip tekrar dene.", filled ? "" : "err");
+      })
+      .catch(function (e) {
+        var msg = errText(e);
+        if (msg) banner("exBanner", msg, "err");
+      })
+      .then(function () {
+        busy(btn, false, "Referanstan doldur");
+        updateExtractButton();
+      });
+  }
+
+  function autoSlots() {
+    if (!caps.sample) {
+      banner("tplBanner", "Claude bu görünümde kullanılamıyor. Değişkenleri {{böyle}} yazarak elle işaretle.", "err");
+      return;
+    }
+    var body = $("tplBody").value;
+    if (!body.trim()) {
+      banner("tplBanner", "Önce kalıp metnini yapıştır.", "err");
+      return;
+    }
+    var btn = $("autoSlots");
+    busy(btn, true, "İnceleniyor…");
+    banner("tplBanner", "");
+
+    var prompt = [
+      "Aşağıda bir yapay zekâ görsel üretim promptu var. Bu prompt bir KALIBA dönüştürülecek.",
+      "",
+      "Sabit kalması gerekenler: çizim stili, teknik, çizgi/render/kalite/kamera/format ayarları,",
+      "renk sistemi tanımı, negatif komutlar. Bunlara dokunma, kelimesi kelimesine koru.",
+      "",
+      "Değişken olması gerekenler: konu, karakter, aksiyon/poz, mekân, sahnedeki objeler,",
+      "renk vurgusu, atmosfer/ruh hâli gibi her üretimde farklılaşan içerik bilgileri.",
+      "Değişken kısımların yerine {{snake_case_anahtar}} biçiminde yer tutucu koy.",
+      "Anahtar isimleri Türkçe ve kısa olsun (konu, aksiyon, mekan, objeler, renk_vurgusu, ruh_hali gibi).",
+      "Metnin geri kalanını hiç değiştirme; satır sonlarını koru.",
+      "",
+      "PROMPT:",
+      body,
+      "",
+      "Yanıt olarak sadece şu JSON nesnesini döndür:",
+      '{"body": "yer tutucular yerleştirilmiş tam metin", "hints": {"anahtar": "bu alanda ne aranacağının kısa Türkçe tarifi"}}'
+    ].join("\n");
+
+    caps.sample.json(prompt, { modelTier: "complex" })
+      .then(function (data) {
+        if (!data || typeof data.body !== "string" || !data.body.trim()) throw { code: "invalid_json" };
+        var keys = slotKeys(data.body);
+        if (!keys.length) {
+          banner("tplBanner", "Değişken bulunamadı — metin baştan sona sabit görünüyor. Elle {{alan}} ekleyebilirsin.", "err");
+          return;
+        }
+        var tpl = active();
+        tpl.body = data.body;
+        tpl.hints = Object.assign({}, tpl.hints, data.hints && typeof data.hints === "object" ? data.hints : {});
+        $("tplBody").value = tpl.body;
+        renderTemplate();
+        renderSlots();
+        renderOutput();
+        saveTemplate(tpl);
+        banner("tplBanner", keys.length + " değişken işaretlendi: " + keys.join(", "));
+      })
+      .catch(function (e) {
+        var msg = errText(e);
+        if (msg) banner("tplBanner", msg, "err");
+      })
+      .then(function () { busy(btn, false, "Değişkenleri bul"); });
+  }
+
+  /* ---------------- events ---------------- */
+
+  $("tplSelect").addEventListener("change", function (e) {
+    state.activeId = e.target.value;
+    var tpl = active();
+    state.values = Object.assign({}, (tpl && tpl.lastValues) || {});
+    state.aiKeys = {};
+    if (tpl && tpl.lang) $("lang").value = tpl.lang;
+    LS.write("activeId", state.activeId);
+    renderTemplate();
+    renderSlots();
+    renderOutput();
+    banner("tplBanner", "");
+  });
+
+  $("newTpl").addEventListener("click", function () {
+    var tpl = {
+      id: uid(),
+      name: "Yeni kalıp " + (state.templates.length + 1),
+      body: "[STİL — SABİT]\nburaya sabit stil / teknik satırlarını yapıştır\n\n[KONU — DEĞİŞKEN]\nSubject: {{konu}}\n",
+      hints: {},
+      lastValues: {}
+    };
+    state.templates.unshift(tpl);
+    state.activeId = tpl.id;
+    state.values = {};
+    state.aiKeys = {};
+    LS.write("activeId", state.activeId);
+    saveTemplate(tpl);
+    renderTemplateList();
+    renderTemplate();
+    renderSlots();
+    renderOutput();
+    setEditing(true);
+    $("tplName").focus();
+    $("tplName").select();
+  });
+
+  function setEditing(on) {
+    state.editing = on;
+    $("tplEdit").hidden = !on;
+    $("tplRead").hidden = on;
+    $("toggleEdit").textContent = on ? "Bitti" : "Düzenle";
+    if (!on) renderTemplate();
+  }
+
+  $("toggleEdit").addEventListener("click", function () { setEditing(!state.editing); });
+
+  $("tplName").addEventListener("input", function () {
+    var tpl = active();
+    if (!tpl) return;
+    tpl.name = $("tplName").value || "Adsız kalıp";
+    $("tplTitle").textContent = tpl.name;
+    renderTemplateList();
+    queueTemplateSave();
+  });
+
+  $("tplBody").addEventListener("input", function () {
+    var tpl = active();
+    if (!tpl) return;
+    tpl.body = $("tplBody").value;
+    $("tplPreview").innerHTML = highlightBody(tpl.body);
+    renderSlots();
+    renderOutput();
+    queueTemplateSave();
+  });
+
+  $("delTpl").addEventListener("click", function () {
+    var tpl = active();
+    if (!tpl) return;
+    if (state.templates.length === 1) { toast("Son kalıp silinemez"); return; }
+    if (!confirm('"' + tpl.name + '" kalıbı silinsin mi?')) return;
+    deleteTemplate(tpl.id);
+    state.activeId = state.templates[0].id;
+    state.values = Object.assign({}, state.templates[0].lastValues || {});
+    LS.write("activeId", state.activeId);
+    renderTemplateList();
+    renderTemplate();
+    renderSlots();
+    renderOutput();
+    setEditing(false);
+  });
+
+  $("autoSlots").addEventListener("click", autoSlots);
+  $("extract").addEventListener("click", extract);
+
+  $("clearVals").addEventListener("click", function () {
+    state.values = {};
+    state.aiKeys = {};
+    renderSlots();
+    renderOutput();
+    queueValueSave();
+  });
+
+  $("copy").addEventListener("click", function () {
+    var tpl = active();
+    if (!tpl) return;
+    var text = buildPrompt(tpl, state.values);
+    var done = function () {
+      toast("Prompt kopyalandı");
+      var title = (state.values[slotKeys(tpl.body)[0]] || "").trim();
+      var last = history[0];
+      if (!last || last.prompt !== text) {
+        saveHistory({
+          id: uid(),
+          templateId: tpl.id,
+          templateName: tpl.name,
+          title: title || tpl.name,
+          prompt: text,
+          values: Object.assign({}, state.values),
+          createdAt: new Date().toISOString()
+        });
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { toast("Kopyalanamadı"); });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { toast("Kopyalanamadı"); }
+      ta.remove();
+    }
+  });
+
+  var drop = $("drop");
+  drop.addEventListener("click", function () { $("fileInput").click(); });
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); }
+  });
+  $("fileInput").addEventListener("change", function (e) { addFiles(e.target.files); e.target.value = ""; });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+  document.addEventListener("paste", function (e) {
+    var t = e.target;
+    if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) {
+      var hasImage = e.clipboardData && Array.prototype.some.call(e.clipboardData.items || [], function (i) {
+        return i.kind === "file";
+      });
+      if (!hasImage) return;
+    }
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length) {
+      addFiles(e.clipboardData.files);
+    }
+  });
+
+  $("lang").addEventListener("change", function () {
+    var tpl = active();
+    if (!tpl) return;
+    tpl.lang = $("lang").value;
+    queueTemplateSave();
+  });
+
+  /* ---------------- boot ---------------- */
+
+  function seedTemplate() {
+    return {
+      id: uid(),
+      name: "Düz vektör illüstrasyon",
+      body: SEED_BODY,
+      hints: Object.assign({}, SEED_HINTS),
+      lastValues: Object.assign({}, SEED_VALUES),
+      lang: "İngilizce"
+    };
+  }
+
+  function boot(templates, hist) {
+    state.templates = templates && templates.length ? templates : [seedTemplate()];
+    var wanted = LS.read("activeId", null);
+    var found = state.templates.filter(function (t) { return t.id === wanted; })[0];
+    state.activeId = (found || state.templates[0]).id;
+    var tpl = active();
+    state.values = Object.assign({}, (tpl && tpl.lastValues) || {});
+    if (tpl && tpl.lang) $("lang").value = tpl.lang;
+    history = hist || [];
+
+    renderTemplateList();
+    renderTemplate();
+    renderSlots();
+    renderOutput();
+    renderHistory();
+  }
+
+  boot(LS.read("templates", null), LS.read("history", []));
+
+  var noteEl = $("extractNote");
+  noteEl.textContent = "Claude bağlanıyor…";
+
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("db").then(function (db) {
+      caps.db = db;
+      if (!db) return;
+      return Promise.all([
+        db.collection("templates").get(),
+        db.collection("history").orderBy("createdAt", "desc").limit(30).get()
+      ]).then(function (res) {
+        var tpls = res[0].docs.map(function (d) { return d.data(); })
+          .filter(function (t) { return t && t.id && typeof t.body === "string"; })
+          .sort(function (a, b) { return (b.updatedAt || "").localeCompare(a.updatedAt || ""); });
+        var hist = res[1].docs.map(function (d) { return d.data(); })
+          .filter(function (h) { return h && h.id; });
+        if (tpls.length || hist.length) {
+          LS.write("templates", tpls);
+          LS.write("history", hist);
+          boot(tpls, hist);
+        } else {
+          state.templates.forEach(function (t) { saveTemplate(t); });
+        }
+      });
+    }).catch(function () {});
+
+    window.claude.use("sample").then(function (s) {
+      caps.sample = s;
+      if (!s) {
+        noteEl.textContent = "Claude bu görünümde yok — alanları elle doldur.";
+        updateExtractButton();
+        return;
+      }
+      return s.limits().then(function (l) {
+        state.imgLimits = l && l.images ? l.images : null;
+        if (state.imgLimits) {
+          $("fileInput").accept = state.imgLimits.mediaTypes.join(",");
+          noteEl.textContent = "En fazla " + state.imgLimits.maxCount + " referans görsel.";
+        } else {
+          noteEl.textContent = "Bu görünümde görsel gönderilemiyor — alanları elle doldur.";
+        }
+        updateExtractButton();
+      }, function () {
+        noteEl.textContent = "";
+        updateExtractButton();
+      });
+    }).catch(function () {
+      noteEl.textContent = "";
+      updateExtractButton();
+    });
+  } else {
+    noteEl.textContent = "Claude bu görünümde yok — alanları elle doldur.";
+  }
+
+  updateExtractButton();
+})();
+</script>
