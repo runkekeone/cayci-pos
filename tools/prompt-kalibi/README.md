@@ -8,9 +8,12 @@ kaydedilir; her yeni iş için sadece değişen konu-konsept alanları doldurulu
 1. **Kalıp** — prompt metnini yapıştır. Değişen kısımlar `{{konu}}` gibi yer tutucularla
    işaretlenir. `Değişkenleri bul` düğmesi metni Claude'a inceletip yer tutucuları
    otomatik yerleştirir; stil, çizgi, render ve kalite satırlarına dokunmaz.
-2. **Referans** — referans görseli sürükle, yapıştır veya seç. `Referanstan doldur`
-   görseldeki konu, aksiyon, mekân, objeler ve atmosferi okuyup yalnızca değişken
-   alanları doldurur. Stil hakkında yorum üretmez, çünkü stil kalıpta sabittir.
+2. **Girdi** — iki yol var, ikisi de aynı alanları doldurur:
+   - `Yazıdan doldur` — konuyu birkaç kelimeyle yaz, Claude kalıba göre genişletir.
+     Dosya seçici gerektirmez, mobilde de çalışır.
+   - `Referans görselden doldur` — görseli sürükle, yapıştır veya dosya seçiciden ekle.
+   İkisi de stil hakkında yorum üretmez, çünkü stil kalıpta sabittir. İpucunda
+   "yoksa boş bırak" yazan alanlar (marka, slogan, yıl) uydurulmaz.
 3. **Çıktı** — kalıp + değerler birleşip kopyalanmaya hazır prompt olur. Kopyalanan her
    prompt arşive düşer, tek tıkla geri yüklenir.
 

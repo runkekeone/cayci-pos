@@ -231,6 +231,19 @@
 
   @media (max-width: 980px) {
     main { grid-template-columns: minmax(0, 1fr); }
+    /* Telefonda önce çalışma alanı, kalıp ve arşiv altta. */
+    .col-right { order: -1; }
+  }
+
+  @media (max-width: 700px) {
+    main { padding: 14px 12px 60px; }
+    .panel-body { padding: 14px; }
+    .panel-head h2 { flex: 1 1 100%; }
+    .topbar-in { padding: 10px 12px; }
+    .brand { flex: 1 1 100%; }
+    .picker { flex: 1 1 auto; min-width: 0; }
+    select.tpl { flex: 1 1 120px; min-width: 0; max-width: none; }
+    .status { min-width: 0; }
   }
 
   .panel {
@@ -246,6 +259,7 @@
   .panel-head {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     padding: 13px 16px;
     border-bottom: 1px solid var(--line-soft);
@@ -406,6 +420,23 @@
     padding: 7px 13px;
     margin-right: 10px;
     cursor: pointer;
+  }
+
+  .or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step--2);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+  }
+  .or::before, .or::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line-soft);
   }
 
   .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -594,8 +625,8 @@
   <div class="col-right">
     <section class="panel">
       <div class="panel-head">
-        <span class="eyebrow">1 · Referans</span>
-        <h2>Görseli bırak, konuyu okusun</h2>
+        <span class="eyebrow">1 · Girdi</span>
+        <h2>Konuyu ver, alanları doldursun</h2>
         <span class="spacer"></span>
         <select class="text" id="lang" style="width:auto" aria-label="Alan değerlerinin dili">
           <option value="İngilizce">Değerler: EN</option>
@@ -603,24 +634,29 @@
         </select>
       </div>
       <div class="panel-body">
+        <div>
+          <label class="field-label" for="note">Konuyu anlat <span style="text-transform:none;letter-spacing:0">— birkaç kelime yeter, kalıba göre genişletilir</span></label>
+          <textarea class="text" id="note" rows="3" placeholder="ör. iki aynalanmış kurt kafası uluyor, sage ve pas kırmızısı, marka NOHOURS"></textarea>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="fromText" disabled>Yazıdan doldur</button>
+          <button class="btn" id="extract" disabled>Referans görselden doldur</button>
+          <button class="btn ghost" id="clearVals">Alanları temizle</button>
+        </div>
+        <div id="exBanner"></div>
+
+        <div class="or"><span>veya referans görsel</span></div>
+
         <label class="drop" id="drop" for="fileInput">
           <strong>Referans görseli buraya bırak</strong>
           <span class="hint">sürükle · <b>Ctrl/⌘+V</b> ile yapıştır · ya da aşağıdan dosya seç</span>
           <input type="file" id="fileInput" accept="image/*" multiple>
         </label>
         <div class="thumbs" id="thumbs"></div>
-
-        <div>
-          <label class="field-label" for="note">Ek not <span style="text-transform:none;letter-spacing:0">— görselde olmayan ya da üstüne yazmak istediğin şeyler</span></label>
-          <textarea class="text" id="note" rows="2" placeholder="ör. karakter kadın olsun, arka plan sade kalsın"></textarea>
-        </div>
-
-        <div class="row">
-          <button class="btn primary" id="extract" disabled>Referanstan doldur</button>
-          <button class="btn ghost" id="clearVals">Alanları temizle</button>
-          <span id="extractNote" class="hint"></span>
-        </div>
-        <div id="exBanner"></div>
+        <p class="hint" id="extractNote"></p>
+        <p class="hint">Bazı mobil görünümlerde tarayıcı dosya seçiciyi hiç açmıyor. Açılmıyorsa
+          yukarıdaki <b>Yazıdan doldur</b> ile devam et — aynı işi yapar, sadece görseli sen tarif edersin.</p>
       </div>
     </section>
 
@@ -705,9 +741,9 @@
     cerceve: "çerçeve biçimi: tombstone arch / ogee arch / hexagon / circular medallion",
     palet: "lacivert-siyah dışındaki 3 spot renk (ör. sage green, rust orange, bone white)",
     gok_motifi: "merkezdeki gök cismi (ör. a rayed sun with a serene sleeping face)",
-    marka: "üstteki serif wordmark — görselde yazı varsa oku, yoksa boş bırak",
-    slogan: "küçük kavisli slogan satırı — görselde yoksa boş bırak",
-    yil: "EST. yılı — görselde yoksa boş bırak"
+    marka: "üstteki serif wordmark — tarifte/görselde varsa al, yoksa boş bırak",
+    slogan: "küçük kavisli slogan satırı — tarifte/görselde yoksa boş bırak",
+    yil: "EST. yılı — tarifte/görselde yoksa boş bırak"
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1102,9 +1138,11 @@
   }
 
   function updateExtractButton() {
-    var btn = $("extract");
-    if (!caps.sample) { btn.disabled = true; return; }
-    btn.disabled = state.images.length === 0;
+    var img = $("extract");
+    var txt = $("fromText");
+    if (!caps.sample) { img.disabled = true; txt.disabled = true; return; }
+    img.disabled = state.images.length === 0;
+    txt.disabled = $("note").value.trim().length === 0;
   }
 
   /* ---------------- Claude calls ---------------- */
@@ -1131,29 +1169,41 @@
     }
   }
 
-  function extract() {
+  function fill(useImages) {
     var tpl = active();
     if (!tpl || !caps.sample) return;
     var keys = slotKeys(tpl.body);
     if (!keys.length) {
-      banner("exBanner", "Önce kalıba değişken ekle — sonra referanstan doldurabilirim.", "err");
+      banner("exBanner", "Önce kalıba değişken ekle — sonra alanları doldurabilirim.", "err");
       return;
     }
     var lang = $("lang").value;
     var note = $("note").value.trim();
+    if (!useImages && !note) {
+      banner("exBanner", "Önce konuyu birkaç kelimeyle yaz.", "err");
+      return;
+    }
 
     var fieldLines = keys.map(function (k) {
       var h = hintFor(tpl, k);
       return "- " + k + (h ? ": " + h : "");
     }).join("\n");
 
+    var head = useImages
+      ? [
+          "Sana verilen referans görsel(ler)i incele ve SADECE aşağıda listelenen alanları doldur.",
+          note ? "KULLANICI NOTU (bu, görselden okuduğunun önüne geçer): " + note : ""
+        ]
+      : [
+          "Kullanıcının kısa tarifinden yola çıkarak aşağıda listelenen alanları doldur.",
+          "TARİF: " + note
+        ];
+
     var prompt = [
       "Sen deneyimli bir görsel yönetmenisin. Aşağıda bir görsel üretim promptunun SABİT kalıbı var.",
       "Kalıptaki stil, teknik ve kalite satırları asla değişmez; sadece {{...}} ile işaretli alanlar değişir.",
-      "",
-      "Sana verilen referans görsel(ler)i incele ve SADECE aşağıda listelenen alanları doldur.",
-      "Her alan için ipucunda ne isteniyorsa onu yaz. Kalıpta zaten geçen sabit cümleleri",
-      "(teknik, render, kalite, doku tarifleri) değerlerin içinde tekrar etme.",
+      ""
+    ].concat(head.filter(Boolean)).concat([
       "",
       "SABİT KALIP (sadece bağlam için):",
       tpl.body,
@@ -1164,18 +1214,23 @@
       "Kurallar:",
       "- Her değer " + lang + " dilinde olsun.",
       "- Kısa ve promptun içine doğrudan girecek biçimde yaz: 1-12 kelime, cümle kurma, sonuna nokta koyma.",
-      "- Görselde karşılığı yoksa alanı boş string bırak, uydurma.",
-      note ? "- KULLANICI NOTU (bu, görselden okuduğunun önüne geçer): " + note : "",
+      "- Kalıpta zaten geçen sabit cümleleri (teknik, render, kalite, doku tarifleri) değerlerde tekrar etme.",
+      "- Her alanın ipucuna uy. İpucunda \"yoksa boş bırak\" yazan alanları uydurma; " +
+        (useImages ? "görselde" : "tarifte") + " karşılığı yoksa boş string bırak.",
+      "- Diğer alanlarda tarif eksikse kalıbın stiline uyan makul bir değer öner.",
       "",
-      'Sadece şu biçimde tek bir JSON nesnesi döndür — başka hiçbir şey yazma:',
-      '{' + keys.map(function (k) { return '"' + k + '": "..."'; }).join(", ") + '}'
-    ].filter(Boolean).join("\n");
+      "Sadece şu biçimde tek bir JSON nesnesi döndür — başka hiçbir şey yazma:",
+      "{" + keys.map(function (k) { return '"' + k + '": "..."'; }).join(", ") + "}"
+    ]).join("\n");
 
-    var btn = $("extract");
-    busy(btn, true, "Görsel okunuyor…");
+    var btn = useImages ? $("extract") : $("fromText");
+    busy(btn, true, useImages ? "Görsel okunuyor…" : "Yazılıyor…");
     banner("exBanner", "");
 
-    caps.sample.json(prompt, { images: state.images, modelTier: "default" })
+    var opts = { modelTier: "default" };
+    if (useImages) opts.images = state.images;
+
+    caps.sample.json(prompt, opts)
       .then(function (data) {
         if (!data || typeof data !== "object") throw { code: "invalid_json" };
         var filled = 0;
@@ -1191,15 +1246,15 @@
         renderOutput();
         queueValueSave();
         banner("exBanner", filled
-          ? filled + " alan referanstan dolduruldu. İstediğini elle düzeltebilirsin."
-          : "Görselden alan çıkarılamadı. İpuçlarını netleştirip tekrar dene.", filled ? "" : "err");
+          ? filled + " alan dolduruldu. İstediğini elle düzeltebilirsin."
+          : "Alan çıkarılamadı. Tarifi ya da alan ipuçlarını netleştirip tekrar dene.", filled ? "" : "err");
       })
       .catch(function (e) {
         var msg = errText(e);
         if (msg) banner("exBanner", msg, "err");
       })
       .then(function () {
-        busy(btn, false, "Referanstan doldur");
+        busy(btn, false, useImages ? "Referans görselden doldur" : "Yazıdan doldur");
         updateExtractButton();
       });
   }
@@ -1346,7 +1401,9 @@
   });
 
   $("autoSlots").addEventListener("click", autoSlots);
-  $("extract").addEventListener("click", extract);
+  $("extract").addEventListener("click", function () { fill(true); });
+  $("fromText").addEventListener("click", function () { fill(false); });
+  $("note").addEventListener("input", updateExtractButton);
 
   $("clearVals").addEventListener("click", function () {
     state.values = {};
