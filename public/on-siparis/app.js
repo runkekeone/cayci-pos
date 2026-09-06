@@ -84,7 +84,6 @@
     item.qty += 1;
     cart.set(id, item);
     renderCart();
-    openCart(true);
   }
 
   function changeQty(id, delta) {
@@ -98,7 +97,11 @@
 
   function renderCart() {
     const items = currentItems();
-    $("#cartCount").textContent = String(items.reduce((sum, item) => sum + item.qty, 0));
+    const quantity = items.reduce((sum, item) => sum + item.qty, 0);
+    $("#cartCount").textContent = String(quantity);
+    $("#dockCount").textContent = String(quantity);
+    $("#dockTotal").textContent = money.format(total());
+    $("#cartDock").hidden = items.length === 0;
     $("#emptyCart").hidden = items.length > 0;
     $("#checkout").hidden = items.length === 0;
     $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div><h3>${escapeHtml(item.title || item.name)}</h3><p>${item.detail ? `${escapeHtml(item.detail)} · ` : ""}${money.format(item.price)} / ${escapeHtml(item.unit)}</p></div><div class="quantity"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">-</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artir">+</button></div></div>`).join("");
@@ -194,6 +197,7 @@
   $("#startButton").addEventListener("click", begin);
   $("#search").addEventListener("input", renderProducts);
   $("#cartButton").addEventListener("click", () => openCart(true));
+  $("#cartDock").addEventListener("click", () => openCart(true));
   $("#closeCart").addEventListener("click", () => openCart(false));
   $("#backdrop").addEventListener("click", () => openCart(false));
   $("#paymentOptions").addEventListener("click", (event) => {
