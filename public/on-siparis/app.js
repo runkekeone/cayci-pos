@@ -3,12 +3,27 @@
   const SUPABASE_KEY = "sb_publishable_m5HEx3mFrjDJHBe0qfUznQ_tXkoESp3";
   const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
   const cart = new Map();
-  const catalog = (window.BABUCO_CATALOG || []).filter((product) => product.active && product.name);
+  const CATEGORY_ORDER = ["Tumu", "Su", "Soda", "Ayran", "Caylar & Kahve", "Mesrubatlar", "Atistirmalik", "Temizlik", "Oyun", "Yan Urunler"];
+  const categoryLabel = (category) => ({ Tumu: "Tüm ürünler", Su: "Su", Soda: "Soda", Ayran: "Ayran", "Caylar & Kahve": "Çaylar & Kahve", Mesrubatlar: "Meşrubatlar", Atistirmalik: "Atıştırmalık", Temizlik: "Temizlik", Oyun: "Oyun", "Yan Urunler": "Yan Ürünler" }[category] || category);
+  function salesCategory(product) {
+    const group = String(product.category || "");
+    const name = String(product.name || "").toLocaleLowerCase("tr-TR");
+    if (group === "Su") return "Su";
+    if (group === "Sodalar") return "Soda";
+    if (name.includes("ayran")) return "Ayran";
+    if (group === "Atıştırmalık") return "Atistirmalik";
+    if (group === "Temizlik" || group === "Kağıt & Hijyen") return "Temizlik";
+    if (group === "Oyun Kağıtları" || /okey|yazboz/.test(name)) return "Oyun";
+    if (["Çaylar", "Kahve & Yan Ürünler", "Sıcak İçecekler", "Toz İçecekler"].includes(group)) return "Caylar & Kahve";
+    if (group === "Soğuk İçecekler" || /aroma|coca-cola|çamlıca|fanta|sarıyer/.test(name)) return "Mesrubatlar";
+    return "Yan Urunler";
+  }
+  const catalog = (window.BABUCO_CATALOG || []).filter((product) => product.active && product.name).map((product) => ({ ...product, salesCategory: salesCategory(product) }));
   const sb = window.supabase && window.supabase.createClient
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
     : null;
   let phone = "";
-  let selectedCategory = "Tumu";
+  let selectedCategory = "Su";
   let payment = "nakit";
 
   const $ = (selector) => document.querySelector(selector);
@@ -23,10 +38,12 @@
   const gross = () => currentItems().reduce((sum, item) => sum + item.price * item.qty, 0);
   const discount = () => payment === "nakit" ? Math.round(gross() * 5) / 100 : 0;
   const total = () => gross() - discount();
+  const historyKey = () => `babuco:on-siparis:last:${phone}`;
+  const loadLastOrder = () => { try { return JSON.parse(localStorage.getItem(historyKey()) || "null"); } catch { return null; } };
+  const saveLastOrder = (order) => localStorage.setItem(historyKey(), JSON.stringify({ date: order.date, lines: order.lines }));
 
   function renderCategories() {
-    const categories = ["Tumu", ...new Set(catalog.map((p) => p.category).sort((a, b) => a.localeCompare(b, "tr")))];
-    $("#categories").innerHTML = categories.map((category) => `<button class="category ${category === selectedCategory ? "active" : ""}" data-category="${escapeHtml(category)}" type="button">${escapeHtml(category === "Tumu" ? "Tum urunler" : category)}</button>`).join("");
+    $("#categories").innerHTML = CATEGORY_ORDER.map((category) => `<button class="category ${category === selectedCategory ? "active" : ""}" data-category="${escapeHtml(category)}" type="button">${escapeHtml(categoryLabel(category))}</button>`).join("");
     document.querySelectorAll("[data-category]").forEach((button) => button.addEventListener("click", () => {
       selectedCategory = button.dataset.category;
       renderCategories(); renderProducts();
@@ -35,11 +52,11 @@
 
   function renderProducts() {
     const query = $("#search").value.trim().toLocaleLowerCase("tr-TR");
-    const products = catalog.filter((product) => (selectedCategory === "Tumu" || product.category === selectedCategory) && (!query || `${product.name} ${product.category}`.toLocaleLowerCase("tr-TR").includes(query)));
+    const products = catalog.filter((product) => (selectedCategory === "Tumu" || product.salesCategory === selectedCategory) && (!query || `${product.name} ${product.salesCategory}`.toLocaleLowerCase("tr-TR").includes(query)));
     $("#catalogStatus").textContent = `${products.length} urun listeleniyor`;
     $("#products").innerHTML = products.map((product) => {
       const isPriceKnown = Number(product.price) > 0;
-      return `<article class="product"><span class="product-category">${escapeHtml(product.category)}</span><h3>${escapeHtml(product.name)}</h3><div class="product-bottom"><div class="price">${isPriceKnown ? money.format(product.price) : "Fiyat sorunuz"}<span class="unit">/${escapeHtml(product.unit)}</span></div>${isPriceKnown ? `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.name)} ekle">+</button>` : ""}</div></article>`;
+      return `<article class="product"><h3>${escapeHtml(product.name)}</h3><div class="product-bottom"><div class="price">${isPriceKnown ? money.format(product.price) : "Fiyat sorunuz"}<span class="unit">/${escapeHtml(product.unit)}</span></div>${isPriceKnown ? `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.name)} ekle">+</button>` : ""}</div></article>`;
     }).join("") || "<p>Aramanizla eslesen urun yok.</p>";
     document.querySelectorAll("[data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
   }
@@ -79,6 +96,17 @@
     $("#backdrop").hidden = !open;
   }
 
+  function renderQuickOrder() {
+    const previous = loadLastOrder();
+    const lines = previous && Array.isArray(previous.lines) ? previous.lines : [];
+    const products = lines.map((line) => catalog.find((product) => product.id === line.catalogItemId)).filter(Boolean);
+    $("#quickOrders").hidden = products.length === 0;
+    if (!products.length) return;
+    $("#quickOrderDate").textContent = new Date(previous.date).toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+    $("#quickProducts").innerHTML = products.map((product) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${escapeHtml(product.name)}</span><b>${money.format(product.price)}</b><small>Tekrar ekle</small></button>`).join("");
+    document.querySelectorAll("[data-quick-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.quickAdd)));
+  }
+
   function begin() {
     const digits = phoneDigits($("#phone").value);
     if (digits.length !== 10 || !digits.startsWith("5")) {
@@ -90,6 +118,7 @@
     $("#phoneError").hidden = true;
     $("#phoneCard").hidden = true;
     $("#catalog").hidden = false;
+    renderQuickOrder();
     $("#search").focus();
   }
 
@@ -111,6 +140,7 @@
       if (!sb) throw new Error("Baglanti hazir degil");
       const { error } = await sb.from("siparisler").upsert({ id: order.id, toptanci: "babuco", cay_ocagi: order.from.name, cay_tel: order.from.phone, payload: order, durum: "yeni", updated_at: new Date().toISOString() });
       if (error) throw error;
+      saveLastOrder(order);
       openCart(false);
       $("#receiptText").textContent = `Siparisiniz ${formatPhone(phone)} numarasi ile kaydedildi. Servis ekibi teslimat oncesi siparisinizi gorur.`;
       $("#receiptSummary").innerHTML = `<div class="total-row"><span>Odeme</span><b>${payment === "nakit" ? "Nakit" : payment === "kart" ? "Kart" : "Acik hesap"}</b></div><div class="total-row"><span>Kalem sayisi</span><b>${items.length}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi</span><b>-${money.format(discount())}</b></div>` : ""}<div class="total-row"><span>Toplam</span><b>${money.format(total())}</b></div>`;
