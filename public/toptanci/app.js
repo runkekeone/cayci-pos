@@ -710,11 +710,13 @@ function openYeniMusteri(onDone, item, preset) {
     { key: "oyunVar", label: "Oyun ürünü kullanır (okey/kağıt/yazboz)", type: "checkbox" },
     { key: "sogukDolap", label: "Soğuk dolabı var", type: "checkbox" },
     { key: "depozitoKullanir", label: "Depozitolu ürün kullanır (kasa/şişe)", type: "checkbox" },
+    { key: "onSiparisMinPesin", label: "Ön siparişte açık hesap seçerse en az %40 peşin öder", type: "checkbox" },
     { key: "bayi", label: "Servisçi (senden toptan/düşük fiyata alan bayi)", type: "checkbox" },
   ], seed, (data) => {
-    if (item) Object.assign(item, data);
-    else store.customers.push(Object.assign({ id: genId() }, data));
+    const customer = item ? Object.assign(item, data) : Object.assign({ id: genId() }, data);
+    if (!item) store.customers.push(customer);
     saveStore(); if (onDone) onDone(); else render();
+    onSiparisKuralYaz(customer);
   });
 }
 // Rehberden kişi seç — native getContacts + uygulama-içi liste (native picker'a bağımlı değil).
@@ -2397,12 +2399,17 @@ async function cayPullSupabase() {
       const odemeTuru = order.paymentType === "nakit" ? "nakit" : order.paymentType === "kart" ? "kart" : "bakiye";
       const iskonto = odemeTuru === "nakit" ? kurus(brut * 0.05) : 0;
       const toplam = kurus(brut - iskonto);
+      const dealerTel = row.cay_tel || (order.from && order.from.phone) || "";
+      const digits = dealerTel.replace(/\D/g, "").replace(/^90/, "").replace(/^0/, "");
+      const customer = digits && store.customers.find((c) => (c.telefon || "").replace(/\D/g, "").replace(/^90/, "").replace(/^0/, "") === digits);
+      const minPesinOran = customer && customer.onSiparisMinPesin ? 0.4 : 0;
+      const minPesinTutar = kurus(toplam * minPesinOran);
       store.gelenSiparisler.push({
         id: genId(), orderId: row.id,
         dealer: row.cay_ocagi || (order.from && order.from.name) || "Bilinmeyen bayi",
-        dealerTel: row.cay_tel || (order.from && order.from.phone) || "",
+        dealerTel,
         not: order.note || "", tarih: order.date || row.created_at || new Date().toISOString(),
-        alindi: new Date().toISOString(), durum: "yeni", items, brut, iskonto, toplam, odemeTuru,
+        alindi: new Date().toISOString(), durum: "yeni", items, brut, iskonto, toplam, odemeTuru, minPesinOran, minPesinTutar,
         teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "",
       });
       degisti = true;
@@ -2436,6 +2443,14 @@ async function kvSet(key, value, updatedAt) {
   if (!SB) return false;
   try { const { error } = await SB.from("kv").upsert({ key, value, updated_at: updatedAt }); return !error; }
   catch (e) { return false; }
+}
+
+/** Müşteri sipariş ekranında yalnız ön ödeme kuralı okunur; müşteri/cari verisi paylaşılmaz. */
+function onSiparisKuralYaz(c) {
+  const tel = (c && c.telefon || "").replace(/\D/g, "").replace(/^90/, "").replace(/^0/, "");
+  if (!tel) return;
+  const ts = new Date().toISOString();
+  kvSet("babuco:on-siparis:policy:" + tel, { minPesinOrani: c.onSiparisMinPesin ? 0.4 : 0 }, ts);
 }
 
 /** Çay ocağı bayisiyse tahsilatın %1'ini işletme puanına ekle ve buluta yayınla.
@@ -2561,6 +2576,7 @@ function cayTeslim(o, odemeTuru) {
   // Çay ocağı bayisi işareti + telefon garanti (puan telefonla eşleşir).
   cust.cayOcagi = true;
   if (!cust.telefon && o.dealerTel) cust.telefon = o.dealerTel;
+  if (odemeTuru === "bakiye" && cust.onSiparisMinPesin) odemeTuru = "nakit-acik";
   const items = o.items.map((l) => {
     const pr = store.products.find((p) => p.id === l.urunId) || store.products.find((p) => p.ad.trim().toLowerCase() === (l.ad || "").trim().toLowerCase());
     return { urunId: pr ? pr.id : "", ad: l.ad, barkod: pr ? pr.barkod || "" : "", kdv: pr ? Number(pr.kdv) || 0 : 0, fiyat: Number(l.fiyat) || 0, adet: Number(l.adet) || 0, iskyuzde: 0 };
@@ -2568,32 +2584,43 @@ function cayTeslim(o, odemeTuru) {
   const brut = kurus(items.reduce((s, i) => s + i.fiyat * i.adet, 0));
   const iskonto = kurus(Number(o.iskonto) || 0);
   const toplam = kurus(Number(o.toplam) || (brut - iskonto));
+  const minPesin = cust.onSiparisMinPesin ? kurus(toplam * 0.4) : 0;
   const maliyet = items.reduce((s, i) => { const pr = findProduct(i.urunId); return s + (pr ? Number(pr.alis) || 0 : 0) * i.adet; }, 0);
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
   // Ödeme türüne göre: nakit → nakit, kart → pos, bakiye → açık hesap (müşteri cari borcuna yazılır).
   const odeme = odemeTuru === "nakit" ? { nakit: toplam, pos: 0, acik: 0 }
     : odemeTuru === "kart" ? { nakit: 0, pos: toplam, acik: 0 }
+    : odemeTuru === "nakit-acik" ? { nakit: minPesin, pos: 0, acik: kurus(toplam - minPesin) }
+    : odemeTuru === "kart-acik" ? { nakit: 0, pos: minPesin, acik: kurus(toplam - minPesin) }
     : { nakit: 0, pos: 0, acik: toplam };
-  const odemeAdi = odemeTuru === "nakit" ? "Nakit" : odemeTuru === "kart" ? "Kart" : "Açık Hesap";
+  const odemeAdi = odemeTuru === "nakit" ? "Nakit" : odemeTuru === "kart" ? "Kart" : odemeTuru === "nakit-acik" ? "Nakit %40 + Açık Hesap" : odemeTuru === "kart-acik" ? "Kart %40 + Açık Hesap" : "Açık Hesap";
   const sale = { id: genId(), belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi, items, brut, iskonto, toplam, maliyet, odeme, tarih: new Date().toISOString() };
   store.sales.push(sale);
   items.forEach((i) => { const pr = findProduct(i.urunId); if (pr) pr.stok = (Number(pr.stok) || 0) - i.adet; });
   o.durum = "teslim"; o.saleId = sale.id; o.odemeTuru = odemeTuru;
   saveStore(); render(); cayDurumBulut(o);
-  const son = odemeTuru === "bakiye" ? "Bayinin açık hesabına yazıldı: " + o.dealer : odemeAdi + " olarak tahsil edildi";
+  const son = odemeTuru === "bakiye" ? "Bayinin açık hesabına yazıldı: " + o.dealer : odemeTuru === "nakit-acik" || odemeTuru === "kart-acik" ? money.format(minPesin) + " peşin tahsil edildi, " + money.format(toplam - minPesin) + " açık hesaba yazıldı" : odemeAdi + " olarak tahsil edildi";
   alert("Teslim edildi ✔ Satış raporlara işlendi (Belge " + belgeNo + ").\n" + son + ".");
 }
 /* Teslim ödeme seçimi — nakit / kart / bakiye (açık hesap) */
 function cayTeslimOde(o) {
   if (o.saleId) { alert("Bu sipariş zaten teslim edilip rapora işlendi."); return; }
+  const tel = (o.dealerTel || "").replace(/\D/g, "");
+  const cust = (tel && store.customers.find((c) => (c.telefon || "").replace(/\D/g, "") === tel))
+    || store.customers.find((c) => c.ad.trim().toLowerCase() === o.dealer.trim().toLowerCase());
+  const minPesin = cust && cust.onSiparisMinPesin ? kurus(Number(o.toplam) * 0.4) : 0;
+  const acikHesapSecenek = minPesin
+    ? `<button class="btn cay-ode cay-ode-bakiye" type="button" data-ode="nakit-acik">Nakit %40 + Açık Hesap<br><small>${money.format(minPesin)} peşin</small></button><button class="btn cay-ode cay-ode-bakiye" type="button" data-ode="kart-acik">Kart %40 + Açık Hesap<br><small>${money.format(minPesin)} peşin</small></button>`
+    : `<button class="btn cay-ode cay-ode-bakiye" type="button" data-ode="bakiye">Bakiye (Açık Hesap)</button>`;
   const secilen = o.odemeTuru === "nakit" ? "Nakit" : o.odemeTuru === "kart" ? "Kart" : "Açık Hesap";
-  const body = `<p class="sub" style="margin:0 0 12px">Müşterinin seçimi: <b>${secilen}</b>. Teslimatta gerekirse değiştirebilirsin. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.</p>
+  const kural = minPesin ? ` Bu müşteri için açık hesapta <b>${money.format(minPesin)} (%40)</b> peşin ödeme zorunludur.` : "";
+  const body = `<p class="sub" style="margin:0 0 12px">Müşterinin seçimi: <b>${secilen}</b>. Teslimatta gerekirse değiştirebilirsin. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.${kural}</p>
     <div class="cay-ode-tut">Tutar <b>${money.format(o.toplam)}</b></div>
     <div class="cay-ode-sec">
-      <button class="btn cay-ode" type="button" data-ode="nakit">💵 Nakit</button>
-      <button class="btn cay-ode" type="button" data-ode="kart">💳 Kart</button>
-      <button class="btn cay-ode cay-ode-bakiye" type="button" data-ode="bakiye">📒 Bakiye (Açık Hesap)</button>
+      <button class="btn cay-ode" type="button" data-ode="nakit">Nakit</button>
+      <button class="btn cay-ode" type="button" data-ode="kart">Kart</button>
+      ${acikHesapSecenek}
     </div>`;
   const m = openModal("Teslim — Ödeme", body, { noFoot: true, onMount: (ov) => {
     ov.querySelectorAll("[data-ode]").forEach((b) => b.addEventListener("click", () => { const tur = b.dataset.ode; m.close(); cayTeslim(o, tur); }));

@@ -41,6 +41,7 @@
   let phone = "";
   let selectedCategory = "Su";
   let payment = "nakit";
+  let minimumUpfrontRate = 0;
 
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (text) => String(text).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
@@ -54,6 +55,8 @@
   const gross = () => currentItems().reduce((sum, item) => sum + item.price * item.qty, 0);
   const discount = () => payment === "nakit" ? Math.round(gross() * 5) / 100 : 0;
   const total = () => gross() - discount();
+  const minimumUpfront = () => Math.round(total() * minimumUpfrontRate * 100) / 100;
+  const openBalance = () => Math.round((total() - minimumUpfront()) * 100) / 100;
   const historyKey = () => `babuco:on-siparis:last:${phone}`;
   const loadLastOrder = () => { try { return JSON.parse(localStorage.getItem(historyKey()) || "null"); } catch { return null; } };
   const saveLastOrder = (order) => localStorage.setItem(historyKey(), JSON.stringify({ date: order.date, lines: order.lines }));
@@ -105,7 +108,9 @@
     $("#emptyCart").hidden = items.length > 0;
     $("#checkout").hidden = items.length === 0;
     $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div><h3>${escapeHtml(item.title || item.name)}</h3><p>${item.detail ? `${escapeHtml(item.detail)} · ` : ""}${money.format(item.price)} / ${escapeHtml(item.unit)}</p></div><div class="quantity"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">-</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artir">+</button></div></div>`).join("");
-    $("#totals").innerHTML = `<div class="total-row"><span>Urunler toplami</span><b>${money.format(gross())}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi (%5)</span><b>-${money.format(discount())}</b></div>` : ""}<div class="total-row grand-total"><span>Odenecek tutar</span><span>${money.format(total())}</span></div>`;
+    const upfrontRows = payment === "acik" && minimumUpfrontRate > 0
+      ? `<div class="total-row"><span>Teslimde minimum ödeme (%${minimumUpfrontRate * 100})</span><b>${money.format(minimumUpfront())}</b></div><div class="total-row"><span>Açık hesaba yazılacak</span><b>${money.format(openBalance())}</b></div>` : "";
+    $("#totals").innerHTML = `<div class="total-row"><span>Urunler toplami</span><b>${money.format(gross())}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi (%5)</span><b>-${money.format(discount())}</b></div>` : ""}${upfrontRows}<div class="total-row grand-total"><span>Odenecek tutar</span><span>${money.format(total())}</span></div>`;
     document.querySelectorAll("[data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
     document.querySelectorAll("[data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
   }
@@ -116,10 +121,27 @@
     $("#backdrop").hidden = !open;
   }
 
+  function renderMinimumPaymentNote() {
+    const note = document.querySelector('[data-payment="acik"] small');
+    if (note) note.textContent = minimumUpfrontRate > 0 ? `Teslimde en az %${minimumUpfrontRate * 100} peşin ödeme` : "Cari hesaba yazilir";
+  }
+
+  async function loadMinimumPaymentRule() {
+    minimumUpfrontRate = 0;
+    if (!sb || !phone) return;
+    try {
+      const { data, error } = await sb.from("kv").select("value").eq("key", "babuco:on-siparis:policy:" + phone).maybeSingle();
+      if (!error && data && data.value) minimumUpfrontRate = Number(data.value.minPesinOrani) || 0;
+    } catch (error) { console.warn("Ön ödeme kuralı okunamadı", error); }
+    renderMinimumPaymentNote();
+    renderCart();
+  }
+
   function startNewOrder() {
     cart.clear();
     phone = "";
     payment = "nakit";
+    minimumUpfrontRate = 0;
     $("#note").value = "";
     $("#phone").value = "";
     $("#phoneCard").hidden = false;
@@ -128,6 +150,7 @@
     $("#receipt").hidden = true;
     openCart(false);
     renderCart();
+    renderMinimumPaymentNote();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -142,7 +165,7 @@
     document.querySelectorAll("[data-quick-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.quickAdd)));
   }
 
-  function begin() {
+  async function begin() {
     const digits = phoneDigits($("#phone").value);
     if (digits.length !== 10 || !digits.startsWith("5")) {
       $("#phoneError").textContent = "Lutfen 05 ile baslayan gecerli telefon numaranizi girin.";
@@ -154,6 +177,7 @@
     $("#phoneCard").hidden = true;
     $("#catalog").hidden = false;
     renderQuickOrder();
+    await loadMinimumPaymentRule();
     $("#search").focus();
   }
 
@@ -167,6 +191,7 @@
     const order = {
       id: uid(), date: new Date().toISOString(), status: "gonderildi", gonderim: "bulut",
       paymentType: payment, grossTotal: gross(), cashDiscount: discount(), total: total(),
+      minimumUpfrontRate, minimumUpfrontAmount: payment === "acik" ? minimumUpfront() : 0, openBalanceAmount: payment === "acik" ? openBalance() : 0,
       note: $("#note").value.trim() || undefined,
       from: { name: `Telefon: ${formatPhone(phone)}`, phone: `0${phone}` },
       lines: items.map((item) => ({ catalogItemId: item.id, name: item.name, birim: item.unit, qty: item.qty, unitPrice: item.price })),
@@ -180,7 +205,9 @@
       renderCart();
       openCart(false);
       $("#receiptText").textContent = `Siparisiniz ${formatPhone(phone)} numarasi ile kaydedildi. Servis ekibi teslimat oncesi siparisinizi gorur.`;
-      $("#receiptSummary").innerHTML = `<div class="total-row"><span>Odeme</span><b>${payment === "nakit" ? "Nakit" : payment === "kart" ? "Kart" : "Acik hesap"}</b></div><div class="total-row"><span>Kalem sayisi</span><b>${items.length}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi</span><b>-${money.format(discount())}</b></div>` : ""}<div class="total-row"><span>Toplam</span><b>${money.format(total())}</b></div>`;
+      const openBreakdown = payment === "acik" && minimumUpfrontRate > 0
+        ? `<div class="total-row"><span>Teslimde minimum ödeme</span><b>${money.format(minimumUpfront())}</b></div><div class="total-row"><span>Açık hesaba yazılacak</span><b>${money.format(openBalance())}</b></div>` : "";
+      $("#receiptSummary").innerHTML = `<div class="total-row"><span>Odeme</span><b>${payment === "nakit" ? "Nakit" : payment === "kart" ? "Kart" : "Acik hesap"}</b></div><div class="total-row"><span>Kalem sayisi</span><b>${items.length}</b></div>${payment === "nakit" ? `<div class="total-row discount"><span>Nakit indirimi</span><b>-${money.format(discount())}</b></div>` : ""}${openBreakdown}<div class="total-row"><span>Toplam</span><b>${money.format(total())}</b></div>`;
       $("#receipt").hidden = false;
     } catch (error) {
       $("#submitError").textContent = "Siparis gonderilemedi. Baglantinizi kontrol edip tekrar deneyin.";
