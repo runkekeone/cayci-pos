@@ -30,3 +30,4 @@ src-yedek-*/
 
 # Android imza anahtarı — asla commit etme
 *.keystore
+tools/yedek/

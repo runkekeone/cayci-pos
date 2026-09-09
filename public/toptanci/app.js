@@ -329,7 +329,6 @@ const MENU = [
   { ico: "🖊", label: "Satış Yap", route: "satis" },
   { ico: "🚗", label: "Rota / Saha Satış", route: "rota" },
   { ico: "🗺", label: "Harita / Rota Planı", route: "harita" },
-  { ico: "🎧", label: "Saha Koçu (Görüşme Analizi)", route: "saha-kocu" },
   { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
   { ico: "📢", label: "Duyurular", route: "duyurular" },
   { ico: "📈", label: "Raporlar", children: [
@@ -430,7 +429,6 @@ function formModal(title, fields, item, onSave) {
     if (f.type === "select") return `<div class="field"><label>${f.label}</label><select data-k="${f.key}">${f.options.map((o) => { const v = typeof o === "object" ? o.v : o; const t = typeof o === "object" ? o.t : o; return `<option value="${esc(v)}" ${String(val) === String(v) ? "selected" : ""}>${esc(t)}</option>`; }).join("")}</select></div>`;
     if (f.type === "textarea") return `<div class="field"><label>${f.label}</label><textarea data-k="${f.key}" rows="3">${esc(val)}</textarea></div>`;
     if (f.type === "checkbox") return `<label class="field field-chk"><input data-k="${f.key}" type="checkbox" ${val ? "checked" : ""} /> <span>${f.label}</span></label>`;
-    if (f.type === "foto") return `<div class="field"><button class="btn soft" type="button" data-foto="${f.key}" style="width:100%;justify-content:center;min-height:44px">${f.label}</button><span class="hint" id="fotoDurum-${f.key}" style="display:block;margin-top:4px"></span></div>`;
     if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">📇 Rehber</button></div></div>`;
     return `<div class="field"><label>${f.label}${f.req ? " *" : ""}</label><input data-k="${f.key}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""} value="${esc(val)}" placeholder="${f.ph || ""}" /></div>`;
   }).join("");
@@ -441,13 +439,11 @@ function formModal(title, fields, item, onSave) {
         const inp = ov.querySelector(`[data-k="${b.dataset.rehberfor}"]`); if (inp && k.tel) inp.value = k.tel;
         const adInp = ov.querySelector('[data-k="ad"]'); if (adInp && !adInp.value && k.ad) adInp.value = k.ad;
       }));
-      ov.querySelectorAll("[data-foto]").forEach((b) => b.addEventListener("click", () => vergiLevhasiOku(ov, b.dataset.foto)));
     },
     onOk: (ov) => {
       const data = {};
       let ok = true;
       fields.forEach((f) => {
-        if (f.type === "foto") return; // sadece aksiyon butonu, veri değil
         const el = ov.querySelector(`[data-k="${f.key}"]`);
         let v = f.type === "checkbox" ? el.checked : el.value;
         if (f.type === "number") v = v === "" ? "" : Number(v);
@@ -689,7 +685,6 @@ function renderUrunAnaliz() {
 function openYeniMusteri(onDone, item, preset) {
   const seed = item || preset || null; // preset: yeni kayıt için varsayılan değerler (ör. bayi:true)
   formModal(item ? "Müşteri Düzenle" : (preset && preset.bayi ? "Yeni Servisçi (Bayi)" : "Yeni Müşteri Oluştur"), [
-    { key: "vergiFoto", label: "📷 Vergi Levhası Çek → Otomatik Doldur", type: "foto" },
     { key: "ad", label: "Müşteri Tanımı", req: true, ph: "Ad Soyad / Ünvan" },
     { key: "vade", label: "Vade Süresi (gün)", type: "number", ph: "opsiyonel" },
     { key: "telefon", label: "Telefon", ph: "05xx", rehber: true },
@@ -1941,11 +1936,11 @@ function renderRaporGunluk() {
     : "";
   return pageHead("Günlük Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "⇩ Satış Listesi (Excel)", cls: "softgreen", act: "gunlukCsv" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) + odemeUyari +
-    grid([["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"]]) +
-    `<div style="height:14px"></div>` +
-    grid([["Alınan Ödemeler", money.format(tahsilat)], ["Firma Ödemeleri", money.format(firmaOde)], ["Giderler", money.format(gider)], ["Gelirler", money.format(gelir)]]) +
-    `<div style="height:14px"></div>` +
-    grid([["Nakit Kasa Raporu", money.format(nakitKasa), "green"], ["Kâr", money.format(ciro - mal), "green"], ["Kâr Oranı", karOrani(ciro, mal), "green"], ["Ciro", money.format(ciro), "blue"], ["Ürün Maliyeti", money.format(mal)]]);
+    `<div class="summary-grid rapor-metrik-grid">${[
+      ["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"],
+      ["Alınan Ödemeler", money.format(tahsilat)], ["Firma Ödemeleri", money.format(firmaOde)], ["Giderler", money.format(gider)], ["Gelirler", money.format(gelir)],
+      ["Nakit Kasa Raporu", money.format(nakitKasa), "green"], ["Kâr", money.format(ciro - mal), "green"], ["Kâr Oranı", karOrani(ciro, mal), "green"], ["Ciro", money.format(ciro), "blue"], ["Ürün Maliyeti", money.format(mal)]
+    ].map((s) => stat(s[0], s[1], s[2])).join("")}</div>`;
 }
 function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
@@ -2071,7 +2066,7 @@ function renderAlisOlustur() {
     </div></div>
     <div class="card">
       <table class="line-table" id="aTable"><thead><tr><th style="width:40%">Ürün</th><th>Miktar</th><th>Birim Fiyat (₺)</th><th>Tutar</th><th></th></tr></thead><tbody id="aBody"></tbody></table>
-      <div style="margin-top:10px"><button class="btn soft" id="aAddRow" type="button">＋ Satır ekle</button> <button class="btn soft" id="aFoto" type="button">📷 Faturadan oku</button> <span id="aFotoDurum" class="hint"></span></div>
+      <div style="margin-top:10px"><button class="btn soft" id="aAddRow" type="button">＋ Satır ekle</button></div>
       <p class="hint">Not: Listeden ürün seçersen o ürünün stoğu artar. "Yeni ürün" seçersen faturaya yazılır ama stok tutulmaz.</p>
       <div class="totbox" style="margin-top:10px"><strong>Genel Toplam: <span id="aTotal">₺0,00</span></strong></div>
       <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="aSave" type="button">💾 Alış Faturasını Kaydet</button></div>
@@ -2093,7 +2088,7 @@ function alisRefresh() {
   document.querySelectorAll("[data-ar]").forEach((el) => el.addEventListener("input", () => { const i = Number(el.dataset.ar), fld = el.dataset.fld; alisRows[i][fld] = el.value; if (fld === "urunId") { const pr = findProduct(el.value); if (pr && !Number(alisRows[i].birimFiyat)) alisRows[i].birimFiyat = pr.alis || 0; alisRefresh(); } if (fld === "adet" || fld === "birimFiyat") alisRefresh(); }));
   document.querySelectorAll("[data-armv]").forEach((b) => b.addEventListener("click", () => { alisRows.splice(Number(b.dataset.armv), 1); if (!alisRows.length) alisRows.push({ urunId: "", ad: "", adet: 1, birimFiyat: 0 }); alisRefresh(); }));
 }
-/* ---- Fotoğraftan fatura okuma (AI Vision, Supabase Edge Function) ---- */
+/* ---- Metin normalleştirme + ürün eşleştirme (serbest yazılan siparişi ürüne bağlar) ---- */
 function ocrNorm(s) {
   return String(s || "").toLocaleLowerCase("tr")
     .replace(/[ıİ]/g, "i").replace(/[şŞ]/g, "s").replace(/[ğĞ]/g, "g")
@@ -2138,111 +2133,9 @@ function ocrMatch(name, list, key) {
   }
   return score >= 20 ? best : "";
 }
-function ocrPickImage(cb) {
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
-  inp.style.display = "none"; document.body.appendChild(inp);
-  inp.addEventListener("change", () => {
-    const f = inp.files && inp.files[0];
-    document.body.removeChild(inp);
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => { const s = String(r.result), c = s.indexOf(","); const h = s.slice(0, c); const mt = (h.match(/data:([^;]+)/) || [])[1] || "image/jpeg"; cb(s.slice(c + 1), mt); };
-    r.readAsDataURL(f);
-  });
-  inp.click();
-}
-/** OCR hata metnini kullanıcının anlayacağı dile çevir (sessiz başarısızlık olmasın). */
-function ocrHataMetni(res, error) {
-  const ham = String((res && res.error) || (error && (error.message || error)) || "").toLowerCase();
-  if (ham.includes("gecersiz mode")) return "Sunucudaki okuma servisi eski sürüm — 'vergi levhası' modu yok. Güncellenmesi gerek (Supabase → ocr-extract).";
-  if (ham.includes("api key")) return "Yapay zekâ anahtarı geçersiz/süresi dolmuş. Supabase → Edge Functions → Secrets → ANTHROPIC_API_KEY yenilenmeli.";
-  if (ham.includes("kurulmamis")) return "Sunucuda ANTHROPIC_API_KEY tanımlı değil — kurulum gerek.";
-  if (ham.includes("gorsel yok")) return "Fotoğraf gönderilemedi, tekrar dene.";
-  if (ham.includes("failed to fetch") || ham.includes("network")) return "İnternete ulaşılamadı. Bağlantını kontrol edip tekrar dene.";
-  return ham ? "Okunamadı: " + ham : "Okunamadı — internet/kurulum gerekli. Elle girebilirsin.";
-}
-
-// Vergi levhası fotoğrafı → OCR → müşteri formu alanlarını doldur (formModal içinden)
-async function vergiLevhasiOku(ov, key) {
-  const durum = ov.querySelector("#fotoDurum-" + key);
-  if (!SB || !SB.functions) { if (durum) durum.textContent = "Bulut bağlantısı yok."; alert("Bulut bağlantısı yok — fotoğraftan okuma internet ister."); return; }
-  ocrPickImage(async (imageBase64, mediaType) => {
-    if (durum) durum.textContent = "Vergi levhası okunuyor… (10-20 sn)";
-    let res, hata;
-    try {
-      const { data, error } = await SB.functions.invoke("ocr-extract", { body: { mode: "vergi", imageBase64, mediaType } });
-      res = error ? null : data; hata = error;
-    } catch (e) { res = null; hata = e; }
-    if (!res || !res.ok || !res.data) {
-      const m = ocrHataMetni(res, hata);
-      if (durum) durum.textContent = "⚠ " + m;
-      alert("Vergi levhası okunamadı.\n\n" + m);   // sessizce hiçbir şey olmaması yerine sebebi söyle
-      return;
-    }
-    const d = res.data, set = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el && !el.value) el.value = v; };
-    const setForce = (k, v) => { if (v == null || v === "") return; const el = ov.querySelector(`[data-k="${k}"]`); if (el) el.value = v; };
-    setForce("ad", d.unvan); setForce("vergiNo", d.vergiNo); setForce("vergiDairesi", d.vergiDairesi);
-    setForce("adres", d.adres); set("bolge", d.il); set("mahalle", d.ilce);
-    if (durum) durum.textContent = "✓ Dolduruldu — kontrol edip Kaydet'e bas.";
-  });
-}
-async function alisFotoOku() {
-  const durum = document.getElementById("aFotoDurum");
-  ocrPickImage(async (imageBase64, mediaType) => {
-    if (durum) durum.textContent = "Okunuyor… (10-20 sn)";
-    let res, hata;
-    try {
-      const { data, error } = await SB.functions.invoke("ocr-extract", {
-        body: { mode: "fatura", imageBase64, mediaType, catalog: store.products.map((p) => p.ad) },
-      });
-      res = error ? null : data; hata = error;
-    } catch (e) { res = null; hata = e; }
-    if (!res || !res.ok || !res.data) {
-      const m = ocrHataMetni(res, hata);
-      if (durum) durum.textContent = "⚠ " + m;
-      alert("Fatura okunamadı.\n\n" + m);
-      return;
-    }
-    const d = res.data;
-    if (d.no) { const el = document.getElementById("aNo"); if (el) el.value = d.no; }
-    if (d.tarih) { const t = new Date(d.tarih); if (!isNaN(t)) { const el = document.getElementById("aTarih"); if (el) el.value = t.toISOString().slice(0, 10); } }
-    if (d.firma) { const fid = ocrMatch(d.firma, store.firmalar, "ad"); const el = document.getElementById("aFirma"); if (fid && el) el.value = fid; }
-    if (Array.isArray(d.lines) && d.lines.length) {
-      alisRows = d.lines.map((l) => { const pid = ocrMatch(l.ad, store.products, "ad"); return { urunId: pid, ad: pid ? "" : (l.ad || ""), adet: Number(l.adet) || 1, birimFiyat: Number(l.birimFiyat) || 0 }; });
-      alisRefresh();
-    }
-    if (durum) durum.textContent = "Okundu — kontrol edip Kaydet'e bas.";
-  });
-}
-/* Satış ekranı — fotoğraftan fiş okuyup sepete ürün ekle (mode: masa) */
-async function satisFotoOku() {
-  ocrPickImage(async (imageBase64, mediaType) => {
-    let res;
-    try {
-      const { data, error } = await SB.functions.invoke("ocr-extract", {
-        body: { mode: "masa", imageBase64, mediaType, catalog: store.products.map((p) => p.ad) },
-      });
-      res = error ? null : data;
-    } catch (e) { res = null; }
-    if (!res || !res.ok || !res.data || !Array.isArray(res.data.lines)) { alert("Okunamadı — internet/kurulum gerekli. Elle ekleyebilirsin."); return; }
-    let eklendi = 0, atlandi = 0;
-    res.data.lines.forEach((l) => {
-      const pid = ocrMatch(l.name, store.products, "ad");
-      if (!pid) { atlandi++; return; }
-      const q = Math.max(1, Math.round(Number(l.qty) || 1));
-      for (let k = 0; k < q; k++) addToCart(pid);
-      eklendi++;
-    });
-    render();
-    alert(eklendi + " ürün sepete eklendi" + (atlandi ? ", " + atlandi + " ürün eşleşmedi (elle ekle)" : "") + ".");
-  });
-}
 function mountAlisOlustur() {
   alisRefresh();
   document.getElementById("aAddRow").addEventListener("click", () => { alisRows.push({ urunId: "", ad: "", adet: 1, birimFiyat: 0 }); alisRefresh(); });
-  const foto = document.getElementById("aFoto");
-  if (foto) foto.addEventListener("click", alisFotoOku);
   document.getElementById("aSave").addEventListener("click", () => {
     const items = alisRows.filter((r) => (r.urunId || (r.ad || "").trim()) && Number(r.adet) > 0).map((r) => ({ urunId: r.urunId || null, ad: r.urunId ? (findProduct(r.urunId) || {}).ad : (r.ad || "").trim(), adet: Number(r.adet), birimFiyat: Number(r.birimFiyat) || 0 }));
     if (!items.length) { alert("En az bir ürün satırı girin."); return; }
@@ -2778,7 +2671,6 @@ const PAGES = {
   rota: { render: renderRota, mount: mountRota },
   "rota-olustur": { render: renderRotaOlustur, mount: mountRotaOlustur },
   harita: { render: renderHarita, mount: mountHarita },
-  "saha-kocu": { render: renderSahaKocu, mount: mountSahaKocu },
   talepler: { render: renderTalepler, mount: mountTalepler },
   "servis-raporlari": { render: renderServisRaporlari, mount: mountServisRaporlari },
   "satis-detay": { render: renderSatisDetay, mount: mountSatisDetay },
@@ -2934,103 +2826,8 @@ function renderEFaturaAyarlar() {
 }
 function mountEFaturaAyarlar() { document.getElementById("efAyarForm").addEventListener("submit", (e) => { e.preventDefault(); const f = new FormData(e.target); ["firmaAdi", "firmaNo", "eposta", "gib"].forEach((k) => store.settings[k] = f.get(k)); saveStore(); alert("Kaydedildi ✔"); }); }
 
-/* ============ SAHA KOÇU (Görüşme Analizi) ============ */
-function sesDosyaSec(cb) {
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = "audio/*"; inp.setAttribute("capture", "microphone");
-  inp.style.display = "none"; document.body.appendChild(inp);
-  inp.addEventListener("change", () => {
-    const f = inp.files && inp.files[0]; document.body.removeChild(inp);
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => { const s = String(r.result), c = s.indexOf(","); const h = s.slice(0, c); const mt = (h.match(/data:([^;]+)/) || [])[1] || "audio/webm"; cb(s.slice(c + 1), mt); };
-    r.readAsDataURL(f);
-  });
-  inp.click();
-}
-function kocKartHTML(a) {
-  if (!a) return "";
-  const list = (arr) => (arr && arr.length) ? `<ul class="koc-list">${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="hint">—</p>`;
-  const puan = Math.max(0, Math.min(100, Math.round(Number(a.puan) || 0)));
-  const renk = puan >= 70 ? "iyi" : puan >= 45 ? "orta" : "dusuk";
-  const itir = (a.itirazlar && a.itirazlar.length)
-    ? `<ul class="koc-list">${a.itirazlar.map((i) => `<li><b>${esc(i.itiraz)}</b><br><span class="hint">→ ${esc(i.karsilanma)}</span></li>`).join("")}</ul>`
-    : `<p class="hint">Belirgin itiraz yok.</p>`;
-  return `<div class="koc-kart">
-    <div class="koc-head">
-      <div class="koc-puan ${renk}">${puan}<span>/100</span></div>
-      <div class="koc-ozet">${esc(a.ozet || "")}</div>
-    </div>
-    <div class="koc-blok koc-iyi"><h3>✓ İyi yapılanlar</h3>${list(a.iyi)}</div>
-    <div class="koc-blok koc-eksik"><h3>✗ Kaçırılanlar</h3>${list(a.eksik)}</div>
-    <div class="koc-blok"><h3>💬 İtirazlar & karşılanma</h3>${itir}</div>
-    <div class="koc-blok"><h3>🎯 Kaçan fırsatlar</h3>${list(a.firsatlar)}</div>
-    <div class="koc-blok koc-oneri"><h3>💡 Öneriler ("şöyle deseydin")</h3>${list(a.oneriler)}</div>
-  </div>`;
-}
-function renderSahaKocu() {
-  const gec = [...(store.gorusmeler || [])].reverse().slice(0, 20);
-  const musOpts = `<option value="">Müşteri seç (ops.)</option>` + store.customers.map((m) => `<option value="${m.id}">${esc(m.ad)}</option>`).join("");
-  const persOpts = store.personeller.length ? `<select id="skPers"><option value="">Plasiyer seç (ops.)</option>${store.personeller.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("")}</select>` : "";
-  const gecRows = gec.length ? gec.map((g) => {
-    const c = g.musteriId && findCustomer(g.musteriId);
-    const p = Math.round(Number(g.analiz && g.analiz.puan) || 0);
-    const renk = p >= 70 ? "iyi" : p >= 45 ? "orta" : "dusuk";
-    return `<div class="koc-gec" data-gec="${g.id}"><span class="koc-gpuan ${renk}">${p}</span><div class="koc-gmid"><b>${c ? esc(c.ad) : "Görüşme"}</b><span class="hint">${fmtDate(g.tarih)}</span></div><button class="rm" data-gecdel="${g.id}" type="button">✕</button></div>`;
-  }).join("") : `<p class="hint">Henüz görüşme analizi yok.</p>`;
-  return pageHead("Saha Koçu", "Görüşme kaydını yükle → yapay zeka satışını analiz etsin") +
-    `<div class="card">
-      <div class="koc-kvkk">
-        <label><input type="checkbox" id="skOnay" /> <b>Müşteriye kayıt alındığı bildirildi ve onay verildi.</b> (KVKK — zorunlu)</label>
-      </div>
-      <div class="form-grid" style="margin-top:12px">
-        <div class="field"><label>Müşteri</label><select id="skMus">${musOpts}</select></div>
-        ${persOpts ? `<div class="field"><label>Plasiyer</label>${persOpts}</div>` : ""}
-      </div>
-      <div style="margin-top:14px;text-align:center">
-        <button class="btn green lg" id="skSes" type="button" disabled>🎧 Ses Kaydını Yükle & Analiz Et</button>
-        <p class="hint" id="skDurum" style="margin-top:10px">Telefonun ses kayıt uygulamasıyla görüşmeyi kaydet, sonra buradan yükle. (En fazla ~15 dk.)</p>
-      </div>
-      <div id="skSonuc" style="margin-top:12px"></div>
-    </div>
-    <div class="section-title" style="margin-top:16px">Geçmiş Görüşmeler</div>
-    <div class="card">${gecRows}</div>`;
-}
-function mountSahaKocu() {
-  const onay = document.getElementById("skOnay"), btn = document.getElementById("skSes"), durum = document.getElementById("skDurum"), sonuc = document.getElementById("skSonuc");
-  if (onay) onay.addEventListener("change", () => { btn.disabled = !onay.checked; });
-  if (btn) btn.addEventListener("click", () => {
-    if (!onay.checked) { alert("Önce KVKK onayını işaretle."); return; }
-    sesDosyaSec(async (audioBase64, mediaType) => {
-      durum.textContent = "Yükleniyor ve analiz ediliyor… (birkaç dakika sürebilir)"; btn.disabled = true;
-      let res;
-      try {
-        const { data, error } = await SB.functions.invoke("ses-analiz", { body: { audioBase64, mediaType } });
-        res = error ? null : data;
-      } catch (e) { res = null; }
-      btn.disabled = false;
-      if (!res || !res.ok) { durum.textContent = "Analiz edilemedi — internet/kurulum (OpenAI anahtarı) gerekli. Hata: " + ((res && res.error) || "bağlantı"); return; }
-      durum.textContent = "Analiz hazır ✔";
-      sonuc.innerHTML = kocKartHTML(res.analiz);
-      const g = { id: genId(), tarih: new Date().toISOString(), musteriId: document.getElementById("skMus").value || null, plasiyerId: (document.getElementById("skPers") || {}).value || null, transcript: res.transcript || "", analiz: res.analiz };
-      store.gorusmeler = store.gorusmeler || []; store.gorusmeler.push(g);
-      saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
-    });
-  });
-  document.querySelectorAll("[data-gec]").forEach((el) => el.addEventListener("click", (e) => {
-    if (e.target.closest("[data-gecdel]")) return;
-    const g = (store.gorusmeler || []).find((x) => x.id === el.dataset.gec);
-    if (g) { document.getElementById("skSonuc").innerHTML = kocKartHTML(g.analiz); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  }));
-  document.querySelectorAll("[data-gecdel]").forEach((b) => b.addEventListener("click", () => {
-    if (!confirm("Bu görüşme analizi silinsin mi?")) return;
-    store.gorusmeler = (store.gorusmeler || []).filter((x) => x.id !== b.dataset.gecdel);
-    saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); render();
-  }));
-}
-
 /* ============ ROTA / SAHA SATIŞ ============ */
-const rota = { konum: null, kayit: null, kayitTimer: null };
+const rota = { konum: null };
 // Aktif servis oturumu (kalıcı değil — modül seviyesinde, gezinmede korunur):
 const servis = { aktif: false, musteriIds: [], edilen: [], paslar: [], acik: null, adim: "onay", satislar: [], sonSatisId: null, watchId: null, stokBitti: false, km: 0, kmSon: null };
 
@@ -3241,9 +3038,6 @@ function musteriAylikCiro(id) {
 function musterininSonSatisi(id) {
   const l = store.sales.filter((s) => s.musteriId === id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   return l[0] || null;
-}
-function blobToBase64(blob) {
-  return new Promise((res) => { const r = new FileReader(); r.onload = () => { const s = String(r.result); res(s.slice(s.indexOf(",") + 1)); }; r.readAsDataURL(blob); });
 }
 // Bakiye takibi: önceki bakiye → bu alışveriş → ödeme/tahsilat/iade → kalan bakiye.
 // customerBorc(id) = kesin güncel bakiye (açılış + açık satışlar - ödemeler). Pozitif = müşteri borçlu.
@@ -3480,11 +3274,6 @@ function ziyaretKartiHTML(id) {
       ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>
       <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
     </div>
-    <div class="zk-kayit">
-      <label class="zk-kvkk"><input type="checkbox" id="zkOnay" /> Müşteriye kayıt onayı verildi (KVKK)</label>
-      <button class="btn lg" id="zkKayit" data-mus="${id}" type="button" disabled>🎙 Görüşmeyi Kaydet</button>
-      <p class="hint" id="zkDurum">Kaydı başlat, konuşma bitince durdur → analiz.</p>
-      <div id="ziyaretKocKart" style="margin-top:10px"></div>
     </div>
   </div>`;
 }
@@ -3506,47 +3295,6 @@ function ziyaretKartiWire(id) {
   if (tel && typeof kvGet === "function") { kvGet("bayi_puan:" + tel).then((r) => { if (pEl) pEl.textContent = num2.format((r && r.value) || 0); }).catch(() => { if (pEl) pEl.textContent = "0"; }); }
   else if (pEl) pEl.textContent = "0";
   // kayıt
-  const onay = document.getElementById("zkOnay"), kbtn = document.getElementById("zkKayit"), durum = document.getElementById("zkDurum");
-  onay.addEventListener("change", () => { kbtn.disabled = !onay.checked && !rota.kayit; });
-  kbtn.addEventListener("click", () => {
-    if (rota.kayit) gorusmeKayitDurdur(kbtn, durum);
-    else { if (!onay.checked) { alert("Önce KVKK onayını işaretle."); return; } gorusmeKayitBaslat(id, kbtn, durum); }
-  });
-}
-async function gorusmeKayitBaslat(musteriId, btn, durum) {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const rec = new MediaRecorder(stream);
-    const chunks = [];
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
-      durum.textContent = "Yükleniyor ve analiz ediliyor… (birkaç dakika)";
-      const b64 = await blobToBase64(blob);
-      let res;
-      try { const { data, error } = await SB.functions.invoke("ses-analiz", { body: { audioBase64: b64, mediaType: blob.type } }); res = error ? null : data; }
-      catch (e) { res = null; }
-      if (!res || !res.ok) { durum.textContent = "Analiz edilemedi: " + ((res && res.error) || "bağlantı/kurulum"); return; }
-      durum.textContent = "Analiz hazır ✔";
-      const g = { id: genId(), tarih: new Date().toISOString(), musteriId, plasiyerId: null, transcript: res.transcript || "", analiz: res.analiz };
-      store.gorusmeler = store.gorusmeler || []; store.gorusmeler.push(g); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
-      const k = document.getElementById("ziyaretKocKart"); if (k) k.innerHTML = kocKartHTML(res.analiz);
-    };
-    rec.start();
-    rota.kayit = { rec, musteriId };
-    rota.kayitTimer = setTimeout(() => { if (rota.kayit) gorusmeKayitDurdur(btn, durum); }, 15 * 60 * 1000);
-    btn.textContent = "⏹ Kaydı Durdur";
-    btn.classList.add("kayit-aktif");
-    durum.textContent = "🔴 Kayıt sürüyor… (en fazla 15 dk)";
-  } catch (e) {
-    durum.textContent = "Mikrofon açılamadı — izin verildi mi / APK güncel mi? (" + (e.message || e) + ")";
-  }
-}
-function gorusmeKayitDurdur(btn, durum) {
-  if (rota.kayit && rota.kayit.rec && rota.kayit.rec.state !== "inactive") rota.kayit.rec.stop();
-  clearTimeout(rota.kayitTimer); rota.kayit = null;
-  if (btn) { btn.textContent = "🎙 Görüşmeyi Kaydet"; btn.classList.remove("kayit-aktif"); }
 }
 function rotaListeDoldur() {
   const el = document.getElementById("rotaListe"); if (!el) return;
@@ -3742,7 +3490,6 @@ function servisSihirbaz(id) {
         <div class="sip-btns">
           <button class="btn soft" id="zkSes" type="button">&#127908; Sesli</button>
           <button class="btn green" id="zkHizliBtn" type="button">&#10003; Doldur</button>
-          <button class="btn soft" id="sFoto" type="button">&#128247; Kamera</button>
         </div>
       </div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
@@ -4354,7 +4101,6 @@ function mountRota() {
       const ps = document.getElementById("prodSearch"); if (ps) ps.addEventListener("input", () => { pos.q = ps.value; gridYen(); });
       const hz = document.getElementById("zkHizliBtn"); if (hz) hz.addEventListener("click", () => hizliSiparisDoldurInline(servis.acik));
       const sesB = document.getElementById("zkSes"); if (sesB) sesB.addEventListener("click", () => sesliSiparis("zkHizli"));
-      const sf = document.getElementById("sFoto"); if (sf) sf.addEventListener("click", satisFotoOku);
       const og = document.getElementById("odemeGec"); if (og) og.addEventListener("click", () => { if (!activeCart().items.length) { alert("Sepet boş — ürün ekle."); return; } servis.adim = "odeme"; render(); });
       servisSepetWire();
     }
