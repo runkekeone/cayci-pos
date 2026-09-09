@@ -75,7 +75,7 @@ export default function Satis() {
   // Ödeme düğmesine art arda basılmasını engelleyen kilit (çift satış koruması).
   const odemeKilit = useRef(false)
   const [target, setTarget] = useState<Target>({ kind: 'hizli' })
-  const [sadeceDolu, setSadeceDolu] = useState(false) // masa şeridini dolulara indirger
+  const [masalarAcik, setMasalarAcik] = useState(false)
   const [quick, setQuick] = useState<SaleLine[]>([])
   const [customerId, setCustomerId] = useState('')
   const [cat, setCat] = useState('Hepsi')
@@ -88,8 +88,6 @@ export default function Satis() {
   const [parcali, setParcali] = useState(false)
   // Yapılmış satışı incele/düzenle modalı.
   const [incele, setIncele] = useState<Sale | null>(null)
-  // Mobilde sepet alttan açılan panel. Masaüstünde CSS bunu yok sayar.
-  const [sepetAcik, setSepetAcik] = useState(false)
   // Satış bitince çıkan onay balonu — "oldu mu olmadı mı" belirsizliğini bitirir.
   const [onay, setOnay] = useState<{ tutar: number; payment: Payment } | null>(null)
   // Veresiyeye basıldı ama müşteri seçilmedi: seçiciyi öne çıkar.
@@ -249,7 +247,6 @@ export default function Satis() {
       setQuick([])
     }
     setCustomerId('')
-    setSepetAcik(false)
     setMusteriSor(false)
     // Satış olduğunu göster: eskiden ekran sessizce temizleniyordu.
     setOnay({ tutar, payment })
@@ -273,7 +270,6 @@ export default function Satis() {
   useEffect(() => {
     const f = () => {
       setTarget({ kind: 'hizli' })
-      setSepetAcik(false)
     }
     window.addEventListener('cayci-hizli', f)
     return () => window.removeEventListener('cayci-hizli', f)
@@ -288,7 +284,6 @@ export default function Satis() {
     w.__cayMasaAc = undefined
     if (id && s.tables.some((t) => t.id === id)) {
       setTarget({ kind: 'masa', id })
-      setSepetAcik(true)
     }
     // yalnız mount'ta: bekleyen id'yi bir kez tüket
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,7 +297,6 @@ export default function Satis() {
     if (target.kind === 'hizli') setQuick([])
     setCustomerId('')
     setParcali(false)
-    setSepetAcik(false)
   }
 
   // Masa şeridi özeti — telefonda tek bakışta: kaç masa dolu, ne kadar açık hesap,
@@ -313,15 +307,7 @@ export default function Satis() {
     0,
   )
   const enUzunDk = doluMasalar.reduce((n, t) => Math.max(n, gecenDakika(t.openedAt)), 0)
-  // Filtre açıkken hepsi boşalırsa şerit boş kalmasın diye tüm masalara dönülür.
-  // Seçili masa boşalsa bile şeritte kalır: ödemesi alınan masa gözden kaybolup
-  // "Masa 3 adisyonu açık" yazısı ortada kalmasın, kullanıcı ona geri dönebilsin.
-  const gorunenMasalar =
-    sadeceDolu && doluMasalar.length
-      ? s.tables.filter(
-          (t) => t.lines.length > 0 || (target.kind === 'masa' && target.id === t.id),
-        )
-      : s.tables
+  const gorunenMasalar = s.tables
 
   return (
     <>
@@ -347,21 +333,12 @@ export default function Satis() {
         </button>
       </div>
 
+      <div className="satis-masa-secimi">
       {/* ---- masalar ----
            Kategori sırasıyla üst üste iki benzer pil şeridi oluşuyordu ve hangisinin
            ne olduğu anlaşılmıyordu. Artık her şerit ne seçtiğini söylüyor. */}
       <div className="masa-baslik">
         <span className="serit-etiket">Masa seçin</span>
-        {/* Filtre açıkken pil kaybolursa kullanıcı filtreyi kapatamaz — o yüzden
-            dolu masa kalmasa bile açık filtre için pil görünmeye devam eder. */}
-        {(doluMasalar.length > 0 || sadeceDolu) && (
-          <button
-            className={`masa-filtre ${sadeceDolu ? 'on' : ''}`}
-            onClick={() => setSadeceDolu(!sadeceDolu)}
-          >
-            {sadeceDolu ? '✓ ' : ''}Sadece dolu ({doluMasalar.length})
-          </button>
-        )}
       </div>
 
       {/* Masa durumu özeti — telefonda şeridi kaydırmadan görünen tek satır. */}
@@ -472,6 +449,7 @@ export default function Satis() {
           )}
         </div>
       )}
+      </div>
 
       {azalanlar.length > 0 && (
         <div
@@ -486,7 +464,7 @@ export default function Satis() {
       )}
 
       {/* ---- ürünler + sepet ---- */}
-      <div className="grid2" style={{ marginTop: 16 }}>
+      <div className="grid2 satis-grid" style={{ marginTop: 16 }}>
         <div>
           {detayli && (
             <div
@@ -528,11 +506,6 @@ export default function Satis() {
                 ✕
               </button>
             )}
-          </div>
-          <div className="row" style={{ marginBottom: 12 }}>
-            <button className="btn sm" onClick={() => setFisOku(true)}>
-              📷 Fişten doldur
-            </button>
           </div>
           <div className="row cat-row" style={{ marginBottom: 12 }}>
             {cats.map((c) => (
@@ -583,21 +556,48 @@ export default function Satis() {
           </div>
         </div>
 
-        <div className={`card cart ${sepetAcik ? 'open' : ''}`}>
+        <div className="card cart">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <strong className="row" style={{ gap: 8 }}>
-              Adisyon
+              Sepet
               <span className="tag warn">
                 {target.kind === 'masa' ? `🪑 ${table?.name}` : '⚡ Hızlı satış'}
               </span>
             </strong>
-            <button
-              className="btn sm ghost only-mobile"
-              onClick={() => setSepetAcik(false)}
-              title="Kapat"
-            >
-              ▼
-            </button>
+          </div>
+          <p className="cart-ozet only-mobile" aria-live="polite">
+            {lines.length ? lines.map((l) => `${l.qty} × ${l.name}`).join(' · ') : 'Henüz ürün eklenmedi.'}
+          </p>
+
+          <div className="masa-secici only-mobile">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <strong>Masa seç</strong>
+              <button className={`btn sm ${target.kind === 'hizli' ? 'primary' : 'ghost'}`} onClick={() => setTarget({ kind: 'hizli' })}>
+                ⚡ Hızlı
+              </button>
+            </div>
+            <div className="tables sepet-masalar">
+              {(masalarAcik ? gorunenMasalar : gorunenMasalar.slice(0, 4)).map((t) => {
+                const dolu = t.lines.length > 0
+                const on = target.kind === 'masa' && target.id === t.id
+                return (
+                  <button
+                    key={t.id}
+                    className={`table-btn ${dolu ? 'busy' : ''} ${on ? 'on' : ''}`}
+                    onClick={() => setTarget({ kind: 'masa', id: t.id })}
+                  >
+                    <span className="t-ic">🪑</span>
+                    <span className="nm">{t.name}</span>
+                    <span className="am">{dolu ? `${t.lines.reduce((n, l) => n + l.qty, 0)} ürün` : 'boş'}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {gorunenMasalar.length > 4 && (
+              <button className="masa-devam" onClick={() => setMasalarAcik((acik) => !acik)}>
+                {masalarAcik ? '▴ Masaları daralt' : `▾ Tüm masaları göster (${gorunenMasalar.length})`}
+              </button>
+            )}
           </div>
           <div className="row" style={{ marginTop: 8 }}>
             <button
@@ -628,6 +628,7 @@ export default function Satis() {
             {lines.map((l, idx) => (
               <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}>
                 {urunGorsel(l.itemId) && <img className="cl-img" src={urunGorsel(l.itemId)!} alt="" />}
+                <span className="cart-line-qty">{l.qty} ×</span>
                 <button className="x" onClick={() => azalt(idx)} title="Bir azalt">
                   −
                 </button>
@@ -686,7 +687,7 @@ export default function Satis() {
               altında Kart turuncu + Veresiye koyu. */}
           <div className="pays">
             <button className="pay nakit genis" disabled={!lines.length} onClick={() => ode('nakit')}>
-              <b>💵 Nakit — Ödeme Al</b>
+              <b>💵 Nakit</b>
               <small>parayı aldım</small>
             </button>
             <button className="pay kart" disabled={!lines.length} onClick={() => ode('kart')}>
@@ -706,17 +707,6 @@ export default function Satis() {
         <div className="onay" role="status">
           ✓ Satış tamam · <b>{fmtTL(onay.tutar)}</b> ·{' '}
           {onay.payment === 'nakit' ? 'Nakit' : onay.payment === 'kart' ? 'Kart' : 'Veresiye'}
-        </div>
-      )}
-
-      {/* ---- mobil: sepet çubuğu ve panel örtüsü ---- */}
-      {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}
-
-      {lines.length > 0 && !sepetAcik && (
-        <div className="sepet-bar only-mobile" onClick={() => setSepetAcik(true)}>
-          <span className="sb-adet">{lines.reduce((n, l) => n + l.qty, 0)}</span>
-          <span className="sb-tut">{fmtTL(total)}</span>
-          <button className="sb-btn">Ödeme al</button>
         </div>
       )}
 

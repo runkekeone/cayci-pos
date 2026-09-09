@@ -519,7 +519,44 @@ h1 {
 
 @media (max-width: 560px) {
   .rgrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .rbox {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 10px;
+    min-height: 112px;
+  }
+
+  .rbox-ic {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 15px;
+  }
+
+  .rbox-txt {
+    width: 100%;
+    text-align: left;
+  }
+
+  .rbox-k {
+    font-size: 10px;
+    white-space: normal;
+    margin-bottom: 3px;
+  }
+
+  .rbox-v {
+    font-size: 15px;
+  }
+
+  .rbox-ek {
+    display: block;
+    margin: 2px 0 0;
+    font-size: 10px;
   }
 }
 
@@ -1526,26 +1563,121 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
-  /* --- masalar: yatay şerit. 12 masa 4 satır kaplayıp ürünleri aşağı itmesin. --- */
-  .tables {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 4px;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .tables::-webkit-scrollbar {
+  /* Masa seçimi mobilde sepetin içine taşındı; ürünler üstünde ayrı blok olmaz. */
+  .satis-masa-secimi {
     display: none;
   }
 
+  .satis-grid .cart {
+    order: -1;
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    margin: 0 0 12px;
+    max-height: none;
+    overflow: visible;
+    padding: 12px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transform: none;
+    visibility: visible;
+  }
+
+  .cart-ozet.only-mobile {
+    display: block;
+    margin: 7px 0 10px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .masa-secici.only-mobile {
+    display: block;
+    margin: 10px 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .sepet-masalar {
+    margin-top: 8px;
+  }
+
+  .masa-devam {
+    display: block;
+    width: 100%;
+    margin-top: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--accent-deep);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  /* Sepet, eski uygulamadaki gibi ürün satırlarını doğrudan gösterir. */
+  .satis-grid .cart-lines {
+    display: flex;
+    max-height: 132px;
+    margin: 8px 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .satis-grid .cart .cline {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 7px 0;
+    font-size: 12px;
+  }
+
+  .satis-grid .cart .cline .cl-img,
+  .satis-grid .cart .cline .x,
+  .satis-grid .cart .cline .qty {
+    display: none;
+  }
+
+  .cart-line-qty {
+    display: none;
+    color: var(--muted);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .satis-grid .cart .cart-line-qty {
+    display: block;
+  }
+
+  .satis-grid .cart .cline .nm {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .satis-grid .cart .cline .am {
+    font-size: 12px;
+  }
+
+  .satis-grid .cart .total {
+    margin: 7px 0;
+    font-size: 14px;
+  }
+
+  /* --- Hızlı sipariş masaları: ekranda kırpılmak yerine dört eşit kart. --- */
+  .tables {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+
   .table-btn {
-    flex: 0 0 86px;
-    scroll-snap-align: start;
+    min-width: 0;
+    padding-inline: 4px;
   }
 
   /* kategori düğmeleri de tek satırda kaysın */
@@ -1643,19 +1775,41 @@ tr:last-child td {
   }
 
 
-  /* --- ürünler: parmakla basılacak, biraz büyük --- */
+  /* --- ürünler: dört kompakt kart, ekranı gereksiz uzatmaz --- */
   .tiles {
-    grid-template-columns: repeat(auto-fill, minmax(102px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .tile {
-    padding: 12px 6px;
-    min-height: 92px;
+    padding: 8px 3px;
+    min-height: 76px;
+    gap: 4px;
+  }
+
+  .tile .ic,
+  .tile .ic-img {
+    width: 22px;
+    height: 22px;
+    font-size: 21px;
   }
 
   .tile .nm {
-    font-size: 13px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .tile .pr { font-size: 11px; }
+
+  .ara-kutu {
+    gap: 6px;
+    padding: 4px 12px;
+    margin-bottom: 6px;
+    border-radius: 18px;
+  }
+  .ara-kutu input {
+    padding: 4px 0;
+    font-size: 14px;
   }
 
   /* iOS: 16px altındaki inputlara odaklanınca sayfayı zoomluyor */
@@ -1670,46 +1824,33 @@ tr:last-child td {
     font-size: 16px;
   }
 
-  /* --- sepet: alttan açılan panel --- */
+  /* Masaüstü kuralı mobilde geçerli kalmasın: sepet artık alttan açılan panel değil. */
   .cart {
-    position: fixed;
-    /* masaüstündeki "top: 24px" burada geçerli kalırsa panel aşağı inemez,
-       alt menüyü örter. Açıkça iptal ediyoruz. */
-    top: auto;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 60;
-    margin: 0;
-    border-radius: 18px 18px 0 0;
-    border-bottom: 0;
-    max-height: 82vh;
-    overflow-y: auto;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-    box-shadow: 0 -10px 40px rgba(28, 26, 23, 0.25);
-    transform: translateY(105%);
-    transition:
-      transform 0.22s ease,
-      visibility 0.22s;
-    /* kapalıyken tıklamaları yutmasın */
-    visibility: hidden;
+    position: sticky;
   }
 
-  .cart.open {
-    transform: none;
-    visibility: visible;
+  .satis-grid .pays {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
 
-  .cart-lines {
-    max-height: 40vh;
+  .satis-grid .pays .genis {
+    grid-column: auto;
   }
 
-  .pays .btn {
-    padding: 14px 10px;
+  .satis-grid .pays .pay {
+    min-height: 38px;
+    padding: 6px 2px;
+    border-radius: 9px;
   }
 
-  .pays .pay {
-    min-height: 70px;
+  .satis-grid .pays .pay b {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .satis-grid .pays .pay small {
+    display: none;
   }
 
   /* --- sepet çubuğu: her zaman altta, tek dokunuşla panel açılır --- */
@@ -1793,7 +1934,7 @@ tr:last-child td {
 
 @media (max-width: 420px) {
   .tiles {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .katalog-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1888,6 +2029,45 @@ tr:last-child td {
   font-size: 44px;
   animation: acilis-nabiz 1.1s ease-in-out infinite;
 }
+
+/* Duyuru tarihi ayrı satırda durur; metin her zaman soldan hizalanır. */
+.duyuru-satir {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 10px 0;
+  text-align: left;
+}
+
+.duyuru-metin {
+  line-height: 1.45;
+}
+
+/* Hizmetler içeriği netleşene kadar sade durum ekranı. */
+.yakinda {
+  min-height: 48vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.yakinda-ikon {
+  font-size: 44px;
+}
+
+.yakinda h1,
+.yakinda p {
+  margin: 0;
+}
+
+.yakinda p {
+  color: var(--muted);
+}
+
 @keyframes acilis-nabiz {
   0%, 100% { transform: scale(1); opacity: 0.7; }
   50% { transform: scale(1.12); opacity: 1; }

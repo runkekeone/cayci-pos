@@ -4,7 +4,7 @@ import { lowStock } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
 import { babucoKatalogGetir, siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
-import type { CatalogItem, Item, Order, OrderLine } from '../types'
+import type { CatalogItem, Order, OrderLine } from '../types'
 
 /** Toptancı-tarafı durum kodu → çay ocağının göreceği etiket. */
 const DURUM_ETIKET: Record<string, string> = {
@@ -18,18 +18,8 @@ type Sepet = Record<string, OrderLine> // key: catalogItemId|birim
 
 const BOS_KATALOG: CatalogItem[] = []
 
-/** Toptancı katalog kategorisini çay ocağı satış kategorisine eşle. */
-function katEsle(cat: string): string {
-  const c = cat.toLowerCase()
-  if (/sicak|çay|cay|tatland|ocag/.test(c)) return 'Sıcak'
-  if (/mesrubat|meşrubat|sogut|soğut|soda|su|ayran|kola/.test(c)) return 'Soğuk'
-  if (/atist|atıst/.test(c)) return 'Atıştırmalık'
-  if (/mutfak|yiyecek|tost/.test(c)) return 'Yiyecek'
-  return cat
-}
-
 export default function Siparis() {
-  const { s, saveOrder, saveItem } = useStore()
+  const { s, saveOrder } = useStore()
   const [cat, setCat] = useState('Hepsi')
   const [ara, setAra] = useState('')
   const [sepet, setSepet] = useState<Sepet>({})
@@ -200,39 +190,6 @@ export default function Siparis() {
     setSepetAcik(false)
   }
 
-  /** Katalog ürününü kendi satış listesine çek: fiyat sor, sellable Item olarak ekle. */
-  function urunumeEkle(k: CatalogItem) {
-    const varMi = s.items.find((i) => i.sellable && i.name.trim().toLowerCase() === k.name.trim().toLowerCase())
-    if (varMi && !confirm(`"${k.name}" zaten ürün listende var. Yine de ekle?`)) return
-    const oneri = Math.max(k.adetPrice, Math.round(k.adetPrice * 1.5)) // %50 kâr önerisi
-    const cevap = prompt(
-      `"${k.name}" kendi ürünlerine eklenecek.\nAlış (adet): ${k.adetPrice} ₺\nKaç TL'ye satacaksın?`,
-      String(oneri),
-    )
-    if (cevap == null) return
-    const fiyat = Number(cevap.replace(',', '.'))
-    if (!isFinite(fiyat) || fiyat <= 0) {
-      alert('Geçerli bir fiyat gir.')
-      return
-    }
-    const item: Item = {
-      id: uid(),
-      name: k.name,
-      unit: 'adet',
-      buyUnit: k.buyUnit || 'adet',
-      packSize: k.packSize > 1 ? k.packSize : undefined,
-      category: katEsle(k.category),
-      icon: '🛒',
-      sellable: true,
-      price: fiyat,
-      stock: 0,
-      // Maliyet = toptancıdan adet alış fiyatı → kâr = satış − bu.
-      lastCost: { total: k.adetPrice, qty: 1 },
-    }
-    saveItem(item)
-    alert(`✓ "${k.name}" ürünlerine eklendi (${fiyat} ₺). Stok girmek için Stok & Alış'ı kullan.`)
-  }
-
   return (
     <>
       <h1>Toptancıdan Sipariş</h1>
@@ -330,9 +287,6 @@ export default function Siparis() {
                         + {o.label}
                       </button>
                     ))}
-                    <button className="btn sm" title="Kendi satış listene ekle" onClick={() => urunumeEkle(k)}>
-                      🛒 Ürünüme
-                    </button>
                   </div>
                 </div>
               )

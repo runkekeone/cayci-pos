@@ -201,16 +201,12 @@ export default function Anasayfa() {
           <div className="card">
             {duyurular.map((d, i) => (
               <div
+                className="duyuru-satir"
                 key={d.id ?? i}
-                style={{
-                  padding: '10px 0',
-                  borderBottom: i < duyurular.length - 1 ? '1px solid var(--line)' : 'none',
-                }}
+                style={{ borderBottom: i < duyurular.length - 1 ? '1px solid var(--line)' : 'none' }}
               >
-                <span className="tag" style={{ marginRight: 8 }}>
-                  {d.tarih}
-                </span>
-                {d.metin}
+                <span className="tag">{d.tarih}</span>
+                <span className="duyuru-metin">{d.metin}</span>
               </div>
             ))}
           </div>
@@ -339,4 +335,3 @@ function Satir({ ad, deger, iyi }: { ad: string; deger: string; iyi?: boolean })
     </div>
   )
 }
-
