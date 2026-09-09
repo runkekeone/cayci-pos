@@ -725,7 +725,9 @@ export default function Satis() {
             </tr>
           </thead>
           <tbody>
-            {sonSatislar.map((sale) => (
+            {sonSatislar.map((sale) => {
+              const icerik = sale.lines.map((l) => `${l.qty}× ${l.name}`).join(' · ')
+              return (
               <tr key={sale.id}>
                 <td>
                   {new Date(sale.date).toLocaleTimeString('tr-TR', {
@@ -745,17 +747,7 @@ export default function Satis() {
                   )}
                 </td>
                 <td>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {sale.lines.map((l, i) => (
-                      <span
-                        key={i}
-                        className={`tag ${l.waste ? 'warn' : ''}`}
-                        style={{ whiteSpace: 'nowrap' }}
-                      >
-                        {l.qty}× {l.name}
-                      </span>
-                    ))}
-                  </div>
+                  <span className="son-satis-icerik" title={icerik}>{icerik}</span>
                 </td>
                 <td>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -775,30 +767,23 @@ export default function Satis() {
                   {fmtTL(sale.total)}
                 </td>
                 <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      flexWrap: 'nowrap',
-                      justifyContent: 'flex-end',
-                      gap: 8,
-                    }}
-                  >
+                  <div className="son-satis-aksiyonlar">
                     <button
-                      className="btn sm"
+                      className="btn sm son-satis-fis"
                       title="Fiş göster / paylaş"
                       onClick={() => setFisSale(sale)}
                     >
                       🧾
                     </button>
                     <button
-                      className="btn sm"
+                      className="btn sm son-satis-incele"
                       title="İncele / düzenle"
                       onClick={() => setIncele(sale)}
                     >
                       👁
                     </button>
                     <button
-                      className="btn sm"
+                      className="btn sm son-satis-iptal"
                       title="İptal et"
                       onClick={() => setIptalSale(sale)}
                     >
@@ -807,7 +792,8 @@ export default function Satis() {
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {sonSatislar.length === 0 && (
               <tr>
                 <td colSpan={6} className="hint">

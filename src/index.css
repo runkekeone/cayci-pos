@@ -1570,9 +1570,7 @@ tr:last-child td {
 
   .satis-grid .cart {
     order: -1;
-    position: sticky;
-    top: 8px;
-    z-index: 20;
+    position: static;
     margin: 0 0 12px;
     max-height: none;
     overflow: visible;
@@ -1734,7 +1732,7 @@ tr:last-child td {
   .son-satis > table > tbody > tr {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    gap: 4px 8px;
+    gap: 7px 10px;
     align-items: center;
     padding: 10px 12px;
     border-bottom: 1px solid var(--line);
@@ -1748,18 +1746,37 @@ tr:last-child td {
     font-size: 12px;
     color: var(--muted);
   }
-  .son-satis td:nth-child(5) {
-    text-align: right;
-    font-weight: 700;
-  }
-  /* ürünler, ödeme, aksiyonlar: tam satır genişliği */
-  .son-satis td:nth-child(3),
-  .son-satis td:nth-child(4),
-  .son-satis td:nth-child(6) {
+  .son-satis td:nth-child(3) {
     grid-column: 1 / -1;
   }
-  .son-satis td:nth-child(6) > div {
-    justify-content: flex-start !important;
+  .son-satis td:nth-child(4),
+  .son-satis td:nth-child(5) {
+    display: none;
+  }
+  .son-satis td:nth-child(6) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .son-satis-icerik {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .son-satis-aksiyonlar {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .son-satis-aksiyonlar .btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 5px;
+  }
+  .son-satis-fis,
+  .son-satis-iptal {
+    display: none;
   }
 
   /* karta sarılı olmayan geniş tablolar: tablonun kendisi yatay kaydırılsın */
