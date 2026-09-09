@@ -243,6 +243,8 @@ export interface Order {
   lines: OrderLine[]
   note?: string
   gonderim?: 'qr' | 'whatsapp' | 'dosya' | 'bulut'
+  /** Bayinin sipariş sırasında seçtiği tahsilat tercihi. */
+  paymentType?: 'nakit' | 'kart' | 'bakiye'
   /** Toptancı tarafındaki işlem durumu (buluttan çekilir): yeni|onay|dagitim|teslim. */
   durum?: string
   /** Gönderen kıraathane bilgisi — karşı tarafta bayi eşleşmesi için. */

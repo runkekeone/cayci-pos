@@ -367,6 +367,49 @@ h1 {
   white-space: nowrap;
 }
 
+.katalog-kart-button {
+  width: 100%;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.katalog-kart-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.kk-ekle {
+  margin-top: auto;
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.siparis-odeme {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.siparis-odeme .btn {
+  padding-inline: 4px;
+  white-space: nowrap;
+}
+
+.bakiye-bilgi,
+.bakiye-uyari {
+  margin: 7px 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.bakiye-bilgi { color: var(--muted); }
+.bakiye-bilgi.asildi,
+.bakiye-uyari { color: var(--bad); }
+
 /* Telefonda 4 sütun sığsın diye ürün kartlarını kompaktla (~85-90px genişlik). */
 @media (max-width: 560px) {
   .kat-kart {
@@ -1581,6 +1624,42 @@ tr:last-child td {
     visibility: visible;
   }
 
+  /* Sipariş sepeti de satıştaki gibi ürünlerin üstünde, normal akışta kalır. */
+  .siparis-grid .siparis-sepet {
+    order: -1;
+    position: static;
+    margin: 0 0 12px;
+    max-height: none;
+    overflow: visible;
+    padding: 12px;
+    border-radius: var(--radius);
+    transform: none;
+    visibility: visible;
+  }
+
+  .siparis-grid .siparis-sepet .cart-lines {
+    max-height: 132px;
+    margin: 8px 0;
+  }
+
+  .siparis-grid .siparis-sepet .cline {
+    gap: 5px;
+    padding: 5px 0;
+    font-size: 12px;
+  }
+
+  .siparis-grid .siparis-sepet .cline .x {
+    min-width: 30px;
+    min-height: 30px;
+    font-size: 16px;
+  }
+
+  .siparis-grid .siparis-sepet .cline .qty {
+    width: 40px;
+    padding: 3px;
+    font-size: 13px;
+  }
+
   .cart-ozet.only-mobile {
     display: block;
     margin: 7px 0 10px;
@@ -1827,6 +1906,10 @@ tr:last-child td {
   .ara-kutu input {
     padding: 4px 0;
     font-size: 14px;
+  }
+
+  .katalog-kart-button .kk-ekle {
+    font-size: 10px;
   }
 
   /* iOS: 16px altındaki inputlara odaklanınca sayfayı zoomluyor */

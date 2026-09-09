@@ -17,6 +17,8 @@ const DURUM_ETIKET: Record<string, string> = {
 type Sepet = Record<string, OrderLine> // key: catalogItemId|birim
 
 const BOS_KATALOG: CatalogItem[] = []
+const BABUQO2 = 'babuqo2'
+const BABUQO2_BAKIYE_LIMITI = 10_000
 
 export default function Siparis() {
   const { s, saveOrder } = useStore()
@@ -26,7 +28,8 @@ export default function Siparis() {
   const [not, setNot] = useState('')
   const [qr, setQr] = useState<string | null>(null)
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
-  const [sepetAcik, setSepetAcik] = useState(false) // mobil: alttan açılan sepet paneli
+  const [paymentType, setPaymentType] = useState<'nakit' | 'kart' | 'bakiye'>('nakit')
+  const [limitUyari, setLimitUyari] = useState<string | null>(null)
   const [durumlar, setDurumlar] = useState<Record<string, string>>({}) // sipariş id → toptancı durumu
   const [bulutKatalog, setBulutKatalog] = useState<CatalogItem[] | null>(null) // toptancının kendi panelinden çekilen güncel ürünler
   const [katalogYukleniyor, setKatalogYukleniyor] = useState(true)
@@ -74,6 +77,12 @@ export default function Siparis() {
 
   const lines = Object.values(sepet)
   const toplam = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+  const denemeHesabi = s.business.name.trim().toLocaleLowerCase('tr-TR') === BABUQO2
+  const bakiyeLimiti = denemeHesabi ? BABUQO2_BAKIYE_LIMITI : 0
+  const bakiyeBorcu = (s.orders ?? [])
+    .filter((o) => o.paymentType === 'bakiye')
+    .reduce((n, o) => n + o.lines.reduce((satir, l) => satir + l.qty * l.unitPrice, 0), 0)
+  const kalanBakiye = Math.max(0, bakiyeLimiti - bakiyeBorcu)
 
   // Buluttan gönderilmiş siparişlerin toptancı-tarafı durumunu periyodik çek.
   const gonderilenler = [...(s.orders ?? [])].reverse()
@@ -137,12 +146,22 @@ export default function Siparis() {
       date: new Date().toISOString(),
       status: 'gonderildi',
       lines,
+      paymentType,
       note: not.trim() || undefined,
       from: { name: s.business.name, phone: s.business.phone || undefined },
     }
   }
 
+  function bakiyeLimitiniKontrolEt(): boolean {
+    if (paymentType !== 'bakiye' || toplam <= kalanBakiye) return true
+    setLimitUyari(
+      `Bakiye limiti aşıldı. Mevcut borç ${fmtTL(bakiyeBorcu)}, kullanılabilir limit ${fmtTL(kalanBakiye)}; bu sipariş ${fmtTL(toplam)}.`,
+    )
+    return false
+  }
+
   function whatsappGonder() {
+    if (!bakiyeLimitiniKontrolEt()) return
     const order = { ...siparisOlustur(), gonderim: 'whatsapp' as const }
     saveOrder(order)
     setGonderildi(order)
@@ -151,6 +170,8 @@ export default function Siparis() {
 
   /** İnternetten gönder: toptancı (babuco) siparişi Supabase'den otomatik alır. */
   async function internetGonder() {
+    if (!bakiyeLimitiniKontrolEt()) return
+    setLimitUyari(null)
     const order = { ...siparisOlustur(), gonderim: 'bulut' as const }
     saveOrder(order)
     setGonderildi(order)
@@ -163,6 +184,7 @@ export default function Siparis() {
   }
 
   async function qrGoster() {
+    if (!bakiyeLimitiniKontrolEt()) return
     const order = { ...siparisOlustur(), gonderim: 'qr' as const }
     saveOrder(order)
     setGonderildi(order)
@@ -170,6 +192,7 @@ export default function Siparis() {
   }
 
   function dosyaIndir() {
+    if (!bakiyeLimitiniKontrolEt()) return
     const order = { ...siparisOlustur(), gonderim: 'dosya' as const }
     saveOrder(order)
     setGonderildi(order)
@@ -187,7 +210,8 @@ export default function Siparis() {
     setNot('')
     setGonderildi(null)
     setQr(null)
-    setSepetAcik(false)
+    setPaymentType('nakit')
+    setLimitUyari(null)
   }
 
   return (
@@ -248,7 +272,7 @@ export default function Siparis() {
         </div>
       )}
 
-      <div className="grid2" style={{ marginTop: 8 }}>
+      <div className="grid2 siparis-grid" style={{ marginTop: 8 }}>
         {/* ---- katalog ---- */}
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -266,7 +290,13 @@ export default function Siparis() {
             {shown.map((k) => {
               const opts = secenekler(k)
               return (
-                <div className="kat-kart" key={k.id}>
+                <button
+                  type="button"
+                  className="kat-kart katalog-kart-button"
+                  key={k.id}
+                  onClick={() => ekle(k, opts[0].birim, opts[0].price)}
+                  title={`${opts[0].label} olarak sepete ekle`}
+                >
                   <div className="kk-ad">
                     <strong>{k.name}</strong>
                     <span className="hint">
@@ -281,14 +311,8 @@ export default function Siparis() {
                       </span>
                     ))}
                   </div>
-                  <div className="kk-butonlar">
-                    {opts.map((o, i) => (
-                      <button key={o.birim} className={`btn sm ${i > 0 ? 'ghost' : ''}`} onClick={() => ekle(k, o.birim, o.price)}>
-                        + {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  <span className="kk-ekle">+ {opts[0].label} ekle</span>
+                </button>
               )
             })}
             {shown.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
@@ -296,13 +320,13 @@ export default function Siparis() {
         </div>
 
         {/* ---- sepet ---- */}
-        <div className={`card cart ${sepetAcik ? 'open' : ''}`}>
+        <div className="card cart siparis-sepet">
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>Sipariş sepeti</strong>
-            <button className="btn ghost sm only-mobile" onClick={() => setSepetAcik(false)}>
-              Kapat
-            </button>
           </div>
+          <p className="cart-ozet only-mobile" aria-live="polite">
+            {lines.length ? lines.map((l) => `${l.qty} × ${l.name}`).join(' · ') : 'Ürün kartına dokunarak sepete ekle.'}
+          </p>
           <div className="cart-lines">
             {lines.length === 0 && <p className="hint">Katalogdan ekle.</p>}
             {lines.map((l) => {
@@ -326,6 +350,30 @@ export default function Siparis() {
             <span className="v">{fmtTL(toplam)}</span>
           </div>
 
+          <div className="siparis-odeme" aria-label="Ödeme tipi">
+            {(['nakit', 'kart', 'bakiye'] as const).map((tip) => (
+              <button
+                key={tip}
+                type="button"
+                className={`btn sm ${paymentType === tip ? 'primary' : 'ghost'}`}
+                onClick={() => {
+                  setPaymentType(tip)
+                  setLimitUyari(null)
+                }}
+              >
+                {tip === 'nakit' ? '💵 Nakit' : tip === 'kart' ? '💳 Kart' : '📒 Bakiye'}
+              </button>
+            ))}
+          </div>
+          {paymentType === 'bakiye' && (
+            <p className={`bakiye-bilgi ${toplam > kalanBakiye ? 'asildi' : ''}`}>
+              {denemeHesabi
+                ? `babuqo2 limiti: ${fmtTL(bakiyeLimiti)} · Kullanılabilir: ${fmtTL(kalanBakiye)}`
+                : 'Bu hesap için bakiye limiti tanımlı değil.'}
+            </p>
+          )}
+          {limitUyari && <p className="bakiye-uyari" role="alert">⚠ {limitUyari}</p>}
+
           <div className="field" style={{ marginTop: 8 }}>
             <label>Not (isteğe bağlı)</label>
             <input value={not} onChange={(e) => setNot(e.target.value)} placeholder="Sabah teslim..." />
@@ -337,7 +385,7 @@ export default function Siparis() {
             onClick={internetGonder}
             style={{ width: '100%', marginTop: 8 }}
           >
-            🚀 İnternetten Gönder
+            🚀 Siparişi Gönder
           </button>
           <div className="hint" style={{ marginTop: 6, textAlign: 'center' }}>
             internet yoksa yedek:
@@ -406,15 +454,6 @@ export default function Siparis() {
       )}
 
       {/* mobil: alttan sepet çubuğu + panel örtüsü (satış ekranıyla aynı desen) */}
-      {sepetAcik && <div className="backdrop only-mobile" onClick={() => setSepetAcik(false)} />}
-      {lines.length > 0 && !sepetAcik && (
-        <div className="sepet-bar only-mobile" onClick={() => setSepetAcik(true)}>
-          <span className="sb-adet">{lines.reduce((n, l) => n + l.qty, 0)}</span>
-          <span className="sb-tut">{fmtTL(toplam)}</span>
-          <button className="sb-btn">Sepeti aç</button>
-        </div>
-      )}
-
       {qr && (
         <div className="modal-bg" onClick={() => setQr(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
