@@ -71,14 +71,14 @@ export default function Rapor() {
       </div>
 
       <div className="rgrid">
-        {/* Her zaman görünen 4 kutu: para nereden geldi */}
+        {/* İlk bakışta yalnız üç temel özet; kalanlar isteğe bağlı açılır. */}
         <Kutu ikon="💵" renk="var(--good-soft)" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
         <Kutu ikon="💳" renk="var(--kutu-bilgi)" baslik="POS / Kart" tutar={r.kartSatis} />
         <Kutu ikon="📒" renk="var(--bad-soft)" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
-        <Kutu ikon="🧾" renk="var(--kutu-bilgi)" baslik="Toplam Ciro" tutar={r.ciro} />
 
         {detay && (
           <>
+            <Kutu ikon="🧾" renk="var(--kutu-bilgi)" baslik="Toplam Ciro" tutar={r.ciro} />
             {/* --- para nereye gitti --- */}
             <Kutu ikon="🤝" renk="var(--good-soft)" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
             <Kutu ikon="🚚" renk="var(--kutu-notr)" baslik="Bugünkü alımlar" tutar={alimlar} />
@@ -114,7 +114,7 @@ export default function Rapor() {
       </div>
 
       <button className="btn" style={{ marginTop: 12 }} onClick={() => setDetay((d) => !d)}>
-        {detay ? '▴ Detayı gizle' : '▾ Detaylı'}
+        {detay ? '▴ Rapor özetlerini gizle' : '▾ Diğer rapor özetlerini görüntüle'}
       </button>
 
       <div className="grafik-izgara">

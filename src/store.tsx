@@ -121,6 +121,7 @@ interface Store {
   ) => void
   removeFromTable: (tableId: string, index: number) => void
   setTableQty: (tableId: string, index: number, qty: number) => void
+  setTableLinePrice: (tableId: string, index: number, unitPrice: number) => void
   renameTable: (tableId: string, name: string) => void
   setTableCustomer: (tableId: string, customerId?: string) => void
   closeTable: (tableId: string, payment: Payment, customerId?: string) => void
@@ -542,6 +543,16 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
               .filter((l) => l.qty > 0)
             return { ...t, lines, openedAt: lines.length ? t.openedAt : undefined }
           }),
+        })),
+
+      setTableLinePrice: (tableId, index, unitPrice) =>
+        set((st) => ({
+          ...st,
+          tables: st.tables.map((t) =>
+            t.id === tableId
+              ? { ...t, lines: t.lines.map((l, i) => (i === index ? { ...l, unitPrice } : l)) }
+              : t,
+          ),
         })),
 
       renameTable: (tableId, name) =>

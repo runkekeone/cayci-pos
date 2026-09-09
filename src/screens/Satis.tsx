@@ -60,6 +60,7 @@ export default function Satis() {
     addToTable,
     removeFromTable,
     setTableQty,
+    setTableLinePrice,
     renameTable,
     setTableCustomer,
     closeTable,
@@ -85,6 +86,7 @@ export default function Satis() {
   const [zayiMod, setZayiMod] = useState<'ikram' | 'fire' | null>(null)
   const [adlandir, setAdlandir] = useState<string | null>(null)
   const [cesitSec, setCesitSec] = useState<Item | null>(null)
+  const [sepetDuzenle, setSepetDuzenle] = useState<number | null>(null)
   const [parcali, setParcali] = useState(false)
   // Yapılmış satışı incele/düzenle modalı.
   const [incele, setIncele] = useState<Sale | null>(null)
@@ -221,6 +223,15 @@ export default function Satis() {
       return
     }
     setQuick((cur) => cur.map((l, i) => (i === index ? { ...l, qty } : l)).filter((l) => l.qty > 0))
+  }
+
+  function setPrice(index: number, unitPrice: number) {
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) return
+    if (target.kind === 'masa') {
+      setTableLinePrice(target.id, index, unitPrice)
+      return
+    }
+    setQuick((cur) => cur.map((l, i) => (i === index ? { ...l, unitPrice } : l)))
   }
 
   function temizle() {
@@ -626,14 +637,22 @@ export default function Satis() {
           <div className="cart-lines">
             {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
             {lines.map((l, idx) => (
-              <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}>
+              <div
+                className="cline sepet-duzenlenebilir"
+                key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}
+                onClick={() => setSepetDuzenle(idx)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setSepetDuzenle(idx)}
+                title="Adet veya fiyatı düzenle"
+              >
                 {urunGorsel(l.itemId) && <img className="cl-img" src={urunGorsel(l.itemId)!} alt="" />}
                 <span className="cart-line-qty">{l.qty} ×</span>
-                <button className="x" onClick={() => azalt(idx)} title="Bir azalt">
+                <button className="x" onClick={(e) => { e.stopPropagation(); azalt(idx) }} title="Bir azalt">
                   −
                 </button>
                 <QtyInput qty={l.qty} onQty={(n) => setQty(idx, n)} />
-                <button className="x" onClick={() => artir(idx)} title="Bir artır">
+                <button className="x" onClick={(e) => { e.stopPropagation(); artir(idx) }} title="Bir artır">
                   +
                 </button>
                 <span className="nm">{l.name}</span>
@@ -701,6 +720,36 @@ export default function Satis() {
           </div>
         </div>
       </div>
+
+      {sepetDuzenle != null && lines[sepetDuzenle] && (
+        <div className="modal-bg" onClick={() => setSepetDuzenle(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <h2>{lines[sepetDuzenle].name}</h2>
+            <div className="field">
+              <label>Adet</label>
+              <input
+                type="number"
+                min={1}
+                value={lines[sepetDuzenle].qty}
+                onChange={(e) => setQty(sepetDuzenle, Math.max(1, Number(e.target.value) || 1))}
+              />
+            </div>
+            <div className="field" style={{ marginTop: 10 }}>
+              <label>Birim fiyat (TL)</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={lines[sepetDuzenle].unitPrice}
+                onChange={(e) => setPrice(sepetDuzenle, Number(e.target.value))}
+              />
+            </div>
+            <button className="btn primary" style={{ width: '100%', marginTop: 14 }} onClick={() => setSepetDuzenle(null)}>
+              Tamam
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ---- satış onayı ---- */}
       {onay && (

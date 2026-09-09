@@ -4,7 +4,7 @@ import { lowStock } from '../lib/cost'
 import { fmtTL, uid } from '../lib/units'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
 import { babucoKatalogGetir, siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
-import type { CatalogItem, Order, OrderLine } from '../types'
+import type { CatalogItem, Order, OrderLine, OrderPaymentPart } from '../types'
 
 /** Toptancı-tarafı durum kodu → çay ocağının göreceği etiket. */
 const DURUM_ETIKET: Record<string, string> = {
@@ -28,7 +28,9 @@ export default function Siparis() {
   const [not, setNot] = useState('')
   const [qr, setQr] = useState<string | null>(null)
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
-  const [paymentType, setPaymentType] = useState<'nakit' | 'kart' | 'bakiye'>('nakit')
+  const [paymentType, setPaymentType] = useState<'nakit' | 'kart' | 'bakiye' | 'parcali'>('nakit')
+  const [parcaliNakit, setParcaliNakit] = useState('0')
+  const [parcaliKart, setParcaliKart] = useState('0')
   const [limitUyari, setLimitUyari] = useState<string | null>(null)
   const [durumlar, setDurumlar] = useState<Record<string, string>>({}) // sipariş id → toptancı durumu
   const [bulutKatalog, setBulutKatalog] = useState<CatalogItem[] | null>(null) // toptancının kendi panelinden çekilen güncel ürünler
@@ -79,10 +81,25 @@ export default function Siparis() {
   const toplam = lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
   const denemeHesabi = s.business.name.trim().toLocaleLowerCase('tr-TR') === BABUQO2
   const bakiyeLimiti = denemeHesabi ? BABUQO2_BAKIYE_LIMITI : 0
-  const bakiyeBorcu = (s.orders ?? [])
-    .filter((o) => o.paymentType === 'bakiye')
-    .reduce((n, o) => n + o.lines.reduce((satir, l) => satir + l.qty * l.unitPrice, 0), 0)
+  const bakiyeBorcu = (s.orders ?? []).reduce((n, o) => {
+    if (o.paymentParts?.length) return n + o.paymentParts.filter((p) => p.payment === 'bakiye').reduce((a, p) => a + p.amount, 0)
+    if (o.paymentType !== 'bakiye') return n
+    return n + o.lines.reduce((satir, l) => satir + l.qty * l.unitPrice, 0)
+  }, 0)
   const kalanBakiye = Math.max(0, bakiyeLimiti - bakiyeBorcu)
+  const parcaliNakitTutar = Math.max(0, Number(parcaliNakit.replace(',', '.')) || 0)
+  const parcaliKartTutar = Math.max(0, Number(parcaliKart.replace(',', '.')) || 0)
+  const parcaliPesin = parcaliNakitTutar + parcaliKartTutar
+  const parcaliBakiye = Math.max(0, toplam - parcaliPesin)
+
+  function odemeParcalari(): OrderPaymentPart[] {
+    if (paymentType !== 'parcali') return [{ payment: paymentType, amount: toplam }]
+    return [
+      ...(parcaliNakitTutar > 0 ? [{ payment: 'nakit' as const, amount: parcaliNakitTutar }] : []),
+      ...(parcaliKartTutar > 0 ? [{ payment: 'kart' as const, amount: parcaliKartTutar }] : []),
+      ...(parcaliBakiye > 0 ? [{ payment: 'bakiye' as const, amount: parcaliBakiye }] : []),
+    ]
+  }
 
   // Buluttan gönderilmiş siparişlerin toptancı-tarafı durumunu periyodik çek.
   const gonderilenler = [...(s.orders ?? [])].reverse()
@@ -141,21 +158,29 @@ export default function Siparis() {
   }
 
   function siparisOlustur(): Order {
+    const paymentParts = odemeParcalari()
+    const bakiyeVar = paymentParts.some((p) => p.payment === 'bakiye')
     return {
       id: uid(),
       date: new Date().toISOString(),
       status: 'gonderildi',
       lines,
-      paymentType,
+      paymentType: bakiyeVar ? 'bakiye' : paymentParts[0]?.payment ?? 'nakit',
+      paymentParts,
       note: not.trim() || undefined,
       from: { name: s.business.name, phone: s.business.phone || undefined },
     }
   }
 
   function bakiyeLimitiniKontrolEt(): boolean {
-    if (paymentType !== 'bakiye' || toplam <= kalanBakiye) return true
+    if (paymentType === 'parcali' && parcaliPesin > toplam) {
+      setLimitUyari(`Peşin tutar toplam siparişten büyük olamaz. Sipariş toplamı ${fmtTL(toplam)}.`)
+      return false
+    }
+    const bakiyeTutar = odemeParcalari().filter((p) => p.payment === 'bakiye').reduce((n, p) => n + p.amount, 0)
+    if (bakiyeTutar <= kalanBakiye) return true
     setLimitUyari(
-      `Bakiye limiti aşıldı. Mevcut borç ${fmtTL(bakiyeBorcu)}, kullanılabilir limit ${fmtTL(kalanBakiye)}; bu sipariş ${fmtTL(toplam)}.`,
+      `Bakiye limiti aşıldı. Mevcut borç ${fmtTL(bakiyeBorcu)}, kullanılabilir limit ${fmtTL(kalanBakiye)}; bakiye payı ${fmtTL(bakiyeTutar)}.`,
     )
     return false
   }
@@ -351,7 +376,7 @@ export default function Siparis() {
           </div>
 
           <div className="siparis-odeme" aria-label="Ödeme tipi">
-            {(['nakit', 'kart', 'bakiye'] as const).map((tip) => (
+            {(['nakit', 'kart', 'bakiye', 'parcali'] as const).map((tip) => (
               <button
                 key={tip}
                 type="button"
@@ -361,10 +386,25 @@ export default function Siparis() {
                   setLimitUyari(null)
                 }}
               >
-                {tip === 'nakit' ? '💵 Nakit' : tip === 'kart' ? '💳 Kart' : '📒 Bakiye'}
+                {tip === 'nakit' ? '💵 Nakit' : tip === 'kart' ? '💳 Kart' : tip === 'bakiye' ? '📒 Bakiye' : '➗ Parçalı'}
               </button>
             ))}
           </div>
+          {paymentType === 'parcali' && (
+            <div className="parcali-odeme">
+              <label>
+                Nakit
+                <input inputMode="decimal" value={parcaliNakit} onChange={(e) => setParcaliNakit(e.target.value)} />
+              </label>
+              <label>
+                Kart
+                <input inputMode="decimal" value={parcaliKart} onChange={(e) => setParcaliKart(e.target.value)} />
+              </label>
+              <p className={`bakiye-bilgi ${parcaliBakiye > kalanBakiye ? 'asildi' : ''}`}>
+                Bakiye payı: <b>{fmtTL(parcaliBakiye)}</b> · Kullanılabilir limit: <b>{fmtTL(kalanBakiye)}</b>
+              </p>
+            </div>
+          )}
           {paymentType === 'bakiye' && (
             <p className={`bakiye-bilgi ${toplam > kalanBakiye ? 'asildi' : ''}`}>
               {denemeHesabi

@@ -2396,7 +2396,13 @@ async function cayPullSupabase() {
         return { urunId: pr ? pr.id : (l.catalogItemId || ""), ad: pr ? pr.ad : l.name, birim: pr ? (pr.birim || l.birim) : l.birim, adet: Number(l.qty) || 0, fiyat: pr ? (Number(pr.satis) || 0) : (Number(l.unitPrice) || 0) };
       });
       const brut = kurus(items.reduce((n, l) => n + l.adet * l.fiyat, 0));
-      const odemeTuru = order.paymentType === "nakit" ? "nakit" : order.paymentType === "kart" ? "kart" : "bakiye";
+      // Mobildeki parçalı tahsilatın yalnızca bakiye payını cari hesaba aktar.
+      const hamParcalar = Array.isArray(order.paymentParts) ? order.paymentParts : [];
+      const parcaTutari = (tur) => kurus(hamParcalar.filter((p) => p && p.payment === tur).reduce((n, p) => n + (Number(p.amount) || 0), 0));
+      const pesinNakit = parcaTutari("nakit");
+      const pesinKart = parcaTutari("kart");
+      const bakiyeTutar = parcaTutari("bakiye");
+      const odemeTuru = hamParcalar.length > 1 ? "parcali" : order.paymentType === "nakit" ? "nakit" : order.paymentType === "kart" ? "kart" : "bakiye";
       const iskonto = odemeTuru === "nakit" ? kurus(brut * 0.05) : 0;
       const toplam = kurus(brut - iskonto);
       const dealerTel = row.cay_tel || (order.from && order.from.phone) || "";
@@ -2409,7 +2415,7 @@ async function cayPullSupabase() {
         dealer: row.cay_ocagi || (order.from && order.from.name) || "Bilinmeyen bayi",
         dealerTel,
         not: order.note || "", tarih: order.date || row.created_at || new Date().toISOString(),
-        alindi: new Date().toISOString(), durum: "yeni", items, brut, iskonto, toplam, odemeTuru, minPesinOran, minPesinTutar,
+        alindi: new Date().toISOString(), durum: "yeni", items, brut, iskonto, toplam, odemeTuru, pesinNakit, pesinKart, bakiyeTutar, minPesinOran, minPesinTutar,
         teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "",
       });
       degisti = true;
@@ -2589,7 +2595,8 @@ function cayTeslim(o, odemeTuru) {
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = new Date().getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
   // Ödeme türüne göre: nakit → nakit, kart → pos, bakiye → açık hesap (müşteri cari borcuna yazılır).
-  const odeme = odemeTuru === "nakit" ? { nakit: toplam, pos: 0, acik: 0 }
+  const odeme = odemeTuru === "parcali" ? { nakit: kurus(Number(o.pesinNakit) || 0), pos: kurus(Number(o.pesinKart) || 0), acik: kurus(Number(o.bakiyeTutar) || 0) }
+    : odemeTuru === "nakit" ? { nakit: toplam, pos: 0, acik: 0 }
     : odemeTuru === "kart" ? { nakit: 0, pos: toplam, acik: 0 }
     : odemeTuru === "nakit-acik" ? { nakit: minPesin, pos: 0, acik: kurus(toplam - minPesin) }
     : odemeTuru === "kart-acik" ? { nakit: 0, pos: minPesin, acik: kurus(toplam - minPesin) }
@@ -2618,6 +2625,7 @@ function cayTeslimOde(o) {
   const body = `<p class="sub" style="margin:0 0 12px">Müşterinin seçimi: <b>${secilen}</b>. Teslimatta gerekirse değiştirebilirsin. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.${kural}</p>
     <div class="cay-ode-tut">Tutar <b>${money.format(o.toplam)}</b></div>
     <div class="cay-ode-sec">
+      ${o.odemeTuru === "parcali" ? `<button class="btn cay-ode" type="button" data-ode="parcali">Siparişte seçilen parçalı ödeme</button>` : ""}
       <button class="btn cay-ode" type="button" data-ode="nakit">Nakit</button>
       <button class="btn cay-ode" type="button" data-ode="kart">Kart</button>
       ${acikHesapSecenek}

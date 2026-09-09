@@ -410,6 +410,33 @@ h1 {
 .bakiye-bilgi.asildi,
 .bakiye-uyari { color: var(--bad); }
 
+.parcali-odeme {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.parcali-odeme label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.parcali-odeme .bakiye-bilgi {
+  grid-column: 1 / -1;
+}
+
+.sepet-duzenlenebilir {
+  cursor: pointer;
+}
+
+.sepet-duzenlenebilir:hover {
+  background: var(--accent-tint);
+}
+
 /* Telefonda 4 sütun sığsın diye ürün kartlarını kompaktla (~85-90px genişlik). */
 @media (max-width: 560px) {
   .kat-kart {

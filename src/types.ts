@@ -235,6 +235,12 @@ export interface OrderLine {
   unitPrice: number
 }
 
+/** Toptancı siparişinde seçilen tahsilat payı. */
+export interface OrderPaymentPart {
+  payment: 'nakit' | 'kart' | 'bakiye'
+  amount: number
+}
+
 /** Kıraathanenin toptancıya geçtiği sipariş (giden). */
 export interface Order {
   id: string
@@ -245,6 +251,8 @@ export interface Order {
   gonderim?: 'qr' | 'whatsapp' | 'dosya' | 'bulut'
   /** Bayinin sipariş sırasında seçtiği tahsilat tercihi. */
   paymentType?: 'nakit' | 'kart' | 'bakiye'
+  /** Peşin + bakiye bölündüyse, tutarların ayrıntısı burada taşınır. */
+  paymentParts?: OrderPaymentPart[]
   /** Toptancı tarafındaki işlem durumu (buluttan çekilir): yeni|onay|dagitim|teslim. */
   durum?: string
   /** Gönderen kıraathane bilgisi — karşı tarafta bayi eşleşmesi için. */
