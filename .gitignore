@@ -31,3 +31,6 @@ src-yedek-*/
 # Android imza anahtarı — asla commit etme
 *.keystore
 tools/yedek/
+
+# gunluk satis disa aktarimlari - musteri/borc verisi iceriyor, git disinda kalir
+Satislar-*.xlsx
