@@ -13,6 +13,7 @@
  *   node babuco.js rapor [YYYY-AA-GG]          Günlük rapor (Markdown)
  *   node babuco.js musteri [arama]             Müşteri(ler) + borç + özel fiyat
  *   node babuco.js musteritablo [YYYY-AA-GG]   Gün satışları müşteri bazında (Tutar/Kâr%/Ödenen/Bakiye)
+ *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *   node babuco.js alim <dosya.json|json>      Mal girişi: stok ekle (--kaydet)
@@ -359,6 +360,82 @@ function provaUyari(ornek) {
       const bakiye = g.musteriId ? money(customerBorc(store, g.musteriId)) : "—";
       console.log("| " + cust(g.musteriId) + " | " + money(g.toplam) + " (" + karOrani(g.toplam, g.maliyet) + ") | " + money(g.odenen) + " | " + bakiye + " |");
     });
+    return;
+  }
+
+  /* Gun sonu kasa ozeti: elde ne kadar nakit olmasi gerektigi + ciro/maliyet/kar.
+     Satista odeme.nakit toplamla sinirli tutulup fazlasi ayri bir tahsilat kaydina
+     yazildigi icin, ELDEN ALINAN nakit = satisin nakidi + o belgeye ait fazla odeme.
+     --hesaba=ad,ad ile nakdini bankaya yatiran musteriler elde kalandan dusulur. */
+  if (komut === "kasa") {
+    const gun = pos[1] || todayStr();
+    const hesabaArg = (args.find((a) => a.indexOf("--hesaba=") === 0) || "").slice(9);
+    const hesabaAdlar = hesabaArg ? hesabaArg.split(",").map((x) => norm(x)).filter(Boolean) : [];
+    const inR = (iso) => iso && localDateStr(new Date(iso)) === gun;
+    const cust = (id) => (store.customers.find((c) => c.id === id) || {}).ad || "(perakende)";
+    const sales = store.sales.filter((s) => inR(s.tarih));
+    if (!sales.length) { console.log("Bu tarihte satış yok: " + gun); return; }
+    const odemeler = store.payments.filter((p) => inR(p.tarih));
+    const fazlaOde = odemeler.filter((p) => /fazla ödeme/i.test(p.not || ""));
+    const digerTahsilat = odemeler.filter((p) => !/fazla ödeme/i.test(p.not || ""));
+
+    const eldeSatir = [], hesapSatir = [];
+    sales.forEach((s) => {
+      const n = Number(s.odeme.nakit) || 0;
+      if (n <= 0) return;
+      const f = fazlaOde.filter((p) => String(p.not || "").indexOf(s.belgeNo) !== -1)
+        .reduce((a, p) => a + (Number(p.tutar) || 0), 0);
+      const ad = cust(s.musteriId);
+      const kayit = { ad: ad, tutar: kurus(n + f) };
+      (hesabaAdlar.some((h) => norm(ad).includes(h)) ? hesapSatir : eldeSatir).push(kayit);
+    });
+    const topla = (arr) => kurus(arr.reduce((a, x) => a + x.tutar, 0));
+    const elde = topla(eldeSatir), hesaba = topla(hesapSatir);
+    const posT = kurus(sales.reduce((a, s) => a + (Number(s.odeme.pos) || 0), 0));
+    const acikT = kurus(sales.reduce((a, s) => a + (Number(s.odeme.acik) || 0), 0));
+    const ciro = kurus(sales.reduce((a, s) => a + (Number(s.toplam) || 0), 0));
+    const mal = kurus(sales.reduce((a, s) => a + (Number(s.maliyet) || 0), 0));
+    const giderler = store.expenses.filter((e) => inR(e.tarih));
+    const gider = kurus(giderler.reduce((a, e) => a + (Number(e.tutar) || 0), 0));
+    const gelirler = store.incomes.filter((e) => inR(e.tarih));
+    const gelir = kurus(gelirler.reduce((a, e) => a + (Number(e.tutar) || 0), 0));
+    const komisyon = kurus(sales.reduce((a, s) => a + (Number(s.komisyon) || 0), 0));
+
+    const p = gun.split("-"), L = [];
+    L.push("# Kasa Özeti — " + p[2] + "." + p[1] + "." + p[0] + "\n");
+    L.push("## Elimdeki para", "", "| Tip | Tutar |", "|---|---|");
+    L.push("| **Nakit (elde)** | **" + money(kurus(elde + gelir - gider)) + "** |");
+    if (hesaba) L.push("| Nakit (hesaba yatan) | " + money(hesaba) + " |");
+    L.push("| Pos (hesaba geçecek) | " + money(posT) + (komisyon ? " · komisyon " + money(komisyon) : "") + " |");
+    L.push("| Açık hesap (alacak) | " + money(acikT) + " |");
+    L.push("| **Günün toplam tahsilatı** | **" + money(kurus(elde + hesaba + posT)) + "** |", "");
+    if (eldeSatir.length) {
+      L.push("### Elden alınan nakit", "", "| Müşteri | Tutar |", "|---|---|");
+      eldeSatir.sort((a, b) => b.tutar - a.tutar).forEach((x) => L.push("| " + x.ad + " | " + money(x.tutar) + " |"));
+      L.push("| **Toplam** | **" + money(elde) + "** |", "");
+    }
+    if (hesapSatir.length) {
+      L.push("### Hesaba yatan (elde değil)", "", "| Müşteri | Tutar |", "|---|---|");
+      hesapSatir.sort((a, b) => b.tutar - a.tutar).forEach((x) => L.push("| " + x.ad + " | " + money(x.tutar) + " |"));
+      L.push("| **Toplam** | **" + money(hesaba) + "** |", "");
+    }
+    L.push("## Ciro · maliyet · kâr", "", "| Metrik | Tutar |", "|---|---|");
+    L.push("| **Ciro** | **" + money(ciro) + "** |");
+    L.push("| Ürün maliyeti | " + money(mal) + " |");
+    L.push("| Gider | " + money(gider) + " |");
+    if (gelir) L.push("| Gelir | " + money(gelir) + " |");
+    L.push("| **Kâr (ürün)** | **" + money(kurus(ciro - mal)) + "** · " + karOrani(ciro, mal) + " |");
+    L.push("| **Net kâr (gider sonrası)** | **" + money(kurus(ciro - mal - gider + gelir)) + "** |", "");
+    if (giderler.length) {
+      L.push("### Giderler", "");
+      giderler.forEach((e) => L.push("- " + (e.kategori || "-") + " — " + money(e.tutar) + (e.not ? " · " + e.not : "")));
+      L.push("");
+    }
+    if (digerTahsilat.length) {
+      L.push("> **Dikkat:** aşağıdaki tahsilat kayıtları satışa bağlı değil, bugün elden para girişi sayılmadı:");
+      digerTahsilat.forEach((x) => L.push("> - " + cust(x.musteriId) + " · " + money(x.tutar) + " · " + (x.not || "-")));
+    }
+    console.log(L.join("\n"));
     return;
   }
 
