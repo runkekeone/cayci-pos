@@ -15,6 +15,7 @@
  *   node babuco.js musteritablo [YYYY-AA-GG]   Gün satışları müşteri bazında (Tutar/Kâr%/Ödenen/Bakiye)
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
+ *   node babuco.js alim <dosya.json|json>      Mal girişi: stok ekle (--kaydet)
  *   node babuco.js tahsilat <musteri> <tutar> [not]                 (--kaydet)
  *   node babuco.js gider <tutar> <aciklama> [kategori]              (--kaydet)
  *   node babuco.js gelir <tutar> <aciklama> [tur]                   (--kaydet)
@@ -388,6 +389,53 @@ function provaUyari(ornek) {
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI - Belge " + sale.belgeNo + " · " + money(sale.toplam) + " · kar " + money(sale.toplam - sale.maliyet) + " (" + karOrani(sale.toplam, sale.maliyet) + ")");
     console.log("  buluta yazildi " + new Date(y.ts).toLocaleString("tr-TR") + " · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* Mal girisi: satin alinan urunu dukkan ya da arac stoguna ekler.
+     Fistaki adet urunun KENDI biriminde verilir (soda icin koli, birimIciAdet=24).
+     Kalemde "alis" verilirse yeni koli maliyeti olarak yazilir (adetAlis de guncellenir);
+     verilmezse fiyatlara dokunulmaz, sadece stok artar. */
+  if (komut === "alim") {
+    const ham = pos[1];
+    if (!ham) throw new Error("Alim verisi gerekli: dosya yolu ya da JSON metni.");
+    const girdi = JSON.parse(fs.existsSync(ham) ? fs.readFileSync(ham, "utf8") : ham);
+    const hedef = girdi.hedef === "dukkan" ? "dukkan" : "arac";
+    const alan = hedef === "arac" ? "aracStok" : "stok";
+    const kalemler = (girdi.kalemler || []).map((k) => {
+      const p = urunBul(store, k.urun);
+      const adet = Number(k.adet) || 0;
+      if (adet <= 0) throw new Error('"' + p.ad + '" icin adet gecersiz.');
+      const yeniAlis = (k.alis != null && k.alis !== "") ? kurus(k.alis) : null;
+      return { p: p, adet: adet, yeniAlis: yeniAlis, eski: Number(p[alan]) || 0 };
+    });
+    if (!kalemler.length) throw new Error("Alimda kalem yok.");
+    const L = [];
+    L.push("Mal girisi -> " + (hedef === "arac" ? "ARAC" : "DUKKAN") + " stogu" + (girdi.not ? "  ·  " + girdi.not : ""), "");
+    let tutar = 0;
+    kalemler.forEach((k) => {
+      const ici = Number(k.p.birimIciAdet) || 0;
+      const birim = k.p.birim || "Adet";
+      const maliyet = k.yeniAlis != null ? k.yeniAlis : (Number(k.p.alis) || 0);
+      tutar += maliyet * k.adet;
+      L.push("  " + String(k.adet).padStart(5) + " " + birim + " x " + String(k.p.ad).padEnd(32) +
+        (ici ? " (" + k.adet * ici + " adet)" : "") +
+        "  stok " + k.eski + " -> " + (k.eski + k.adet) +
+        (k.yeniAlis != null ? "  ·  alis " + money(Number(k.p.alis) || 0) + " -> " + money(k.yeniAlis) : ""));
+    });
+    L.push("", "Toplam maliyet: " + money(tutar));
+    console.log(L.join("\n"));
+    if (!kaydet) { provaUyari("alim <dosya.json>"); return; }
+    kalemler.forEach((k) => {
+      k.p[alan] = k.eski + k.adet;
+      if (k.yeniAlis != null) {
+        k.p.alis = k.yeniAlis;
+        const ici = Number(k.p.birimIciAdet) || 0;
+        if (ici) k.p.adetAlis = k.yeniAlis / ici;
+      }
+    });
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + kalemler.length + " kalem · buluta yazildi " + new Date(y.ts).toLocaleString("tr-TR") + " · yedek: " + path.basename(y.yedek));
     return;
   }
 
