@@ -12,6 +12,7 @@
  *   node babuco.js durum                       Bulut yedeğinin durumu
  *   node babuco.js rapor [YYYY-AA-GG]          Günlük rapor (Markdown)
  *   node babuco.js musteri [arama]             Müşteri(ler) + borç + özel fiyat
+ *   node babuco.js musteritablo [YYYY-AA-GG]   Gün satışları müşteri bazında (Tutar/Kâr%/Ödenen/Bakiye)
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *   node babuco.js tahsilat <musteri> <tutar> [not]                 (--kaydet)
@@ -331,6 +332,31 @@ function provaUyari(ornek) {
       if (anahtarlar.length) {
         console.log("    ozel fiyat: " + anahtarlar.map((id) => { const p = store.products.find((x) => x.id === id); return (p ? p.ad : id) + " " + money(oz[id]); }).join(" · "));
       }
+    });
+    return;
+  }
+
+  if (komut === "musteritablo") {
+    const gun = pos[1] || todayStr();
+    const inR = (iso) => iso && localDateStr(new Date(iso)) === gun;
+    const cust = (id) => (store.customers.find((c) => c.id === id) || {}).ad || "(perakende)";
+    const sales = store.sales.filter((s) => inR(s.tarih));
+    if (!sales.length) { console.log("Bu tarihte satış yok: " + gun); return; }
+    const grup = {};
+    sales.forEach((s) => {
+      const key = s.musteriId || "__perakende__";
+      grup[key] = grup[key] || { musteriId: s.musteriId, toplam: 0, maliyet: 0, odenen: 0 };
+      grup[key].toplam += Number(s.toplam) || 0;
+      grup[key].maliyet += Number(s.maliyet) || 0;
+      grup[key].odenen += (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0);
+    });
+    const parca = gun.split("-");
+    console.log("# Müşteri Bazlı Satış Tablosu — " + parca[2] + "." + parca[1] + "." + parca[0] + "\n");
+    console.log("| Müşteri | Satış Tutarı (Kâr Marjı) | Ödenen | Kalan Bakiye |");
+    console.log("|---|---|---|---|");
+    Object.values(grup).sort((a, b) => b.toplam - a.toplam).forEach((g) => {
+      const bakiye = g.musteriId ? money(customerBorc(store, g.musteriId)) : "—";
+      console.log("| " + cust(g.musteriId) + " | " + money(g.toplam) + " (" + karOrani(g.toplam, g.maliyet) + ") | " + money(g.odenen) + " | " + bakiye + " |");
     });
     return;
   }
