@@ -12,7 +12,7 @@
  *   node babuco.js durum                       Bulut yedeğinin durumu
  *   node babuco.js rapor [YYYY-AA-GG]          Günlük rapor (Markdown)
  *   node babuco.js musteri [arama]             Müşteri(ler) + borç + özel fiyat
- *   node babuco.js musteritablo [YYYY-AA-GG]   Gün satışları müşteri bazında (Tutar/Kâr%/Ödenen/Bakiye)
+ *   node babuco.js musteritablo [YYYY-AA-GG]   Günün satış şablonu: Müşteri|İçerik|Tutar|Ödenen|Bakiye|Marj
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
@@ -338,28 +338,67 @@ function provaUyari(ornek) {
     return;
   }
 
+  /* Gunun satis sablonu: her musteri icin tek satir.
+     Musteri | Icerik (ozet) | Tutar | Odenen | Kalan Bakiye | Kar Marji
+     "Odenen" = satisin nakit+pos'u + o belgeye ait fazla odeme tahsilati,
+     yani musterinin o gun elden verdigi toplam para. */
   if (komut === "musteritablo") {
     const gun = pos[1] || todayStr();
     const inR = (iso) => iso && localDateStr(new Date(iso)) === gun;
     const cust = (id) => (store.customers.find((c) => c.id === id) || {}).ad || "(perakende)";
     const sales = store.sales.filter((s) => inR(s.tarih));
     if (!sales.length) { console.log("Bu tarihte satış yok: " + gun); return; }
+    const fazlalar = store.payments.filter((p) => inR(p.tarih) && /fazla ödeme/i.test(p.not || ""));
+
+    /* Urun adini ozet icin kisaltir; ayni kisa ada dusenler tek satirda toplanir. */
+    const kisaAd = (ad) => {
+      const a = String(ad);
+      if (/Toz İçecek/i.test(a)) return "toz içecek";
+      if (/Bardak Su|Pet Şişe Su/i.test(a)) return "su";
+      if (/Küp Şeker/i.test(a)) return "şeker";
+      if (/Süt Tozu/i.test(a)) return "süt tozu";
+      if (/Çay 5 kg/i.test(a)) return "çay";
+      if (/Ayran/i.test(a)) return "ayran";
+      if (/Coca-Cola/i.test(a)) return "kola";
+      if (/Gazoz/i.test(a)) return "gazoz";
+      if (/Yazboz/i.test(a)) return "yazboz";
+      if (/Çıkma Kağıt/i.test(a)) return "çıkma kağıt";
+      if (/Oyun Kağıdı/i.test(a)) return "oyun kağıdı";
+      const soda = a.match(/(\S+)\s+Soda$/i);
+      if (soda) return soda[1].toLocaleLowerCase("tr") + " soda";
+      const aroma = a.match(/^Aroma\s+(\S+)/i);
+      if (aroma) return aroma[1].toLocaleLowerCase("tr");
+      return a.toLocaleLowerCase("tr");
+    };
+
     const grup = {};
     sales.forEach((s) => {
       const key = s.musteriId || "__perakende__";
-      grup[key] = grup[key] || { musteriId: s.musteriId, toplam: 0, maliyet: 0, odenen: 0 };
-      grup[key].toplam += Number(s.toplam) || 0;
-      grup[key].maliyet += Number(s.maliyet) || 0;
-      grup[key].odenen += (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0);
+      grup[key] = grup[key] || { musteriId: s.musteriId, toplam: 0, maliyet: 0, odenen: 0, kalem: {} };
+      const g = grup[key];
+      g.toplam += Number(s.toplam) || 0;
+      g.maliyet += Number(s.maliyet) || 0;
+      g.odenen += (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0) +
+        fazlalar.filter((p) => String(p.not || "").indexOf(s.belgeNo) !== -1)
+          .reduce((a, p) => a + (Number(p.tutar) || 0), 0);
+      s.items.forEach((it) => { const k = kisaAd(it.ad); g.kalem[k] = (g.kalem[k] || 0) + (Number(it.adet) || 0); });
     });
+
     const parca = gun.split("-");
-    console.log("# Müşteri Bazlı Satış Tablosu — " + parca[2] + "." + parca[1] + "." + parca[0] + "\n");
-    console.log("| Müşteri | Satış Tutarı (Kâr Marjı) | Ödenen | Kalan Bakiye |");
-    console.log("|---|---|---|---|");
+    console.log("# " + parca[2] + "." + parca[1] + "." + parca[0] + "\n");
+    console.log("| Müşteri | İçerik | Tutar | Ödenen | Kalan Bakiye | Kâr Marjı |");
+    console.log("|---|---|---|---|---|---|");
+    let tT = 0, tO = 0, tM = 0;
     Object.values(grup).sort((a, b) => b.toplam - a.toplam).forEach((g) => {
+      const icerik = Object.entries(g.kalem).sort((a, b) => b[1] - a[1])
+        .map((e) => e[1] + " " + e[0]).join(", ");
       const bakiye = g.musteriId ? money(customerBorc(store, g.musteriId)) : "—";
-      console.log("| " + cust(g.musteriId) + " | " + money(g.toplam) + " (" + karOrani(g.toplam, g.maliyet) + ") | " + money(g.odenen) + " | " + bakiye + " |");
+      console.log("| " + cust(g.musteriId) + " | " + icerik + " | " + money(g.toplam) + " | " +
+        money(g.odenen) + " | " + bakiye + " | " + karOrani(g.toplam, g.maliyet) + " |");
+      tT += g.toplam; tO += g.odenen; tM += g.maliyet;
     });
+    console.log("| **TOPLAM** | " + sales.length + " satış | **" + money(tT) + "** | **" + money(tO) +
+      "** | — | **" + karOrani(tT, tM) + "** |");
     return;
   }
 
