@@ -12,7 +12,7 @@
  *   node babuco.js durum                       Bulut yedeğinin durumu
  *   node babuco.js rapor [YYYY-AA-GG]          Günlük rapor (Markdown)
  *   node babuco.js musteri [arama]             Müşteri(ler) + borç + özel fiyat
- *   node babuco.js musteritablo [YYYY-AA-GG]   Günün satış şablonu: Müşteri|İçerik|Tutar|Ödenen|Bakiye|Marj
+ *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
@@ -374,8 +374,9 @@ function provaUyari(ornek) {
     const grup = {};
     sales.forEach((s) => {
       const key = s.musteriId || "__perakende__";
-      grup[key] = grup[key] || { musteriId: s.musteriId, toplam: 0, maliyet: 0, odenen: 0, kalem: {} };
+      grup[key] = grup[key] || { musteriId: s.musteriId, toplam: 0, maliyet: 0, odenen: 0, kalem: {}, ilk: s.tarih, saat: saat(s.tarih) };
       const g = grup[key];
+      if (s.tarih < g.ilk) { g.ilk = s.tarih; g.saat = saat(s.tarih); }
       g.toplam += Number(s.toplam) || 0;
       g.maliyet += Number(s.maliyet) || 0;
       g.odenen += (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0) +
@@ -386,18 +387,22 @@ function provaUyari(ornek) {
 
     const parca = gun.split("-");
     console.log("# " + parca[2] + "." + parca[1] + "." + parca[0] + "\n");
-    console.log("| Müşteri | İçerik | Tutar | Ödenen | Kalan Bakiye | Kâr Marjı |");
-    console.log("|---|---|---|---|---|---|");
-    let tT = 0, tO = 0, tM = 0;
-    Object.values(grup).sort((a, b) => b.toplam - a.toplam).forEach((g) => {
+    console.log("| # | Saat | Müşteri | İçerik | Tutar | Ödenen | Kalan Bakiye | Kâr Marjı |");
+    console.log("|---|---|---|---|---|---|---|---|");
+    let tT = 0, tO = 0, tM = 0, sira = 0;
+    const tutaraGore = args.indexOf("--tutar") !== -1;
+    const siralanmis = Object.values(grup).sort((a, b) =>
+      tutaraGore ? b.toplam - a.toplam : String(a.ilk).localeCompare(String(b.ilk)));
+    siralanmis.forEach((g) => {
       const icerik = Object.entries(g.kalem).sort((a, b) => b[1] - a[1])
         .map((e) => e[1] + " " + e[0]).join(", ");
       const bakiye = g.musteriId ? money(customerBorc(store, g.musteriId)) : "—";
-      console.log("| " + cust(g.musteriId) + " | " + icerik + " | " + money(g.toplam) + " | " +
+      sira += 1;
+      console.log("| " + sira + " | " + g.saat + " | " + cust(g.musteriId) + " | " + icerik + " | " + money(g.toplam) + " | " +
         money(g.odenen) + " | " + bakiye + " | " + karOrani(g.toplam, g.maliyet) + " |");
       tT += g.toplam; tO += g.odenen; tM += g.maliyet;
     });
-    console.log("| **TOPLAM** | " + sales.length + " satış | **" + money(tT) + "** | **" + money(tO) +
+    console.log("| | | **TOPLAM** | " + sales.length + " satış | **" + money(tT) + "** | **" + money(tO) +
       "** | — | **" + karOrani(tT, tM) + "** |");
     return;
   }
