@@ -555,9 +555,14 @@ function provaUyari(ornek) {
     if (!ham) throw new Error("Satis verisi gerekli: dosya yolu ya da JSON metni.");
     const girdi = JSON.parse(fs.existsSync(ham) ? fs.readFileSync(ham, "utf8") : ham);
     const h = satisHazirla(store, girdi);
-    console.log(args.includes("--duz") ? satisOzet(store, h) : satisFis(store, h, false, null));
-    if (!kaydet) { provaUyari("satis <dosya.json>"); return; }
+    const duz = args.includes("--duz");
+    /* Fiş, satış işlenmeden ÖNCE üretilir: bakiye satırı "eski -> yeni" gösterebilsin diye
+       (satisIsle'den sonra customerBorc zaten yeni bakiyeyi döndürür). */
+    const fis = duz ? satisOzet(store, h) : satisFis(store, h, false, null);
+    if (!kaydet) { console.log(fis); provaUyari("satis <dosya.json>"); return; }
     const sale = satisIsle(store, h);
+    console.log(duz ? fis : fis.replace(/\*\*KAYDEDİLMEDİ\*\* — onayını bekliyorum$/,
+      "**KAYDEDİLDİ** — Belge " + sale.belgeNo));
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI - Belge " + sale.belgeNo + " · " + money(sale.toplam) + " · kar " + money(sale.toplam - sale.maliyet) + " (" + karOrani(sale.toplam, sale.maliyet) + ")");
     console.log("  buluta yazildi " + new Date(y.ts).toLocaleString("tr-TR") + " · yedek: " + path.basename(y.yedek));
