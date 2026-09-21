@@ -38,9 +38,16 @@ ortam değişkenleriyle ezilebilir.
 
 ### Kaydetme protokolü
 **`--kaydet` verilmedikçe hiçbir şey yazılmaz** — araç sadece özeti basar.
-Önce `--kaydet`siz çalıştır, özeti (kalemler, fiyatlar, toplam, **kâr ve marj**,
-bakiyenin ne olacağı) kullanıcıya göster, **tamam** dedikten sonra aynı komutu
-`--kaydet` ile tekrarla. Kullanıcı onaylamadan kaydetme.
+Önce `--kaydet`siz çalıştır, çıkan **fişi olduğu gibi kullanıcıya göster**, **tamam**
+dedikten sonra aynı komutu `--kaydet` ile tekrarla. Kullanıcı onaylamadan kaydetme.
+
+**Fiş şablonu zorunlu.** `satis` komutu `--kaydet`siz çalıştığında Markdown bir fiş
+basar: adet · ürünün **tam adı** · birim fiyat · satır tutarı, toplam, paranın
+kırılımı (nakit / kart / açık / fazlası borca), **bakiyenin ne olacağı** ve kâr+marj.
+Fiyatın yanında `⚠` = elle verilen fiyat (listeden farklı), `⭐` = müşterinin özel
+fiyatı — kullanıcı yanlış fiyatı buradan yakalıyor. Bu fişi **özetleyip kısaltma**,
+araç ne bastıysa onu göster; kullanıcı her müşteride bunu okuyup onaylıyor.
+(Eski düz metin özet gerekirse `--duz`.)
 
 Satış JSON'u:
 ```json

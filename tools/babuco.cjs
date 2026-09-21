@@ -16,6 +16,8 @@
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
+ *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
+ *                                              eski düz metin özet için --duz.
  *   node babuco.js alim <dosya.json|json>      Mal girişi: stok ekle (--kaydet)
  *   node babuco.js tahsilat <musteri> <tutar> [not]                 (--kaydet)
  *   node babuco.js gider <tutar> <aciklama> [kategori]              (--kaydet)
@@ -274,6 +276,55 @@ function satisOzet(store, h) {
   }
   return L.join("\n");
 }
+/**
+ * Fiş şablonu (Markdown) — kullanıcı sahada telefondan okuyup "tamam"/"hayır" desin diye.
+ * Kaydetmeden ÖNCE basılır; amacı yanlış ürün/fiyat/ödeme girişini kullanıcıya yakalatmak.
+ * ⚠ = elle verilen fiyat (listeden farklı) · ⭐ = müşterinin özel fiyatı.
+ */
+function satisFis(store, h, kaydedildi, belgeNo) {
+  const q = (n) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
+  const L = [];
+  L.push("### 🧾 FİŞ — " + (h.c ? h.c.ad : "(perakende / müşterisiz)"));
+  L.push("**" + h.tarih.toLocaleDateString("tr-TR") + "**" +
+    (h.girdi.stokKaynak === "arac" ? " · araçtan" : " · dükkandan") +
+    (belgeNo ? " · Belge " + belgeNo : ""));
+  L.push("");
+  L.push("| Adet | Ürün | Fiyat | Tutar |");
+  L.push("|---:|---|---:|---:|");
+  let elle = false, ozelV = false;
+  h.kalemler.forEach((k) => {
+    const beklenen = k.ozelFiyat != null ? k.ozelFiyat : k.listeFiyat;
+    let im = "";
+    if (k.fiyat !== beklenen) { im = " ⚠"; elle = true; }
+    else if (k.ozelFiyat != null) { im = " ⭐"; ozelV = true; }
+    L.push("| " + k.adet + " | " + k.ad + " | " + q(k.fiyat) + im + " | " + q(k.adet * k.fiyat) + " |");
+  });
+  if (h.iskonto) {
+    L.push("| | | Ara toplam | " + q(h.brut) + " |");
+    L.push("| | | İskonto | −" + q(h.iskonto) + " |");
+  }
+  L.push("| | | **TOPLAM** | **" + q(h.toplam) + " ₺** |");
+  L.push("");
+  L.push("| | |");
+  L.push("|---|---:|");
+  if (h.odeme.nakit) L.push("| Nakit alınan | " + q(h.odeme.nakit + h.fazla) + " ₺ |");
+  if (h.odeme.pos) L.push("| Kart / pos" + (h.girdi.odemeAdi ? " (" + h.girdi.odemeAdi + ")" : "") + " | " + q(h.odeme.pos) + " ₺ |");
+  if (h.komisyon) L.push("| Pos komisyonu (%2) | −" + q(h.komisyon) + " ₺ |");
+  if (h.fazla > 0.001) L.push("| Fazlası borca | −" + q(h.fazla) + " ₺ |");
+  if (h.odeme.acik > 0.001) L.push("| **Açık hesap kalan** | **" + q(h.odeme.acik) + " ₺** |");
+  if (h.c) {
+    const eski = customerBorc(store, h.c.id);
+    L.push("| **Bakiye** | " + q(eski) + " → **" + q(kurus(eski + h.odeme.acik - h.fazla)) + " ₺** |");
+  }
+  L.push("| Kâr | " + q(h.toplam - h.maliyet) + " ₺ · " + karOrani(h.toplam, h.maliyet) + " |");
+  L.push("");
+  const im = [];
+  if (elle) im.push("⚠ = elle fiyat (listeden farklı)");
+  if (ozelV) im.push("⭐ = müşterinin özel fiyatı");
+  if (im.length) L.push(im.join(" · "));
+  L.push(kaydedildi ? "**KAYDEDİLDİ**" : "**KAYDEDİLMEDİ** — onayını bekliyorum");
+  return L.join("\n");
+}
 function satisIsle(store, h) {
   store.counters.sale = (store.counters.sale || 0) + 1;
   const belgeNo = h.tarih.getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
@@ -504,7 +555,7 @@ function provaUyari(ornek) {
     if (!ham) throw new Error("Satis verisi gerekli: dosya yolu ya da JSON metni.");
     const girdi = JSON.parse(fs.existsSync(ham) ? fs.readFileSync(ham, "utf8") : ham);
     const h = satisHazirla(store, girdi);
-    console.log(satisOzet(store, h));
+    console.log(args.includes("--duz") ? satisOzet(store, h) : satisFis(store, h, false, null));
     if (!kaydet) { provaUyari("satis <dosya.json>"); return; }
     const sale = satisIsle(store, h);
     const y = await storeYaz(store, updatedAt);
