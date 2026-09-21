@@ -821,7 +821,7 @@ function renderMusteriDetay() {
   const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>${p.tutar < 0 ? "Borç Ekleme" : "Tahsilat"}</td><td>${esc(p.not || "-")}</td><td>${money.format(Math.abs(p.tutar))}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
   const tsipler = store.tsiparisler.filter((t) => t.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const tsipRows = tsipler.map((t, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-tsip="${t.id}">${esc(tsiparisKalemOzet(t))}</button></td><td>${money.format(t.toplamTutar)}</td><td>${money.format(tsiparisKalanTutar(t))}</td><td>${tsiparisAcikMi(t) ? '<span class="risk-orta">Açık</span>' : '<span class="risk-dusuk">Kapandı</span>'}</td><td>${fmtDate(t.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "📦 Toplu Sipariş", cls: "soft", act: "tsipYeni" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
+  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "🧾 Hesap Özeti", cls: "softgreen", act: "ekstre" }, { label: "📦 Toplu Sipariş", cls: "soft", act: "tsipYeni" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
     grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length)) +
@@ -835,6 +835,7 @@ function mountMusteriDetay() {
   const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
   const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
   const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
+  const ek = document.querySelector('[data-act="ekstre"]'); if (ek) ek.addEventListener("click", () => ekstreModal(selectedCustomerId));
   wireSaleLinks();
 }
 
