@@ -3114,6 +3114,12 @@ function irsaliyeGorsel(s, opts) {
   }
   rows.push({ sep: 1 });
   rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
+  return fisCanvasCiz(rows);
+}
+/* Satır listesini fiş görseline çizer. Hem irsaliye hem hesap özeti bunu kullanır —
+   ikisinin görünümü tek yerden değişsin diye ayrıldı.
+   Satır: {t, r, sub, sep, bold, center, size, color} */
+function fisCanvasCiz(rows) {
   const W = 520, pad = 28, lh = 30;
   const logoOk = OZGUR_LOGO && OZGUR_LOGO.complete && OZGUR_LOGO.naturalWidth > 0;
   const logoH = logoOk ? 100 : 0;
@@ -3188,6 +3194,136 @@ function fisGonderModal(s, opts) {
     </div>
     <p class="hint" style="margin-top:6px">Metin doğrudan bağlı numaraya gider (tek dokunuş gönder). Görsel için Paylaş → WhatsApp → kişi seç.</p>`;
   const m = openModal("Fiş / İrsaliye " + s.belgeNo, body, { noFoot: true, onMount: (ov) => { const r = ov.querySelector("#fgResim"); if (r) r.onclick = () => irsaliyePaylas(s, opts); } });
+}
+/* ---- HESAP ÖZETİ (ekstre) ----------------------------------------------
+   Müşteriye "şu tarihten beri ne aldın, ne ödedin, ne kaldı" diye gönderilen belge.
+   İrsaliye tek satışı gösterir; bu, dönem içindeki BÜTÜN hareketleri gösterir.
+   Varsayılan dönem "son sıfırlanma": bakiyenin en son 0'a indiği an — müşteri
+   "ben ödemiştim" dediğinde tartışma oradan başladığı için en anlaşılır kesit. */
+function ekstreHareketler(id) {
+  const c = findCustomer(id); if (!c) return [];
+  const h = [];
+  store.sales.forEach((s) => {
+    if (s.musteriId !== id) return;
+    const pesin = (Number(s.odeme.nakit) || 0) + (Number(s.odeme.pos) || 0);
+    h.push({ t: s.tarih, tip: "satis", tutar: Number(s.toplam) || 0, acik: Number(s.odeme.acik) || 0,
+             pesin: pesin, items: s.items || [], belge: s.belgeNo });
+  });
+  store.payments.forEach((p) => {
+    if (p.musteriId !== id) return;
+    h.push({ t: p.tarih, tip: "odeme", tutar: Number(p.tutar) || 0, not: p.not || "" });
+  });
+  h.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+  let bak = Number(c.acilis) || 0;
+  h.forEach((x) => { bak = kurus(bak + (x.tip === "satis" ? x.acik : -x.tutar)); x.bakiye = bak; x.oncesi = kurus(bak - (x.tip === "satis" ? x.acik : -x.tutar)); });
+  return h;
+}
+/* Kalemleri tek satırlık özete indirger: "10 × Pet Şişe Su · 4 × Bardak Su".
+   Canvas satır kaydırmadığı için uzunsa kırpılır. */
+function ekstreKalemOzet(items) {
+  const t = (items || []).map((it) => num2.format(it.adet) + " × " + it.ad).join("  ·  ");
+  return t.length > 66 ? t.slice(0, 63) + "..." : t;
+}
+function ekstreSatirlari(id, mod) {
+  const c = findCustomer(id), st = store.settings;
+  const hep = ekstreHareketler(id);
+  let bas = 0;
+  if (mod === "gun90") {
+    const sinir = new Date(Date.now() - 90 * 86400000).toISOString();
+    bas = hep.findIndex((x) => x.t >= sinir); if (bas < 0) bas = hep.length;
+  } else if (mod !== "tumu") {
+    // son sıfırlanma: bakiyenin en son 0'a indiği hareket (o hareket dahil)
+    for (let i = hep.length - 1; i >= 0; i--) { if (Math.abs(hep[i].bakiye) < 0.005) { bas = i; break; } }
+  }
+  const hs = hep.slice(bas);
+  const donemBasi = hs.length ? hs[0].oncesi : customerBorc(id);
+  const rows = [];
+  rows.push({ t: st.fisBaslik || st.firmaAdi || "", size: 22, bold: true, center: true });
+  rows.push({ t: "HESAP ÖZETİ", size: 13, center: true, color: "#555" });
+  rows.push({ sep: 1 });
+  rows.push({ t: "Müşteri: " + c.ad });
+  rows.push({ t: "Tarih: " + fmtDateShort(new Date().toISOString()) });
+  rows.push({ t: "Dönem: " + (hs.length ? fmtDateShort(hs[0].t) : "—") + " – " + fmtDateShort(new Date().toISOString()) });
+  rows.push({ sep: 1 });
+  if (Math.abs(donemBasi) > 0.005) rows.push({ t: "Dönem Başı Bakiye", r: money.format(donemBasi), color: "#555" });
+  let alis = 0, ode = 0;
+  hs.forEach((x) => {
+    if (x.tip === "satis") {
+      alis += x.tutar;
+      rows.push({ t: fmtDateShort(x.t) + " — Teslimat", r: money.format(x.tutar), sub: ekstreKalemOzet(x.items) });
+      if (x.pesin > 0.005) { ode += x.pesin; rows.push({ t: fmtDateShort(x.t) + " — Ödeme (peşin)", r: "-" + money.format(x.pesin), color: "#1e824c" }); }
+    } else {
+      ode += x.tutar;
+      // Not YAZILMAZ: tahsilat notları iç kayıt ("bakiye düzeltmesi", "sisteme girilmemişti"
+      // gibi) ve müşteriye gösterilecek şeyler değil. Sadece iade bilgisi anlamlı.
+      const iade = /iade/i.test(x.not || "") ? x.not : "";
+      rows.push({ t: fmtDateShort(x.t) + " — " + (iade ? "İADE" : "ÖDEME"), r: "-" + money.format(x.tutar), color: "#1e824c", sub: iade });
+    }
+  });
+  rows.push({ sep: 1 });
+  rows.push({ t: "TOPLAM TESLİMAT", r: money.format(alis), bold: true, size: 18 });
+  rows.push({ t: "TOPLAM ÖDEME", r: "-" + money.format(ode), bold: true, size: 18, color: "#1e824c" });
+  const kalan = customerBorc(id);
+  rows.push({ sep: 1 });
+  rows.push({ t: kalan > 0.005 ? "KALAN BAKİYE (BORÇ)" : "KALAN BAKİYE", r: money.format(kalan), bold: true, size: 20, color: kalan > 0.005 ? "#c0392b" : "#1e824c" });
+  rows.push({ sep: 1 });
+  rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
+  return rows;
+}
+function ekstreGorsel(id, mod) { return fisCanvasCiz(ekstreSatirlari(id, mod)); }
+function ekstreMetni(id, mod) {
+  const c = findCustomer(id);
+  return (store.settings.fisBaslik || store.settings.firmaAdi || "") + "\nHESAP ÖZETİ\n" + c.ad +
+    "\nTarih: " + fmtDateShort(new Date().toISOString()) +
+    "\nKalan bakiye: " + money.format(customerBorc(id));
+}
+async function ekstrePaylas(id, mod) {
+  const c = findCustomer(id); if (!c) { alert("Müşteri bulunamadı."); return; }
+  const url = ekstreGorsel(id, mod);
+  const cap = "Hesap Özeti · " + c.ad + " · Kalan Bakiye: " + money.format(customerBorc(id));
+  let d = (c.telefon || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  if (d && window.AndroidWa && window.AndroidWa.sendImage) {
+    try { window.AndroidWa.sendImage(url.split(",")[1], d, cap); return; } catch (e) {}
+  }
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  if (P && P.Filesystem && P.Share) {
+    try {
+      const fname = "hesap-ozeti-" + (c.ad || "musteri").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + "-" + Date.now() + ".png";
+      const w = await P.Filesystem.writeFile({ path: fname, data: url.split(",")[1], directory: "CACHE" });
+      await P.Share.share({ title: "Hesap Özeti", text: cap, files: [w.uri], dialogTitle: "Hesap özetini paylaş" });
+      return;
+    } catch (e) { if (e && (e.message || "").toLowerCase().includes("cancel")) return; }
+  }
+  if (navigator.share) {
+    try { await navigator.share({ files: [dataURLtoFile(url, "hesap-ozeti.png")], title: "Hesap Özeti", text: cap }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  openModal("Hesap Özeti · " + c.ad, `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="hesap özeti" />`, { noFoot: true });
+}
+/* Önizleme + dönem seçimi. Müşteri kartındaki "Hesap Özeti" düğmesi burayı açar. */
+function ekstreModal(id, mod) {
+  const c = findCustomer(id); if (!c) return;
+  mod = mod || "sifir";
+  const url = ekstreGorsel(id, mod);
+  const metin = ekstreMetni(id, mod);
+  let d = (c.telefon || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  const sec = (k, ad) => `<button class="btn ${mod === k ? "primary" : "soft"} sm" data-ekmod="${k}" type="button">${ad}</button>`;
+  const body = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      ${sec("sifir", "Son sıfırlamadan")}${sec("gun90", "Son 90 gün")}${sec("tumu", "Tüm hareketler")}
+    </div>
+    <img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="hesap özeti" />
+    <div class="fg-actions">
+      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">📲 ${esc(c.ad)} — Özet Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
+      <button class="btn primary lg" id="ekResim" type="button">🖼 Hesap Özetini Paylaş (görsel)</button>
+    </div>
+    <p class="hint" style="margin-top:6px">Görsel için Paylaş → WhatsApp → kişi seç. Dönemi yukarıdan değiştirebilirsin.</p>`;
+  const m = openModal("Hesap Özeti · " + c.ad, body, { noFoot: true, onMount: (ov) => {
+    const r = ov.querySelector("#ekResim"); if (r) r.onclick = () => ekstrePaylas(id, mod);
+    ov.querySelectorAll("[data-ekmod]").forEach((b) => {
+      b.onclick = () => { const k = b.getAttribute("data-ekmod"); m.close(); ekstreModal(id, k); };
+    });
+  } });
+  return m;
 }
 function openSaleForCustomer(id) {
   const c = pos.carts[pos.active]; c.musteriId = id; navigate("satis");
@@ -3271,6 +3407,7 @@ function ziyaretKartiHTML(id) {
       <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
       <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
       <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi Paylaş (görsel)</button>
+      <button class="btn soft" data-zkekstre="${id}" type="button">🧾 Hesap Özeti Çıkar</button>
       ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>
       <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
     </div>
@@ -3284,6 +3421,7 @@ function ziyaretKartiWire(id) {
   kart.querySelector("[data-zksatis]").onclick = () => openSaleForCustomer(id);
   kart.querySelector("[data-zkkonum]").onclick = () => konumKaydet(id);
   kart.querySelector("[data-zkwa]").onclick = () => irsaliyePaylas(musterininSonSatisi(id));
+  kart.querySelector("[data-zkekstre]").onclick = () => ekstreModal(id);
   const tmbtn = kart.querySelector("[data-zktamam]"); if (tmbtn) tmbtn.onclick = () => durakTamamla(id);
   const pasbtn = kart.querySelector("[data-zkpas]"); if (pasbtn) pasbtn.onclick = () => { if (confirm("Bu müşteri pas geçilsin mi?")) durakPasGec(id); };
   const sonabtn = kart.querySelector("[data-zksona]"); if (sonabtn) sonabtn.onclick = () => durakSonaAt(id);
