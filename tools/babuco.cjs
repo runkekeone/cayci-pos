@@ -12,9 +12,13 @@
  *   node babuco.js durum                       Bulut yedeğinin durumu
  *   node babuco.js rapor [YYYY-AA-GG]          Günlük rapor (Markdown)
  *   node babuco.js musteri [arama]             Müşteri(ler) + borç + özel fiyat
+ *   node babuco.js ekstre <musteri>            Müşterinin tüm hareketleri + bakiye seyri
+ *   node babuco.js tahsilat-listesi            Kim borçlu, en son ne zaman ödedi (riskli üstte)
+ *   node babuco.js aylik                       Aylık servis günü / ciro / kâr / sahadaki alacak
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
+ *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
  *                                              eski düz metin özet için --duz.
@@ -667,5 +671,157 @@ function provaUyari(ornek) {
     return;
   }
 
-  console.log("Bilinmeyen komut: " + komut + "\nKomutlar: durum | rapor | musteri | urun | satis | tahsilat | gider | gelir | sil-satis | siparisler");
+
+  /* ---------- ekstre: musterinin tum hareketleri, bakiye seyriyle ---------- */
+  if (komut === "ekstre") {
+    const c = musteriBul(store, pos[1]);
+    const h = [];
+    store.sales.filter((x) => x.musteriId === c.id).forEach((x) =>
+      h.push({ t: x.tarih, tip: "satis", belge: x.belgeNo, tutar: Number(x.toplam) || 0, acik: Number(x.odeme.acik) || 0,
+               odenen: (Number(x.odeme.nakit) || 0) + (Number(x.odeme.pos) || 0), items: x.items }));
+    store.payments.filter((x) => x.musteriId === c.id).forEach((x) =>
+      h.push({ t: x.tarih, tip: "tahsilat", tutar: Number(x.tutar) || 0, not: x.not }));
+    h.sort((a, b) => (a.t < b.t ? -1 : 1));
+    let bak = Number(c.acilis) || 0;
+    const L = [];
+    L.push("# Ekstre — " + c.ad + (c.telefon ? "  ·  " + c.telefon : ""), "");
+    L.push("| Tarih | İşlem | Belge | Tutar | Ödenen | Açık | Bakiye |");
+    L.push("|---|---|---|---:|---:|---:|---:|");
+    L.push("| — | açılış | | | | | " + money(bak) + " |");
+    h.forEach((x) => {
+      const g = new Date(x.t).toLocaleDateString("tr-TR");
+      if (x.tip === "satis") {
+        bak = kurus(bak + x.acik);
+        L.push("| " + g + " | satış | " + x.belge + " | " + money(x.tutar) + " | " + money(x.odenen) + " | " + money(x.acik) + " | " + money(bak) + " |");
+      } else {
+        bak = kurus(bak - x.tutar);
+        L.push("| " + g + " | **tahsilat** | | | " + money(x.tutar) + " | | " + money(bak) + " |" + (x.not ? "  <!-- " + x.not + " -->" : ""));
+      }
+    });
+    L.push("", "**Güncel bakiye: " + money(bak) + "**");
+    const tah = h.filter((x) => x.tip === "tahsilat");
+    const son = tah[tah.length - 1];
+    L.push("Satış " + h.filter((x) => x.tip === "satis").length + " · tahsilat " + tah.length +
+      (son ? " · son ödeme " + new Date(son.t).toLocaleDateString("tr-TR") + " (" + money(son.tutar) + ")" : " · **hiç ödeme yok**"));
+    console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- tahsilat-listesi: kim borclu, en son ne zaman odedi ---------- */
+  if (komut === "tahsilat-listesi" || komut === "alacak") {
+    const simdi = new Date();
+    const d60 = new Date(simdi - 60 * 86400000);
+    const sat = store.products.reduce((a, p) => { a[p.id] = Number(p.alis) || 0; return a; }, {});
+    const satir = store.customers.map((c) => {
+      const b = customerBorc(store, c.id);
+      const tah = store.payments.filter((p) => p.musteriId === c.id).sort((a, x) => (a.tarih < x.tarih ? -1 : 1));
+      const son = tah[tah.length - 1];
+      const gun = son ? Math.round((simdi - new Date(son.tarih)) / 86400000) : null;
+      const s60 = store.sales.filter((s) => s.musteriId === c.id && new Date(s.tarih) >= d60);
+      const acik60 = s60.reduce((a, s) => a + (Number(s.odeme.acik) || 0), 0);
+      const tah60 = tah.filter((p) => new Date(p.tarih) >= d60).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
+      const kar60 = s60.reduce((a, s) => a + (Number(s.toplam) || 0) - s.items.reduce((m, it) => m + (sat[it.urunId] || 0) * it.adet, 0), 0);
+      return { ad: c.ad, b: b, son: son, gun: gun, net: kurus(tah60 - acik60), kar60: kurus(kar60) };
+    }).filter((x) => x.b > 0.5).sort((a, b) => b.b - a.b);
+    const L = [];
+    L.push("# Tahsilat listesi — " + new Date().toLocaleDateString("tr-TR"), "");
+    L.push("| ! | Müşteri | Bakiye | Son ödeme | Kaç gün | 60g net | 60g kâr |");
+    L.push("|---|---|---:|---|---:|---:|---:|");
+    satir.forEach((x) => {
+      const risk = !x.son ? "🔴" : (x.gun > 30 ? "🔴" : (x.net < 0 ? "🟡" : "🟢"));
+      L.push("| " + risk + " | " + x.ad + " | **" + money(x.b) + "** | " +
+        (x.son ? money(x.son.tutar) + " · " + new Date(x.son.tarih).toLocaleDateString("tr-TR") : "**hiç yok**") + " | " +
+        (x.gun == null ? "—" : x.gun) + " | " + money(x.net) + " | " + money(x.kar60) + " |");
+    });
+    L.push("", "**TOPLAM ALACAK: " + money(satir.reduce((a, x) => a + x.b, 0)) + "** · " + satir.length + " borçlu müşteri");
+    L.push("", "🔴 hiç ödeme yok ya da 30 günden eski · 🟡 aldığından az ödüyor (borç büyüyor) · 🟢 düzenli");
+    L.push("_60g net = son 60 günde ödediği − yeni açtığı borç. Eksi ise borcu büyüyor._");
+    console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- kalem-ekle: var olan fise kalem ekle (fark acik hesaba yazilir) ---------- */
+  if (komut === "kalem-ekle") {
+    const s = store.sales.find((x) => x.belgeNo === pos[1]);
+    if (!s) throw new Error("Belge bulunamadi: " + pos[1]);
+    const p = urunBul(store, pos[2]);
+    const adet = Number(pos[3]) || 0;
+    if (adet <= 0) throw new Error("Adet gecersiz.");
+    const c = store.customers.find((x) => x.id === s.musteriId);
+    const ozel = (c && c.ozelFiyatlar && c.ozelFiyatlar[p.id] != null && c.ozelFiyatlar[p.id] !== "") ? Number(c.ozelFiyatlar[p.id]) : null;
+    const fiyat = pos[4] != null ? Number(String(pos[4]).replace(",", ".")) : (ozel != null ? ozel : Number(p.satis) || 0);
+    const ekTutar = kurus(adet * fiyat), ekMaliyet = kurus(adet * (Number(p.alis) || 0));
+    console.log("Belge " + s.belgeNo + " · " + (c ? c.ad : "(perakende)") + " · " + new Date(s.tarih).toLocaleString("tr-TR"));
+    s.items.forEach((it) => console.log("   " + it.adet + " x " + it.ad + " @ " + money(it.fiyat)));
+    console.log("  + EKLENECEK: " + adet + " x " + p.ad + " @ " + money(fiyat) + (ozel != null && fiyat === ozel ? " (özel fiyat)" : "") + " = " + money(ekTutar));
+    console.log("  Toplam : " + money(s.toplam) + " -> " + money(kurus(s.toplam + ekTutar)));
+    console.log("  Açık   : " + money(s.odeme.acik) + " -> " + money(kurus((Number(s.odeme.acik) || 0) + ekTutar)));
+    if (c) { const eski = customerBorc(store, c.id); console.log("  Bakiye : " + money(eski) + " -> " + money(kurus(eski + ekTutar))); }
+    if (!kaydet) { provaUyari("kalem-ekle " + s.belgeNo + ' "' + p.ad + '" ' + adet); return; }
+    s.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: adet, iskyuzde: 0 });
+    s.brut = kurus((Number(s.brut) || 0) + ekTutar);
+    s.toplam = kurus((Number(s.toplam) || 0) + ekTutar);
+    s.maliyet = kurus((Number(s.maliyet) || 0) + ekMaliyet);
+    s.odeme.acik = kurus((Number(s.odeme.acik) || 0) + ekTutar);
+    const pr = store.products.find((x) => x.id === p.id);
+    if (s.stokKaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) - adet;
+    else pr.stok = (Number(pr.stok) || 0) - adet;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- ozel-fiyat: musterinin urun fiyatini ayarla ---------- */
+  if (komut === "ozel-fiyat") {
+    const c = musteriBul(store, pos[1]);
+    const p = urunBul(store, pos[2]);
+    c.ozelFiyatlar = c.ozelFiyatlar || {};
+    const eski = c.ozelFiyatlar[p.id];
+    if (pos[3] == null) throw new Error('Fiyat gerekli. Silmek icin: ozel-fiyat "' + c.ad + '" "' + p.ad + '" sil');
+    const sil = String(pos[3]).toLocaleLowerCase("tr") === "sil";
+    const fiyat = sil ? null : kurus(String(pos[3]).replace(",", "."));
+    console.log(c.ad + " · " + p.ad);
+    console.log("  özel fiyat : " + (eski != null ? money(eski) : "(yok)") + "  ->  " + (sil ? "(silinecek)" : money(fiyat)));
+    console.log("  liste fiyatı: " + money(p.satis) + " · alış " + money(p.alis));
+    if (!kaydet) { provaUyari('ozel-fiyat "' + c.ad + '" "' + p.ad + '" ' + (sil ? "sil" : fiyat)); return; }
+    if (sil) delete c.ozelFiyatlar[p.id]; else c.ozelFiyatlar[p.id] = fiyat;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- aylik: servis gunu / ciro / kar ozeti ---------- */
+  if (komut === "aylik") {
+    const alis = store.products.reduce((a, p) => { a[p.id] = Number(p.alis) || 0; return a; }, {});
+    const gun = {};
+    store.sales.forEach((s) => {
+      const g = s.servisGun || String(s.tarih).slice(0, 10);
+      const mal = s.items.reduce((a, it) => a + (alis[it.urunId] || 0) * it.adet, 0);
+      gun[g] = gun[g] || { ciro: 0, kar: 0, n: 0 };
+      gun[g].ciro += Number(s.toplam) || 0; gun[g].kar += (Number(s.toplam) || 0) - mal; gun[g].n++;
+    });
+    const ay = {};
+    Object.keys(gun).forEach((g) => {
+      const a = g.slice(0, 7);
+      ay[a] = ay[a] || { ciro: 0, kar: 0, gun: 0, satis: 0, gider: 0 };
+      ay[a].ciro += gun[g].ciro; ay[a].kar += gun[g].kar; ay[a].gun++; ay[a].satis += gun[g].n;
+    });
+    store.expenses.forEach((e) => { const a = String(e.tarih).slice(0, 7); if (ay[a]) ay[a].gider += Number(e.tutar) || 0; });
+    const L = [];
+    L.push("# Aylık özet", "");
+    L.push("| Ay | Servis günü | Satış | Ciro | Ürün kârı | Marj | Gider | Net kâr | Gün başı |");
+    L.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+    Object.keys(ay).sort().forEach((a) => {
+      const v = ay[a];
+      L.push("| " + a + " | " + v.gun + " | " + v.satis + " | " + money(v.ciro) + " | " + money(v.kar) + " | " +
+        karOrani(v.ciro, v.ciro - v.kar) + " | " + money(v.gider) + " | **" + money(kurus(v.kar - v.gider)) + "** | " +
+        money(kurus((v.kar - v.gider) / v.gun)) + " |");
+    });
+    const alacak = store.customers.reduce((a, c) => a + Math.max(0, customerBorc(store, c.id)), 0);
+    L.push("", "**Sahadaki alacak: " + money(kurus(alacak)) + "**");
+    console.log(L.join("\n"));
+    return;
+  }
+
+  console.log("Bilinmeyen komut: " + komut + "\nKomutlar: durum | rapor | musteri | musteritablo | kasa | aylik | ekstre | tahsilat-listesi |\n          urun | ozel-fiyat | satis | kalem-ekle | alim | tahsilat | gider | gelir | sil-satis | siparisler");
 })().catch((e) => { console.error("\nHATA: " + e.message); process.exit(1); });

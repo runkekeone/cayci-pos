@@ -23,9 +23,14 @@ Araç depoda: **`node tools/babuco.cjs <komut>`** (depo kökünden çalıştır)
 durum                        bulut yedeğinin son hâli, kayıt sayıları
 rapor [YYYY-AA-GG]           günlük rapor (Markdown; boş = bugün)
 musteri [arama]              müşteri + borç + telefon + özel fiyatları
+ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
+tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
+aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
+ozel-fiyat <musteri> <urun> <fiyat|sil>
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
+kalem-ekle <belgeNo> <urun> <adet> [fiyat]   var olan fişe kalem ekle
 tahsilat <musteri> <tutar> [not]
 gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]
@@ -63,6 +68,11 @@ Satış JSON'u:
   tahsilat olarak yazılır — panelin davranışının aynısı.
 - Ürün/müşteri adı birden çok kayda uyarsa araç hata verip adayları listeler.
   Kendi kafana göre seçme, kullanıcıya sor.
+
+**Aynı müşteriye aynı gün ikinci fiş açmadan önce dur.** Kullanıcı çoğu zaman aynı
+teslimatı yeniden anlatıp bir kalem ekletmek ister ("bir de fanta bıraktım"). Önce o
+gün o müşteriye kesilmiş fiş var mı bak; varsa yeni satış açma, `kalem-ekle` ile
+mevcut belgeye ekle — yoksa bakiye iki katına çıkar.
 
 ### Çakışma
 Panel tüm veriyi tek bulut anahtarına yazar, **son yazan kazanır**. Araç bunu
