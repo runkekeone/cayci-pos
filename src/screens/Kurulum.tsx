@@ -168,7 +168,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                 sonra kendi alışlarına göre düzeltirsin.
               </p>
               <button className="btn primary" disabled={!biz.name.trim()} onClick={onerilenIleKur}>
-                ⚡ Önerilen ayarlarla kur
+                Önerilen ayarlarla kur
               </button>
             </div>
           </>
@@ -234,7 +234,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                   return (
                     <tr key={h.id}>
                       <td>
-                        {h.icon} <strong>{h.name}</strong>
+                        <strong>{h.name}</strong>
                       </td>
                       <td className="num">
                         <input
@@ -307,7 +307,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
                   return (
                     <tr key={u.id}>
                       <td>
-                        {u.icon} <strong>{u.name}</strong>
+                        <strong>{u.name}</strong>
                       </td>
                       <td className="num">
                         {u.alsat ? (
@@ -473,7 +473,7 @@ export default function Kurulum({ businessName }: { businessName: string }) {
             </button>
           ) : (
             <button className="btn primary" onClick={bitir}>
-              Kurulumu bitir ✓
+              Kurulumu bitir
             </button>
           )}
         </div>

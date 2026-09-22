@@ -21,6 +21,7 @@ import Profil from './screens/Profil'
 import Siparis from './screens/Siparis'
 import Hizmetler from './screens/Hizmetler'
 import Anasayfa from './screens/Anasayfa'
+import { Ikon, type IkonAd } from './lib/Ikon'
 
 /** id → ekran bileşeni. */
 const EKRANLAR: Record<string, ComponentType> = {
@@ -37,7 +38,7 @@ const EKRANLAR: Record<string, ComponentType> = {
   hizmetler: Hizmetler,
 }
 
-type MenuLeaf = { id: string; ad: string; kisa: string; ic: string }
+type MenuLeaf = { id: string; ad: string; kisa: string; ic: IkonAd }
 type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
 
 /**
@@ -50,27 +51,27 @@ type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
  * ızgarasından gidilir; masaüstünde hepsi solda durur.
  */
 const MENU: MenuItem[] = [
-  { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: '🏠', ana: true },
+  { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: 'ev', ana: true },
   // Mobilde alt çubukta gösterilmez (nav-gizli): (+) Hızlı Satış zaten satış ekranına gidiyor.
   // Masaüstü sidebar'da görünmeye devam eder.
-  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: '🧾', ana: false },
-  { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: '🚚', ana: true },
+  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: 'fis', ana: false },
+  { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: 'kamyon', ana: true },
   // Masaüstü sidebar'da görünür; mobilde nav-gizli — alt çubukta ayrı only-mobile düğmesi var.
-  { id: 'hizmetler', ad: 'Hizmetler', kisa: 'Hizmet', ic: '🎁', ana: false },
+  { id: 'hizmetler', ad: 'Hizmetler', kisa: 'Hizmet', ic: 'hediye', ana: false },
   {
     id: 'rapor',
     ad: 'Raporlar',
     kisa: 'Rapor',
-    ic: '📊',
+    ic: 'grafik',
     ana: false,
     alt: [
-      { id: 'rapor', ad: 'Günlük Rapor', kisa: 'Günlük', ic: '📈' },
-      { id: 'takvim', ad: 'Tarihsel Rapor', kisa: 'Tarihsel', ic: '🗓️' },
-      { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: '💵' },
-      { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: '🍵' },
-      { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: '📦' },
-      { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: '👥' },
-      { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: '💸' },
+      { id: 'rapor', ad: 'Günlük Rapor', kisa: 'Günlük', ic: 'grafik' },
+      { id: 'takvim', ad: 'Tarihsel Rapor', kisa: 'Tarihsel', ic: 'takvim' },
+      { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: 'para' },
+      { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: 'dukkan' },
+      { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: 'kutu' },
+      { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: 'kisiler' },
+      { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: 'defter' },
     ],
   },
 ]
@@ -147,7 +148,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
                 className={`nav ${sayfa === p.id ? 'on' : ''} ${p.ana ? '' : 'nav-gizli'}`}
                 onClick={() => git(p.id)}
               >
-                <span>{p.ic}</span>
+                <Ikon ad={p.ic} />
                 <span className="nav-ad">{p.ad}</span>
                 <span className="nav-kisa">{p.kisa}</span>
               </button>
@@ -165,10 +166,12 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
                   setAcikGruplar((c) => (c.includes(p.id) ? c.filter((x) => x !== p.id) : [...c, p.id]))
                 }}
               >
-                <span>{p.ic}</span>
+                <Ikon ad={p.ic} />
                 <span className="nav-ad">{p.ad}</span>
                 <span className="nav-kisa">{p.kisa}</span>
-                <span className="nav-caret nav-ad">{acik ? '▾' : '▸'}</span>
+                <span className="nav-caret nav-ad">
+                  <Ikon ad={acik ? 'asagi' : 'sag'} boy={16} />
+                </span>
               </button>
               {acik &&
                 p.alt.map((a) => (
@@ -177,7 +180,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
                     className={`nav nav-alt nav-gizli ${sayfa === a.id ? 'on' : ''}`}
                     onClick={() => git(a.id)}
                   >
-                    <span>{a.ic}</span>
+                    <Ikon ad={a.ic} boy={18} />
                     <span className="nav-ad">{a.ad}</span>
                   </button>
                 ))}
@@ -195,22 +198,23 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           aria-label="Hızlı Satış"
         >
           <span className="arti-yuvarlak">
-            ＋{doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
+            <Ikon ad="arti" boy={22} kalinlik={2.2} />
+            {doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
           </span>
-          <span className="nav-kisa">Hızlı Satış</span>
+          <span className="nav-kisa">Satış</span>
         </button>
         <button
           className={`nav only-mobile ${sayfa === 'hizmetler' ? 'on' : ''}`}
           onClick={() => git('hizmetler')}
         >
-          <span>🎁</span>
+          <Ikon ad="hediye" boy={22} />
           <span className="nav-kisa">Hizmetler</span>
         </button>
         <button
           className={`nav only-mobile ${sayfa === 'rapor' ? 'on' : ''}`}
           onClick={() => git('rapor')}
         >
-          <span>📊</span>
+          <Ikon ad="grafik" boy={22} />
           <span className="nav-kisa">Rapor</span>
         </button>
 
@@ -222,14 +226,14 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
             </strong>
           </div>
           <button className="nav" onClick={() => setGunSonu(true)}>
-            <span>🌙</span>
+            <Ikon ad="ay" />
             <span>Gün Sonu</span>
           </button>
           <button
             className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
             onClick={() => git('profil')}
           >
-            <span>👤</span>
+            <Ikon ad="kisi" />
             <span>
               Profil <span className="hint">({user.username})</span>
             </span>
@@ -293,7 +297,7 @@ function InternetKapisi() {
   return (
     <div className="acilis">
       <div className="acilis-ic">
-        <div className="acilis-logo">📡</div>
+        <div className="acilis-logo">!</div>
         <div style={{ fontWeight: 700, fontSize: 18 }}>İnternet bağlantısı gerekli</div>
         <div style={{ opacity: 0.75, textAlign: 'center', maxWidth: 300 }}>
           Bu uygulama verileri buluttan çalışır. Bağlantı gelince otomatik açılır.
@@ -326,7 +330,7 @@ export default function App() {
     return (
       <div className="acilis">
         <div className="acilis-ic">
-          <div className="acilis-logo">🍵</div>
+          <div className="acilis-logo nabiz">Ç</div>
           <div>Yükleniyor…</div>
         </div>
       </div>

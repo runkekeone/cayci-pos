@@ -105,7 +105,7 @@ export default function Urunler() {
         </button>
         {eksikler.length > 0 && (
           <button className="btn" onClick={() => setKatalog(true)}>
-            📚 Hazır katalogdan ekle
+            Hazır katalogdan ekle
             <span className="tag warn" style={{ marginLeft: 6 }}>
               {eksikler.length}
             </span>
@@ -160,7 +160,7 @@ export default function Urunler() {
               return (
                 <tr key={i.id}>
                   <td>
-                    {i.icon} <strong>{i.name}</strong>
+                    <strong>{i.name}</strong>
                   </td>
                   <td>
                     {i.recipe?.lines.length ? (
@@ -221,7 +221,7 @@ export default function Urunler() {
             {hammadde.map((i) => (
               <tr key={i.id}>
                 <td>
-                  {i.icon} <strong>{i.name}</strong>
+                  <strong>{i.name}</strong>
                 </td>
                 <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
                 <td className="num">
@@ -576,7 +576,7 @@ function UrunKarti({
                     onClick={hazirTarifiKullan}
                     style={{ marginBottom: 12 }}
                   >
-                    ⚡ Otomatik tarif kullan ({hazir!.name})
+                    Otomatik tarif kullan ({hazir!.name})
                   </button>
                 )}
 
@@ -599,7 +599,7 @@ function UrunKarti({
                           .filter((i) => i.id !== d.id)
                           .map((i) => (
                             <option key={i.id} value={i.id}>
-                              {i.icon} {i.name}
+                              {i.name}
                             </option>
                           ))}
                       </select>

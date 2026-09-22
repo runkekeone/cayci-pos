@@ -35,7 +35,7 @@ export default function GunBaslat({
       }}
     >
       <div className="card" style={{ maxWidth: 420, width: '100%', textAlign: 'center', padding: '32px 24px' }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>☕</div>
+        <div className="acilis-logo" style={{ margin: '0 auto 12px' }}>Ç</div>
         <h1 style={{ margin: 0 }}>{isletme || 'Çay Ocağı'}</h1>
         <p className="hint" style={{ marginTop: 6, marginBottom: 24 }}>
           {simdi}

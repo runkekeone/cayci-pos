@@ -69,7 +69,7 @@ export default function GunSonu({ gun, onKapat }: { gun: string; onKapat: () => 
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 620, width: '100%' }}
       >
-        <h2>🌙 Gün Sonu — {gun_tr}</h2>
+        <h2>Gün sonu — {gun_tr}</h2>
         <p className="hint" style={{ marginBottom: 14 }}>
           Günün özeti. Eksik gelir/gider varsa şimdi ekle. Onaylayınca gün kapanır.
         </p>
@@ -120,7 +120,7 @@ export default function GunSonu({ gun, onKapat }: { gun: string; onKapat: () => 
             className="card"
             style={{ marginBottom: 14, borderColor: 'var(--bad)', background: 'var(--bg)' }}
           >
-            <strong>⚠ Açık hesaplar — {fmtTL(totalVeresiye(s))}</strong>
+            <strong>Açık hesaplar — {fmtTL(totalVeresiye(s))}</strong>
             <p className="hint" style={{ marginTop: 6 }}>
               Kapatmadan tahsil etmek istersen Müşteriler'den topla.
             </p>

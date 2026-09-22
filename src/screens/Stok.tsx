@@ -37,7 +37,7 @@ export default function Stok() {
 
       {azalan.length > 0 && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
-          <strong>⚠ Azalan stok</strong>
+          <strong>Azalan stok</strong>
           <p className="hint" style={{ marginTop: 6 }}>
             {azalan.map((i) => `${i.name} (${fmtQty(i.stock, i.unit, i.buyUnit)})`).join(' · ')}
           </p>
@@ -62,7 +62,7 @@ export default function Stok() {
               return (
                 <tr key={i.id}>
                   <td>
-                    {i.icon} <strong>{i.name}</strong>
+                    <strong>{i.name}</strong>
                   </td>
                   <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
                   <td className="num">
@@ -184,7 +184,7 @@ function AlisModal({
           >
             {stoklu.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.icon} {i.name}
+                {i.name}
               </option>
             ))}
           </select>
@@ -235,14 +235,14 @@ function AlisModal({
               className={`btn sm ${nakit ? 'primary' : 'ghost'}`}
               onClick={() => setNakit(true)}
             >
-              💵 Kasadan nakit
+              Kasadan nakit
             </button>
             <button
               type="button"
               className={`btn sm ${!nakit ? 'primary' : 'ghost'}`}
               onClick={() => setNakit(false)}
             >
-              💳 Kart / havale
+              Kart / havale
             </button>
           </div>
           <p className="hint" style={{ marginTop: 6 }}>
@@ -312,7 +312,7 @@ function FireModal({
           <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
             {s.items.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.icon} {i.name}
+                {i.name}
               </option>
             ))}
           </select>
