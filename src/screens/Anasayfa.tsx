@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore, aktifOturum } from '../store'
+import { useStore } from '../store'
 import { cloudGet } from '../lib/cloud'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { lowStock } from '../lib/cost'
@@ -14,8 +14,6 @@ import type { Table } from '../types'
 const ISLEMLER: { id: string; ad: string; ic: IkonAd }[] = [
   { id: 'giderler', ad: 'Giderler', ic: 'defter' },
   { id: 'musteriler', ad: 'Müşteriler', ic: 'kisiler' },
-  { id: 'kasa', ad: 'Kasa', ic: 'para' },
-  { id: 'takvim', ad: 'Geçmiş', ic: 'takvim' },
   { id: 'urunler', ad: 'Ürünler', ic: 'dukkan' },
   { id: 'stok', ad: 'Stok', ic: 'kutu' },
   { id: 'profil', ad: 'Ayarlar', ic: 'ayar' },
@@ -51,14 +49,14 @@ export default function Anasayfa() {
       iptal = true
     }
   }, [])
-  const gun = aktifOturum(s)?.date ?? today()
+  const gun = today()
   const r = dayReport(s, gun)
   const kritik = lowStock(s.items).length
   const alacak = totalVeresiye(s)
   const satisAdet = s.sales.filter((x) => (x.bizDay ?? x.date.slice(0, 10)) === gun).length
   const doluMasalar = s.tables.filter((t) => t.lines.length > 0)
   const sonSatislar = [...s.sales].reverse().slice(0, 4)
-  const tarihYazi = new Date().toLocaleDateString('tr-TR', {
+  const tarihYazi = new Date(gun + 'T12:00:00').toLocaleDateString('tr-TR', {
     day: 'numeric',
     month: 'long',
     weekday: 'long',
@@ -109,12 +107,6 @@ export default function Anasayfa() {
             <span>{p.ad}</span>
           </button>
         ))}
-        {hepsi && (
-          <button className="ana-islem" onClick={() => window.dispatchEvent(new CustomEvent('cayci-gunsonu'))}>
-            <Ikon ad="ay" boy={24} />
-            <span>Gün Sonu</span>
-          </button>
-        )}
         <button className="ana-islem" onClick={() => setHepsi((v) => !v)}>
           <Ikon ad={hepsi ? 'yukari' : 'menu'} boy={24} />
           <span>{hepsi ? 'Daha az' : 'Tümü'}</span>

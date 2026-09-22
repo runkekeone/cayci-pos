@@ -19,6 +19,7 @@ export function unitCost(itemId: string, items: Item[], seen: Set<string> = new 
   const item = items.find((i) => i.id === itemId)
   if (!item) return 0
   if (seen.has(itemId)) return 0 // kendini içeren tarif: sonsuz döngüye girme
+  if (item.cost != null) return item.cost
   const path = new Set(seen).add(itemId)
 
   if (item.recipe && item.recipe.lines.length > 0) {
@@ -67,7 +68,7 @@ export function variantCost(itemId: string, items: Item[], v?: Variant): number 
   if (!v || (!v.factor && !v.skip?.length)) return unitCost(itemId, items)
 
   const item = items.find((i) => i.id === itemId)
-  if (!item?.recipe) return unitCost(itemId, items) * (v.factor ?? 1)
+  if (!item?.recipe || item.cost != null) return unitCost(itemId, items) * (v.factor ?? 1)
 
   const y = item.recipe.yield > 0 ? item.recipe.yield : 1
   const f = v.factor ?? 1
@@ -125,6 +126,15 @@ export function availableQty(itemId: string, items: Item[]): number {
     if (per > 0) min = Math.min(min, stock / per)
   }
   return min === Infinity ? 0 : Math.floor(min)
+}
+
+/**
+ * Bu ürünün stoğu takip ediliyor mu. Tarifli ürün ya da en az bir alışı girilmiş
+ * ürün evet; sadece fiyatı ve elle maliyeti olan ürün hayır — onda "stok yok"
+ * uyarısı çıkmaz.
+ */
+export function stokTakipli(item: Item): boolean {
+  return !!item.recipe?.lines.length || !!item.lastCost
 }
 
 /** Stoğu alt limitin altına düşmüş hammaddeler. */

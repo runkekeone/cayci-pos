@@ -1,261 +1,101 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { unitCost } from '../lib/cost'
-import {
-  UNITS,
-  alisToBase,
-  baseToAlis,
-  fmtQty,
-  fmtTL,
-  fmtTLInce,
-  packSizeGerekli,
-  round,
-  uid,
-  unitDef,
-} from '../lib/units'
-import { URUNLER, urunleriKur } from '../defaults'
+import { fmtTL, round, uid } from '../lib/units'
+import { URUNLER, basitUrunleriKur } from '../defaults'
+import { Ikon } from '../lib/Ikon'
 import type { Item } from '../types'
 
-function bosUrun(sellable: boolean): Item {
+/**
+ * ÜRÜNLER — satış ekranında görünen ürünler: ad, fiyat, maliyet, kâr.
+ *
+ * Tarif (gram) ve hammadde düzenleme kaldırıldı; maliyet tek bir sayı. Eski
+ * kurulumlardaki tarifli ürünlerin maliyeti tariften hesaplanmaya devam eder,
+ * elle maliyet yazılırsa onun önüne geçer.
+ */
+const SIRA = ['Sıcak', 'Soğuk', 'Yiyecek', 'Atıştırmalık']
+
+function bosUrun(kategori: string): Item {
   return {
     id: uid(),
     name: '',
-    unit: sellable ? 'adet' : 'g',
-    buyUnit: sellable ? 'adet' : 'kg',
-    category: sellable ? 'Sıcak' : 'Hammadde',
-    icon: sellable ? '🍵' : '📦',
-    sellable,
-    price: sellable ? 0 : undefined,
+    unit: 'adet',
+    buyUnit: 'adet',
+    category: kategori,
+    icon: '',
+    sellable: true,
+    price: 0,
     stock: 0,
   }
 }
-
-type SiraAnahtar = 'ad' | 'maliyet' | 'satis' | 'kar' | 'karp'
 
 export default function Urunler() {
   const { s, saveItem, deleteItem } = useStore()
   const [edit, setEdit] = useState<Item | null>(null)
   const [katalog, setKatalog] = useState(false)
-  const [filtre, setFiltre] = useState<string>('tumu') // tumu | tarifli | tarifsiz | cat:<ad>
-  const [sira, setSira] = useState<SiraAnahtar | null>(null)
-  const [yon, setYon] = useState<'artan' | 'azalan'>('azalan')
+  const [zam, setZam] = useState(false)
 
-  const hammadde = s.items.filter((i) => !i.sellable)
-
-  // Satış ürünlerini hesaplanmış rakamlarıyla birlikte türet (filtre + sıralama için).
-  const satilanHam = s.items
-    .filter((i) => i.sellable)
-    .map((i) => {
-      const c = unitCost(i.id, s.items)
-      const p = i.price ?? 0
-      const kar = p - c
-      return { i, c, p, kar, karp: p > 0 ? (kar / p) * 100 : 0, tarifli: !!i.recipe?.lines.length }
-    })
-
-  const kategoriler = [...new Set(satilanHam.map((r) => r.i.category))]
-
-  const filtreli = satilanHam.filter((r) => {
-    if (filtre === 'tarifli') return r.tarifli
-    if (filtre === 'tarifsiz') return !r.tarifli
-    if (filtre.startsWith('cat:')) return r.i.category === filtre.slice(4)
-    return true
+  const satilan = s.items.filter((i) => i.sellable)
+  const kategoriler = [...new Set(satilan.map((i) => i.category))].sort((a, b) => {
+    const ia = SIRA.indexOf(a)
+    const ib = SIRA.indexOf(b)
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
   })
-
-  const satilan = [...filtreli]
-  if (sira) {
-    const carp = yon === 'artan' ? 1 : -1
-    const alan: Record<Exclude<SiraAnahtar, 'ad'>, 'c' | 'p' | 'kar' | 'karp'> = {
-      maliyet: 'c',
-      satis: 'p',
-      kar: 'kar',
-      karp: 'karp',
-    }
-    satilan.sort((a, b) => {
-      if (sira === 'ad') return carp * a.i.name.localeCompare(b.i.name, 'tr')
-      return carp * (a[alan[sira]] - b[alan[sira]])
-    })
-  }
-
-  function basligaTikla(k: SiraAnahtar) {
-    if (sira === k) setYon((y) => (y === 'azalan' ? 'artan' : 'azalan'))
-    else {
-      setSira(k)
-      setYon(k === 'ad' ? 'artan' : 'azalan')
-    }
-  }
-  const ok = (k: SiraAnahtar) => (sira === k ? (yon === 'azalan' ? ' ▾' : ' ▴') : '')
-
-  // Hazır katalogda olup bu işletmede olmayan ürünler.
   const eksikler = URUNLER.filter((u) => !s.items.some((i) => i.id === u.id))
 
   return (
     <>
-      <h1>Ürünler & Tarifler</h1>
-      <p className="sub">
-        Maliyet son alış fiyatından hesaplanır. Alış fiyatını değiştirdiğin an tarifteki gramaja
-        göre ürün maliyeti kendiliğinden güncellenir — ortalama alınmaz.
-      </p>
+      <h1>Ürünler</h1>
+      <p className="sub">Satış ekranındaki ürünler. Ürüne dokun, fiyatını ya da maliyetini değiştir.</p>
 
-      <div className="row" style={{ marginBottom: 16 }}>
-        <button className="btn primary" onClick={() => setEdit(bosUrun(true))}>
-          + Satış ürünü
+      <div className="row" style={{ marginBottom: 6 }}>
+        <button className="btn primary" onClick={() => setEdit(bosUrun(kategoriler[0] ?? 'Sıcak'))}>
+          + Ürün ekle
         </button>
-        <button className="btn" onClick={() => setEdit(bosUrun(false))}>
-          + Hammadde
+        <button className="btn" onClick={() => setZam(true)} disabled={satilan.length === 0}>
+          Toplu zam
         </button>
         {eksikler.length > 0 && (
-          <button className="btn" onClick={() => setKatalog(true)}>
-            Hazır katalogdan ekle
-            <span className="tag warn" style={{ marginLeft: 6 }}>
-              {eksikler.length}
-            </span>
+          <button className="btn ghost" onClick={() => setKatalog(true)}>
+            Hazır listeden ekle ({eksikler.length})
           </button>
         )}
       </div>
 
-      <div className="section-title">Satış ürünleri</div>
-
-      <div className="row" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-        {[
-          { k: 'tumu', ad: 'Tümü' },
-          { k: 'tarifli', ad: 'Tarifli' },
-          { k: 'tarifsiz', ad: 'Tarifsiz' },
-          ...kategoriler.map((c) => ({ k: `cat:${c}`, ad: c })),
-        ].map((f) => (
-          <button
-            key={f.k}
-            className={`btn sm ${filtre === f.k ? 'primary' : 'ghost'}`}
-            onClick={() => setFiltre(f.k)}
-          >
-            {f.ad}
-          </button>
-        ))}
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table>
-          <thead>
-            <tr>
-              <th className="sortable" onClick={() => basligaTikla('ad')} style={{ cursor: 'pointer' }}>
-                Ürün{ok('ad')}
-              </th>
-              <th>Tarif</th>
-              <th className="num sortable" onClick={() => basligaTikla('maliyet')} style={{ cursor: 'pointer' }}>
-                Maliyet{ok('maliyet')}
-              </th>
-              <th className="num sortable" onClick={() => basligaTikla('satis')} style={{ cursor: 'pointer' }}>
-                Satış{ok('satis')}
-              </th>
-              <th className="num sortable" onClick={() => basligaTikla('kar')} style={{ cursor: 'pointer' }}>
-                Kâr{ok('kar')}
-              </th>
-              <th className="num sortable" onClick={() => basligaTikla('karp')} style={{ cursor: 'pointer' }}>
-                Kâr %{ok('karp')}
-              </th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {satilan.map(({ i, c, p, kar }) => {
-              return (
-                <tr key={i.id}>
-                  <td>
-                    <strong>{i.name}</strong>
-                  </td>
-                  <td>
-                    {i.recipe?.lines.length ? (
-                      <span className="hint">
-                        {i.recipe.lines
-                          .map((l) => {
-                            const it = s.items.find((x) => x.id === l.itemId)
-                            if (!it) return '?'
-                            const perUnit = l.qty / (i.recipe!.yield || 1)
-                            return `${round(perUnit, 2)} ${it.unit} ${it.name}`
-                          })
-                          .join(' + ')}
-                      </span>
-                    ) : (
-                      <span className="tag">tarifsiz (al-sat)</span>
-                    )}
-                  </td>
-                  <td className="num">{fmtTLInce(c)}</td>
-                  <td className="num">{fmtTL(p)}</td>
-                  <td className="num">
-                    <span className={kar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 14 }}>
-                      {fmtTL(kar)}
+      {kategoriler.map((kat) => (
+        <div key={kat}>
+          <div className="section-title">{kat}</div>
+          <div className="card liste">
+            {satilan
+              .filter((i) => i.category === kat)
+              .map((i) => {
+                const fiyat = i.price ?? 0
+                const m = unitCost(i.id, s.items)
+                const maliyetVar = m > 0
+                const kar = fiyat - m
+                return (
+                  <button key={i.id} className="urun-satir" onClick={() => setEdit(i)}>
+                    <span className="us-ad">{i.name}</span>
+                    <span className="us-rakam">
+                      <b>{fmtTL(fiyat)}</b>
+                      <small className={maliyetVar ? (kar >= 0 ? 'good-txt' : 'bad-txt') : ''}>
+                        {maliyetVar ? `kâr ${fmtTL(kar)}` : 'maliyet yok'}
+                      </small>
                     </span>
-                  </td>
-                  <td className="num">{p > 0 ? `%${round((kar / p) * 100, 0)}` : '—'}</td>
-                  <td className="num">
-                    <button className="btn sm" onClick={() => setEdit(i)}>
-                      Aç
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-            {satilan.length === 0 && (
-              <tr>
-                <td colSpan={7} className="hint">
-                  Henüz satış ürünü yok.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="section-title">Hammaddeler</div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Hammadde</th>
-              <th className="num">Stok</th>
-              <th className="num">Son alış</th>
-              <th className="num">Birim maliyet</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {hammadde.map((i) => (
-              <tr key={i.id}>
-                <td>
-                  <strong>{i.name}</strong>
-                </td>
-                <td className="num">{fmtQty(i.stock, i.unit, i.buyUnit)}</td>
-                <td className="num">
-                  {i.lastCost
-                    ? `${fmtTL(i.lastCost.total)} / ${round(
-                        baseToAlis(i.lastCost.qty, i.unit, i.buyUnit, i.packSize),
-                        2,
-                      )} ${i.buyUnit}`
-                    : '—'}
-                </td>
-                <td className="num">
-                  {fmtTLInce(unitCost(i.id, s.items))} / {i.unit}
-                </td>
-                <td className="num">
-                  <button className="btn sm" onClick={() => setEdit(i)}>
-                    Aç
+                    <Ikon ad="sag" boy={18} />
                   </button>
-                </td>
-              </tr>
-            ))}
-            {hammadde.length === 0 && (
-              <tr>
-                <td colSpan={5} className="hint">
-                  Henüz hammadde yok.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                )
+              })}
+          </div>
+        </div>
+      ))}
+      {satilan.length === 0 && <p className="hint">Henüz ürün yok.</p>}
 
       {edit && (
         <UrunKarti
           item={edit}
+          kategoriler={kategoriler.length ? kategoriler : SIRA}
+          yeni={!s.items.some((i) => i.id === edit.id)}
           onClose={() => setEdit(null)}
           onSave={(it) => {
             saveItem(it)
@@ -273,12 +113,19 @@ export default function Urunler() {
           eksikIdler={eksikler.map((u) => u.id)}
           onClose={() => setKatalog(false)}
           onEkle={(secilen) => {
-            // Seçilen ürünler ve eksik hammaddeleri hazır tarifleriyle kurulur.
-            const yeniler = urunleriKur(secilen)
-            for (const it of yeniler) {
-              if (!s.items.some((i) => i.id === it.id)) saveItem(it)
-            }
+            for (const it of basitUrunleriKur(secilen)) saveItem(it)
             setKatalog(false)
+          }}
+        />
+      )}
+
+      {zam && (
+        <ZamModal
+          urunler={satilan}
+          onClose={() => setZam(false)}
+          onUygula={(yeniler) => {
+            for (const it of yeniler) saveItem(it)
+            setZam(false)
           }}
         />
       )}
@@ -286,7 +133,218 @@ export default function Urunler() {
   )
 }
 
-/** Hazır katalogda olup listende olmayan ürünleri getirir. */
+/** Ürün kartı: ad, kategori, satış fiyatı, maliyet. */
+function UrunKarti({
+  item,
+  kategoriler,
+  yeni,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  item: Item
+  kategoriler: string[]
+  yeni: boolean
+  onClose: () => void
+  onSave: (i: Item) => void
+  onDelete: () => void
+}) {
+  const { s } = useStore()
+  const hesaplanan = unitCost(item.id, s.items)
+  const [ad, setAd] = useState(item.name)
+  const [kategori, setKategori] = useState(item.category)
+  const [fiyat, setFiyat] = useState(String(item.price ?? ''))
+  const [maliyet, setMaliyet] = useState(hesaplanan > 0 ? String(round(hesaplanan, 2)) : '')
+  const [silOnay, setSilOnay] = useState(false)
+
+  const f = Number(fiyat) || 0
+  const m = maliyet === '' ? null : Number(maliyet)
+  const tarifli = !!item.recipe?.lines.length && item.cost == null
+
+  function kaydet() {
+    const yeniMaliyet = m == null || !Number.isFinite(m) ? undefined : m
+    // Maliyete dokunulmadıysa kaynağı (tarif / son alış) aynen kalsın.
+    const onceki = hesaplanan > 0 ? round(hesaplanan, 2) : undefined
+    onSave({
+      ...item,
+      name: ad.trim(),
+      category: kategori,
+      price: f,
+      cost: yeniMaliyet === onceki ? item.cost : yeniMaliyet,
+    })
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <h2>{yeni ? 'Yeni ürün' : item.name}</h2>
+        <div className="field">
+          <label htmlFor="u-ad">Ürün adı</label>
+          <input id="u-ad" value={ad} onChange={(e) => setAd(e.target.value)} placeholder="Örn. Ihlamur" />
+        </div>
+        <div className="field">
+          <label htmlFor="u-kat">Bölüm</label>
+          <select id="u-kat" value={kategori} onChange={(e) => setKategori(e.target.value)}>
+            {[...new Set([...kategoriler, ...SIRA])].map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="row" style={{ flexWrap: 'nowrap' }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="u-fiyat">Satış fiyatı (₺)</label>
+            <input
+              id="u-fiyat"
+              type="number"
+              inputMode="decimal"
+              value={fiyat}
+              onChange={(e) => setFiyat(e.target.value)}
+            />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="u-maliyet">Maliyeti (₺)</label>
+            <input
+              id="u-maliyet"
+              type="number"
+              inputMode="decimal"
+              value={maliyet}
+              placeholder="bilmiyorum"
+              onChange={(e) => setMaliyet(e.target.value)}
+            />
+          </div>
+        </div>
+        <p className="hint" style={{ marginTop: -4 }}>
+          {m != null && f > 0
+            ? `Tanesinde ${fmtTL(f - m)} kâr (%${round(((f - m) / f) * 100, 0)}).`
+            : 'Maliyeti yazarsan raporda kârın doğru çıkar. Bilmiyorsan boş bırak.'}
+          {tarifli && ' Şu anki rakam eski tariften hesaplandı.'}
+        </p>
+
+        <div className="row" style={{ marginTop: 16, justifyContent: 'space-between' }}>
+          {!yeni ? (
+            silOnay ? (
+              <button className="btn tehlike" onClick={onDelete}>
+                Evet, sil
+              </button>
+            ) : (
+              <button className="btn ghost" onClick={() => setSilOnay(true)}>
+                Sil
+              </button>
+            )
+          ) : (
+            <span />
+          )}
+          <div className="row">
+            <button className="btn ghost" onClick={onClose}>
+              Vazgeç
+            </button>
+            <button className="btn primary" disabled={!ad.trim()} onClick={kaydet}>
+              Kaydet
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Toplu zam: bütün fiyatlara aynı tutarı ya da yüzdeyi ekle, önce önizle. */
+function ZamModal({
+  urunler,
+  onClose,
+  onUygula,
+}: {
+  urunler: Item[]
+  onClose: () => void
+  onUygula: (yeniler: Item[]) => void
+}) {
+  const [tur, setTur] = useState<'tl' | 'yuzde'>('tl')
+  const [miktar, setMiktar] = useState('')
+  const [secili, setSecili] = useState<string[]>(urunler.map((u) => u.id))
+
+  const n = Number(miktar) || 0
+  const yeniFiyat = (p: number) => {
+    const x = tur === 'tl' ? p + n : p * (1 + n / 100)
+    return Math.max(0, Math.round(x * 2) / 2) // 0,50 ₺'ye yuvarla
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <h2>Toplu zam</h2>
+        <div className="row" style={{ flexWrap: 'nowrap', marginBottom: 12 }}>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={miktar}
+            onChange={(e) => setMiktar(e.target.value)}
+            placeholder="Örn. 5"
+            aria-label="Zam miktarı"
+            style={{ flex: 1 }}
+          />
+          <button className={`btn ${tur === 'tl' ? 'primary' : ''}`} onClick={() => setTur('tl')}>
+            ₺ ekle
+          </button>
+          <button className={`btn ${tur === 'yuzde' ? 'primary' : ''}`} onClick={() => setTur('yuzde')}>
+            % ekle
+          </button>
+        </div>
+        <div className="cart-lines" style={{ maxHeight: '45vh' }}>
+          {urunler.map((u) => {
+            const on = secili.includes(u.id)
+            const p = u.price ?? 0
+            return (
+              <label key={u.id} className="liste-satir" style={{ cursor: 'pointer' }}>
+                <span className="ls-ad">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() =>
+                      setSecili((c) => (c.includes(u.id) ? c.filter((x) => x !== u.id) : [...c, u.id]))
+                    }
+                  />
+                  {u.name}
+                </span>
+                <span className="ls-deger">
+                  {on && n ? (
+                    <>
+                      <small style={{ textDecoration: 'line-through', marginRight: 6 }}>{fmtTL(p)}</small>
+                      {fmtTL(yeniFiyat(p))}
+                    </>
+                  ) : (
+                    fmtTL(p)
+                  )}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>
+            Vazgeç
+          </button>
+          <button
+            className="btn primary"
+            disabled={!n || secili.length === 0}
+            onClick={() =>
+              onUygula(
+                urunler
+                  .filter((u) => secili.includes(u.id))
+                  .map((u) => ({ ...u, price: yeniFiyat(u.price ?? 0) })),
+              )
+            }
+          >
+            {secili.length} ürüne uygula
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Hazır listede olup işletmede olmayan ürünleri ekler. */
 function KatalogModal({
   eksikIdler,
   onClose,
@@ -297,416 +355,36 @@ function KatalogModal({
   onEkle: (ids: string[]) => void
 }) {
   const eksikler = URUNLER.filter((u) => eksikIdler.includes(u.id))
-  const [secili, setSecili] = useState<string[]>(eksikIdler)
-
-  const kategoriler = [...new Set(eksikler.map((u) => u.category))]
+  const [secili, setSecili] = useState<string[]>([])
 
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
-        <h2>Hazır katalogdan ürün ekle</h2>
-        <p className="hint" style={{ marginBottom: 16 }}>
-          Bunlar katalogda var ama senin listende yok. Eklediklerin hazır tarifleri ve varsayılan
-          alış fiyatlarıyla gelir — sonra kendi rakamlarınla düzeltirsin.
-        </p>
-
-        {kategoriler.map((kat) => (
-          <div key={kat}>
-            <div className="section-title">{kat}</div>
-            <div className="tiles">
-              {eksikler
-                .filter((u) => u.category === kat)
-                .map((u) => {
-                  const on = secili.includes(u.id)
-                  return (
-                    <button
-                      key={u.id}
-                      className="tile"
-                      style={{ opacity: on ? 1 : 0.45, borderColor: on ? 'var(--accent)' : undefined }}
-                      onClick={() =>
-                        setSecili((c) =>
-                          c.includes(u.id) ? c.filter((x) => x !== u.id) : [...c, u.id],
-                        )
-                      }
-                    >
-                      <span className="ic">{u.icon}</span>
-                      <span className="nm">{u.name}</span>
-                      <span className="pr">{fmtTL(u.price)}</span>
-                    </button>
-                  )
-                })}
-            </div>
-          </div>
-        ))}
-
-        <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <h2>Hazır listeden ekle</h2>
+        <div className="cart-lines" style={{ maxHeight: '55vh' }}>
+          {eksikler.map((u) => (
+            <label key={u.id} className="liste-satir" style={{ cursor: 'pointer' }}>
+              <span className="ls-ad">
+                <input
+                  type="checkbox"
+                  checked={secili.includes(u.id)}
+                  onChange={() =>
+                    setSecili((c) => (c.includes(u.id) ? c.filter((x) => x !== u.id) : [...c, u.id]))
+                  }
+                />
+                {u.name}
+              </span>
+              <span className="ls-deger">{fmtTL(u.price)}</span>
+            </label>
+          ))}
+        </div>
+        <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
           <button className="btn ghost" onClick={onClose}>
             Vazgeç
           </button>
-          <button
-            className="btn primary"
-            disabled={secili.length === 0}
-            onClick={() => onEkle(secili)}
-          >
+          <button className="btn primary" disabled={secili.length === 0} onClick={() => onEkle(secili)}>
             {secili.length} ürünü ekle
           </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * ÜRÜN KARTI.
- * Ad · Ürün tipi (kg/lt/cc/adet...) · Alış fiyatı · Satış fiyatı · [ ] Tarif ekle
- * Alış "kaç birim için kaç ₺" olarak girilir; birim maliyet buradan çıkar.
- */
-function UrunKarti({
-  item,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  item: Item
-  onClose: () => void
-  onSave: (i: Item) => void
-  onDelete: () => void
-}) {
-  const { s } = useStore()
-  const [d, setD] = useState<Item>(item)
-
-  // Alış kutuları kullanıcının birimiyle çalışır, kayıtta temel birime çevrilir.
-  const [alisMiktar, setAlisMiktar] = useState(
-    item.lastCost ? round(baseToAlis(item.lastCost.qty, item.unit, item.buyUnit, item.packSize), 3) : 1,
-  )
-  const [alisTutar, setAlisTutar] = useState(item.lastCost?.total ?? 0)
-  const [tarifli, setTarifli] = useState(!!item.recipe)
-
-  const yieldN = d.recipe?.yield || 1
-  const packGerek = packSizeGerekli(d.unit, d.buyUnit)
-  const alisBase = alisToBase(alisMiktar, d.unit, d.buyUnit, d.packSize)
-
-  // Kaydedilmemiş hali de dahil ederek maliyeti canlı göster.
-  const kayitli = { ...d, lastCost: { total: alisTutar, qty: alisBase } }
-  const preview = s.items.some((i) => i.id === d.id)
-    ? s.items.map((i) => (i.id === d.id ? kayitli : i))
-    : [...s.items, kayitli]
-  const maliyet = unitCost(d.id, preview)
-
-  /** Hazır tarif: kütüphaneden aynı isimli/id'li ürünün tarifini getirir. */
-  const hazir = URUNLER.find(
-    (u) => u.id === d.id || u.name.toLowerCase() === d.name.trim().toLowerCase(),
-  )
-  const hazirVar = !!hazir?.recipe
-
-  function hazirTarifiKullan() {
-    if (!hazir?.recipe) return
-    const eksik = hazir.recipe.lines.filter((l) => !s.items.some((i) => i.id === l.itemId))
-    if (eksik.length > 0) {
-      alert(
-        'Bu hazır tarifin bazı hammaddeleri ürün listende yok: ' +
-          eksik.map((l) => l.itemId).join(', ') +
-          '\nÖnce onları hammadde olarak ekle.',
-      )
-      return
-    }
-    setTarifli(true)
-    setD({
-      ...d,
-      recipe: { yield: hazir.recipe.yield, lines: hazir.recipe.lines.map((l) => ({ ...l })) },
-    })
-  }
-
-  function kaydet() {
-    const next: Item = {
-      ...d,
-      recipe: tarifli ? d.recipe : undefined,
-      // Tarifli üründe kendi alış maliyeti tutulmaz — maliyet içindekilerden gelir.
-      lastCost:
-        tarifli || alisTutar <= 0 || alisBase <= 0 ? d.lastCost : { total: alisTutar, qty: alisBase },
-    }
-    if (tarifli) next.lastCost = undefined
-    onSave(next)
-  }
-
-  const birimSecenek = UNITS
-
-  return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
-        <h2>{d.sellable ? 'Ürün kartı' : 'Hammadde kartı'}</h2>
-
-        <div className="row">
-          <div className="field" style={{ flex: 2 }}>
-            <label>Ürün adı</label>
-            <input
-              value={d.name}
-              onChange={(e) => setD({ ...d, name: e.target.value })}
-              placeholder="Çay, Kaşarlı tost, Kola..."
-            />
-          </div>
-          <div className="field" style={{ width: 70 }}>
-            <label>İkon</label>
-            <input value={d.icon} onChange={(e) => setD({ ...d, icon: e.target.value })} />
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="field" style={{ flex: 1 }}>
-            <label>Ürün tipi (birim)</label>
-            <select
-              value={d.buyUnit}
-              onChange={(e) => {
-                const def = unitDef(e.target.value)
-                setD({ ...d, buyUnit: def.label, unit: def.base })
-              }}
-            >
-              {['Ağırlık', 'Hacim', 'Sayı'].map((g) => (
-                <optgroup key={g} label={g}>
-                  {birimSecenek
-                    .filter((u) => u.group === g)
-                    .map((u) => (
-                      <option key={u.label} value={u.label}>
-                        {u.label}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Kategori</label>
-            <input value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })} />
-          </div>
-          {d.sellable && (
-            <div className="field" style={{ width: 120 }}>
-              <label>Satış fiyatı ₺</label>
-              <input
-                type="number"
-                min={0}
-                value={d.price ?? 0}
-                onChange={(e) => setD({ ...d, price: Math.max(0, Number(e.target.value) || 0) })}
-              />
-            </div>
-          )}
-        </div>
-
-        {!tarifli && (
-          <>
-            <div className="section-title">Alış fiyatı</div>
-            <div className="row">
-              <input
-                type="number"
-                min={0}
-                style={{ width: 80 }}
-                value={alisMiktar}
-                onChange={(e) => setAlisMiktar(Math.max(0, Number(e.target.value) || 0))}
-              />
-              <span className="hint">{d.buyUnit} aldım,</span>
-              {packGerek && (
-                <>
-                  <span className="hint">içinde</span>
-                  <input
-                    type="number"
-                    min={1}
-                    style={{ width: 70 }}
-                    value={d.packSize ?? 1}
-                    onChange={(e) => setD({ ...d, packSize: Math.max(1, Number(e.target.value) || 1) })}
-                  />
-                  <span className="hint">adet var,</span>
-                </>
-              )}
-              <input
-                type="number"
-                style={{ width: 100 }}
-                value={alisTutar}
-                onChange={(e) => setAlisTutar(Number(e.target.value))}
-              />
-              <span className="hint">₺ ödedim</span>
-            </div>
-            <p className="hint" style={{ marginTop: 8 }}>
-              Birim maliyet: <strong>{fmtTLInce(maliyet)}</strong> / {d.unit}
-              {alisBase > 0 && d.buyUnit !== d.unit && (
-                <>
-                  {' '}
-                  (stoğa {round(alisBase, 0)} {d.unit} girer)
-                </>
-              )}
-            </p>
-
-            {!d.sellable && (
-              <div className="field" style={{ marginTop: 12, width: 200 }}>
-                <label>Kritik stok ({d.unit})</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={d.minStock ?? 0}
-                  onChange={(e) => setD({ ...d, minStock: Math.max(0, Number(e.target.value) || 0) })}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {d.sellable && (
-          <>
-            <div className="section-title">Tarif</div>
-            <label className="row" style={{ cursor: 'pointer', marginBottom: 10 }}>
-              <input
-                type="checkbox"
-                checked={tarifli}
-                onChange={(e) => {
-                  const on = e.target.checked
-                  setTarifli(on)
-                  if (on && !d.recipe) setD({ ...d, recipe: { yield: 1, lines: [] } })
-                }}
-                style={{ width: 18, height: 18 }}
-              />
-              <strong>Tarif ekle</strong>
-              <span className="hint">
-                işaretlersen satışta içindekiler stoktan düşer, maliyet tariften hesaplanır
-              </span>
-            </label>
-
-            {tarifli && (
-              <>
-                {hazirVar && (
-                  <button
-                    className="btn sm"
-                    onClick={hazirTarifiKullan}
-                    style={{ marginBottom: 12 }}
-                  >
-                    Otomatik tarif kullan ({hazir!.name})
-                  </button>
-                )}
-
-                {(d.recipe?.lines ?? []).map((line, idx) => {
-                  const li = s.items.find((i) => i.id === line.itemId)
-                  const perUnit = line.qty / yieldN
-                  const satirMaliyet = perUnit * unitCost(line.itemId, s.items)
-                  return (
-                    <div className="row" key={idx} style={{ marginBottom: 8 }}>
-                      <select
-                        style={{ flex: 1 }}
-                        value={line.itemId}
-                        onChange={(e) => {
-                          const lines = [...d.recipe!.lines]
-                          lines[idx] = { ...line, itemId: e.target.value }
-                          setD({ ...d, recipe: { ...d.recipe!, lines } })
-                        }}
-                      >
-                        {s.items
-                          .filter((i) => i.id !== d.id)
-                          .map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {i.name}
-                            </option>
-                          ))}
-                      </select>
-                      <input
-                        type="number"
-                        min={0}
-                        style={{ width: 90 }}
-                        value={line.qty}
-                        onChange={(e) => {
-                          const lines = [...d.recipe!.lines]
-                          lines[idx] = { ...line, qty: Math.max(0, Number(e.target.value) || 0) }
-                          setD({ ...d, recipe: { ...d.recipe!, lines } })
-                        }}
-                      />
-                      <span className="hint" style={{ width: 34 }}>
-                        {li?.unit}
-                      </span>
-                      <span className="hint" style={{ width: 110 }}>
-                        = {fmtTLInce(satirMaliyet)}/adet
-                      </span>
-                      <button
-                        className="x"
-                        onClick={() =>
-                          setD({
-                            ...d,
-                            recipe: {
-                              ...d.recipe!,
-                              lines: d.recipe!.lines.filter((_, i) => i !== idx),
-                            },
-                          })
-                        }
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )
-                })}
-
-                <div className="row" style={{ marginTop: 10 }}>
-                  <button
-                    className="btn sm"
-                    onClick={() => {
-                      const first = s.items.find((i) => i.id !== d.id)
-                      if (!first) return
-                      setD({
-                        ...d,
-                        recipe: {
-                          yield: d.recipe?.yield ?? 1,
-                          lines: [...(d.recipe?.lines ?? []), { itemId: first.id, qty: 1 }],
-                        },
-                      })
-                    }}
-                  >
-                    + Malzeme ekle
-                  </button>
-                  <span className="hint">Bu tariften çıkan adet:</span>
-                  <input
-                    type="number"
-                    style={{ width: 80 }}
-                    value={yieldN}
-                    onChange={(e) =>
-                      setD({
-                        ...d,
-                        recipe: { ...d.recipe!, yield: Math.max(1, Number(e.target.value)) },
-                      })
-                    }
-                  />
-                </div>
-                <p className="hint" style={{ marginTop: 8 }}>
-                  Miktarlar <strong>bir parti</strong> içindir. Demlik örneği: 119 g çay yaz, çıkan
-                  adet 25 de — bardak başına 4,76 g düşer.
-                </p>
-              </>
-            )}
-          </>
-        )}
-
-        <div
-          className="card"
-          style={{ marginTop: 16, background: 'var(--accent-soft)', borderColor: 'var(--accent)' }}
-        >
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span>Birim maliyet</span>
-            <strong>{fmtTLInce(maliyet)}</strong>
-          </div>
-          {d.sellable && (
-            <div className="row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-              <span>Kâr</span>
-              <strong className={(d.price ?? 0) - maliyet >= 0 ? 'v good' : 'v bad'}>
-                {fmtTL((d.price ?? 0) - maliyet)}
-              </strong>
-            </div>
-          )}
-        </div>
-
-        <div className="row" style={{ marginTop: 20, justifyContent: 'space-between' }}>
-          <button className="btn ghost" onClick={onDelete} style={{ color: 'var(--bad)' }}>
-            Sil
-          </button>
-          <div className="row">
-            <button className="btn ghost" onClick={onClose}>
-              Vazgeç
-            </button>
-            <button className="btn primary" disabled={!d.name.trim()} onClick={kaydet}>
-              Kaydet
-            </button>
-          </div>
         </div>
       </div>
     </div>

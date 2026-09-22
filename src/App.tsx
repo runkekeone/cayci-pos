@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentType } from 'react'
-import { StoreProvider, useStore, aktifOturum } from './store'
+import { StoreProvider, useStore } from './store'
 import { currentUser, logout, syncUsers, type User } from './auth'
 import { cloudPing } from './lib/cloud'
 import { dayReport } from './lib/report'
@@ -7,16 +7,12 @@ import { useTema } from './lib/tema'
 import { fmtTL, today } from './lib/units'
 import Giris from './screens/Giris'
 import Kurulum from './screens/Kurulum'
-import GunBaslat from './screens/GunBaslat'
-import GunSonu from './screens/GunSonu'
 import Satis from './screens/Satis'
 import Urunler from './screens/Urunler'
 import Stok from './screens/Stok'
 import Musteriler from './screens/Musteriler'
 import Giderler from './screens/Giderler'
-import Kasa from './screens/Kasa'
 import Rapor from './screens/Rapor'
-import Takvim from './screens/Takvim'
 import Profil from './screens/Profil'
 import Siparis from './screens/Siparis'
 import Anasayfa from './screens/Anasayfa'
@@ -31,8 +27,6 @@ const EKRANLAR: Record<string, ComponentType> = {
   stok: Stok,
   musteriler: Musteriler,
   giderler: Giderler,
-  kasa: Kasa,
-  takvim: Takvim,
   siparis: Siparis,
 }
 
@@ -61,9 +55,7 @@ const MENU: MenuItem[] = [
     ic: 'grafik',
     ana: false,
     alt: [
-      { id: 'rapor', ad: 'Günlük Rapor', kisa: 'Günlük', ic: 'grafik' },
-      { id: 'takvim', ad: 'Tarihsel Rapor', kisa: 'Tarihsel', ic: 'takvim' },
-      { id: 'kasa', ad: 'Kasa', kisa: 'Kasa', ic: 'para' },
+      { id: 'rapor', ad: 'Rapor', kisa: 'Rapor', ic: 'grafik' },
       { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: 'dukkan' },
       { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: 'kutu' },
       { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: 'kisiler' },
@@ -74,21 +66,17 @@ const MENU: MenuItem[] = [
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
 function Shell({ user, onOut }: { user: User; onOut: () => void }) {
-  const { s, startDay } = useStore()
+  const { s } = useStore()
   const [sayfa, setSayfa] = useState('anasayfa')
-  const [gunSonu, setGunSonu] = useState(false)
   const [acikGruplar, setAcikGruplar] = useState<string[]>(['rapor'])
 
   // Anasayfa'daki Hızlı İşlemler ızgarası gibi ekran dışı yerlerden sayfa
   // değiştirmek için: window'a 'cayci-git' olayı at, burada yakala.
   useEffect(() => {
     const f = (e: Event) => setSayfa((e as CustomEvent<string>).detail)
-    const g = () => setGunSonu(true) // telefonda Gün Sonu artık Anasayfa ızgarasından açılır
     window.addEventListener('cayci-git', f)
-    window.addEventListener('cayci-gunsonu', g)
     return () => {
       window.removeEventListener('cayci-git', f)
-      window.removeEventListener('cayci-gunsonu', g)
     }
   }, [])
 
@@ -99,30 +87,15 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   // Kurulum bitmeden uygulamaya girilemez.
   if (!s.setupDone) return <Kurulum businessName={user.businessName} />
 
-  // Gün başlatılmadan uygulamaya girilemez (tam kapı).
-  const aktif = aktifOturum(s)
-  if (!aktif)
-    return (
-      <GunBaslat
-        isletme={s.business.name || user.businessName}
-        onBaslat={(nakit) => startDay(nakit)}
-      />
-    )
-
+  // İş günü kendiliğinden döner (bkz. today()); "Günü başlat" kapısı yok.
   const Ekran = EKRANLAR[sayfa] ?? Satis
-  const r = dayReport(s, aktif.date)
+  const r = dayReport(s, today())
   const doluMasa = s.tables.filter((t) => t.lines.length > 0).length
 
   function git(id: string) {
     setSayfa(id)
   }
 
-  function gunAdi(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('tr-TR', {
-      day: 'numeric',
-      month: 'long',
-    })
-  }
 
   return (
     <div className="app">
@@ -216,15 +189,8 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
 
         <div className="side-alt">
           <div className="hint" style={{ padding: '8px 12px' }}>
-            Bugün net:{' '}
-            <strong className={r.netKar >= 0 ? 'v good' : 'v bad'} style={{ fontSize: 13 }}>
-              {fmtTL(r.netKar)}
-            </strong>
+            Bugünkü satış: <strong className="v">{fmtTL(r.ciro)}</strong>
           </div>
-          <button className="nav" onClick={() => setGunSonu(true)}>
-            <Ikon ad="ay" />
-            <span>Gün Sonu</span>
-          </button>
           <button
             className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
             onClick={() => git('profil')}
@@ -238,24 +204,9 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
       </aside>
 
       <main className="main">
-        {/* Gün kapatılmadan ertesi gün çalışılırsa BÜTÜN satışlar hâlâ eski
-            iş gününe yazılır ve o günün raporu şişer. Otomatik kapatmak riskli
-            (kasa sayımı kullanıcıdan alınıyor), o yüzden görünür şekilde uyarıyoruz. */}
-        {aktif.date !== today() && (
-          <div className="eski-gun">
-            <span>
-              <strong>{gunAdi(aktif.date)} günü hâlâ açık.</strong> Bugün yaptığın satışlar
-              o günün raporuna yazılıyor. Gün Sonu yapıp yeni günü başlat.
-            </span>
-            <button className="btn sm" onClick={() => setGunSonu(true)}>
-              Gün Sonu yap
-            </button>
-          </div>
-        )}
         {sayfa === 'profil' ? <Profil user={user} onOut={onOut} /> : <Ekran />}
       </main>
 
-      {gunSonu && <GunSonu gun={aktif.date} onKapat={() => setGunSonu(false)} />}
     </div>
   )
 }

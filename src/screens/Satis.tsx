@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { availableQty, lowStock, unitCost, variantCost } from '../lib/cost'
+import { availableQty, lowStock, stokTakipli, unitCost, variantCost } from '../lib/cost'
 import { Ikon } from '../lib/Ikon'
 import { fmtSure, fmtTL, gecenDakika, uid } from '../lib/units'
 import type { Business, Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
@@ -509,7 +509,7 @@ export default function Satis() {
               return (
                 <button
                   key={i.id}
-                  className={`tile ${kalan <= 0 ? 'out' : ''} ${adet > 0 ? 'secili' : ''}`}
+                  className={`tile ${stokTakipli(i) && kalan <= 0 ? 'out' : ''} ${adet > 0 ? 'secili' : ''}`}
                   onClick={() => tikla(i)}
                   title={
                     zayiMod

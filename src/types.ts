@@ -55,6 +55,12 @@ export interface Item {
   minStock?: number
   /** Son alış: maliyet bundan hesaplanır (ortalama yok). */
   lastCost?: { total: number; qty: number }
+  /**
+   * Elle yazılan birim maliyet (₺, bir satış adedi için). Doluysa tarif ve alış
+   * hesabının önüne geçer. Yeni kurulumlar tarif yerine bunu kullanır; ürüne
+   * alış girilince silinir ve son alış fiyatı geçerli olur.
+   */
+  cost?: number
 }
 
 export interface Purchase {

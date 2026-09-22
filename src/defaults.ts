@@ -1,5 +1,6 @@
 import type { Hizmet, Item, Unit, Variant } from './types'
 import { alisToBase, uid } from './lib/units'
+import { unitCost } from './lib/cost'
 
 /**
  * HİZMETLER — uygulamanın/toptancının verdiği müşteri sadakat ödülleri.
@@ -464,6 +465,42 @@ export function urunleriKur(
   }
 
   return items
+}
+
+/**
+ * Hazır üründen bir satış adedinin tahmini maliyeti (₺, kuruşa yuvarlı).
+ * Eski tarif + varsayılan alış rakamlarından bir kez hesaplanır; kullanıcı
+ * kendi rakamıyla düzeltir.
+ */
+export function varsayilanMaliyet(): Record<string, number> {
+  const hepsi = urunleriKur(VARSAYILAN_SECILI)
+  return Object.fromEntries(
+    URUNLER.map((u) => [u.id, Math.round(unitCost(u.id, hepsi) * 100) / 100]),
+  )
+}
+
+/**
+ * Basit kurulum: tarif ve hammadde yok. Her satış ürünü kendi fiyatı ve elle
+ * yazılan maliyetiyle gelir. Stok takibi, ürüne ilk alış girilince başlar.
+ */
+export function basitUrunleriKur(
+  secili: string[],
+  fiyat: Record<string, number> = {},
+  maliyet: Record<string, number | undefined> = varsayilanMaliyet(),
+): Item[] {
+  return URUNLER.filter((u) => secili.includes(u.id)).map((u) => ({
+    id: u.id,
+    name: u.name,
+    unit: 'adet' as const,
+    buyUnit: 'adet',
+    category: u.category,
+    icon: u.icon,
+    sellable: true,
+    price: fiyat[u.id] ?? u.price,
+    cost: maliyet[u.id],
+    variants: u.variants,
+    stock: 0,
+  }))
 }
 
 export function varsayilanGiderler() {

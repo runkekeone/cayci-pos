@@ -109,8 +109,15 @@ export function round(n: number, d = 2): number {
   return Math.round(n * p) / p
 }
 
+/**
+ * İş günü saat 04:00'te döner: gece 01:30'daki satış bir önceki günün hesabına
+ * yazılır. Eskiden bunu elle "Günü başlat / Gün sonu" yapıyordu; unutulunca
+ * satışlar yanlış güne gidiyordu. Artık gün kendiliğinden açılıp kapanıyor.
+ */
+export const GUN_DONUM_SAATI = 4
+
 export function today(): string {
-  const d = new Date()
+  const d = new Date(Date.now() - GUN_DONUM_SAATI * 3600_000)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 

@@ -305,43 +305,11 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
         </div>
       </div>
 
-      {/* ---- Ayarlar ---- */}
-      <div className="section-title">Ayarlar</div>
-      <div className="card">
-        <label className="row" style={{ cursor: 'pointer', gap: 10, justifyContent: 'space-between' }}>
-          <span>
-            <strong>Ürün görselleri</strong>
-            <span className="hint" style={{ display: 'block' }}>
-              Satış ekranında ürün fotoğraflarını göster.
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            checked={s.settings.showImages}
-            onChange={(e) => ayar({ showImages: e.target.checked })}
-            style={{ width: 20, height: 20 }}
-          />
-        </label>
-
-        <div style={{ borderTop: '1px solid var(--line)', margin: '12px 0' }} />
-
-        <label className="row" style={{ gap: 10, justifyContent: 'space-between', opacity: 0.55 }}>
-          <span>
-            <strong>Otomatik gün başlat/bitir</strong>
-            <span className="hint" style={{ display: 'block' }}>
-              Açılış/kapanış saatine göre günü otomatik başlatır, kapanışa 30 dk kala uyarır.{' '}
-              <em>Yakında.</em>
-            </span>
-          </span>
-          <input type="checkbox" disabled checked={false} style={{ width: 20, height: 20 }} />
-        </label>
-      </div>
-
       {/* ---- Yedekleme ---- */}
       <div className="section-title">Yedekleme</div>
       <div className="card">
         <p className="hint" style={{ marginTop: 0 }}>
-          Tüm veriler bu cihazın tarayıcısında tutulur. Tarayıcı temizlenirse gider — düzenli yedek al.
+          Veriler bulutta saklanır. Yine de ara sıra yedek almak iyidir.
         </p>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <button className="btn" onClick={yedekAl}>

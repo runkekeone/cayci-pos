@@ -151,8 +151,9 @@ interface Store {
   // gider / kasa
   saveExpense: (e: Expense) => void
   deleteExpense: (id: string) => void
-  setOpeningCash: (amount: number) => void
-  setCountedCash: (amount: number) => void
+  /** Kasa: o günün açılış nakdi / gün sonu sayımı. Gün verilmezse bugün. */
+  setOpeningCash: (amount: number, date?: string) => void
+  setCountedCash: (amount: number, date?: string) => void
 
   // kurulum
   finishSetup: (patch: Pick<State, 'items' | 'expenses' | 'business'>) => void
@@ -422,7 +423,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             customerId: veresiyeParca?.customerId,
             tableId,
             tableName,
-            bizDay: aktifOturum(st)?.date ?? today(),
+            bizDay: today(),
             stokDusum,
           },
         ],
@@ -455,8 +456,9 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
             i.id === itemId
               ? {
                   ...i,
-                  stock: i.stock + qty,
+                  stock: i.lastCost || i.recipe ? i.stock + qty : qty,
                   lastCost: { total, qty },
+                  cost: undefined,
                   buyUnit: birim?.buyUnit ?? i.buyUnit,
                   packSize: birim?.packSize ?? i.packSize,
                 }
@@ -472,7 +474,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
               total,
               supplier,
               paidCash: paidCash ?? false,
-              bizDay: aktifOturum(st)?.date ?? today(),
+              bizDay: today(),
             },
           ],
         })),
@@ -495,7 +497,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
                 qty,
                 reason,
                 cost,
-                bizDay: aktifOturum(st)?.date ?? today(),
+                bizDay: today(),
               },
             ],
           }
@@ -817,7 +819,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
               customerId,
               amount,
               method,
-              bizDay: aktifOturum(st)?.date ?? today(),
+              bizDay: today(),
             },
           ],
         })),
@@ -833,10 +835,9 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       deleteExpense: (id) =>
         set((st) => ({ ...st, expenses: st.expenses.filter((e) => e.id !== id) })),
 
-      setOpeningCash: (amount) =>
+      setOpeningCash: (amount, date) =>
         set((st) => {
-          // Açık oturum varsa onun gününe yaz — rapor/Kasa da o günü okur (gece yarısı sapması önlenir).
-          const d = aktifOturum(st)?.date ?? today()
+          const d = date ?? today()
           return {
             ...st,
             cashDays: st.cashDays.some((c) => c.date === d)
@@ -845,9 +846,9 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           }
         }),
 
-      setCountedCash: (amount) =>
+      setCountedCash: (amount, date) =>
         set((st) => {
-          const d = aktifOturum(st)?.date ?? today()
+          const d = date ?? today()
           return {
             ...st,
             cashDays: st.cashDays.some((c) => c.date === d)

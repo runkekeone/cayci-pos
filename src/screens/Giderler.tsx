@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { aktifOturum, useStore } from '../store'
+import { useStore } from '../store'
 import { dailyFixedShare } from '../lib/report'
 import { fmtTL, today, uid } from '../lib/units'
 import type { Expense } from '../types'
@@ -11,10 +11,8 @@ export default function Giderler() {
   const [kind, setKind] = useState<Expense['kind']>('gunluk')
   const [paidCash, setPaidCash] = useState(true)
 
-  // Gider, takvim gününe değil AÇIK İŞ GÜNÜNE yazılır. Diğer bütün kayıtlar
-  // (satış, tahsilat, fire, alış) böyle yazılıyordu; sadece bu ekran today()
-  // kullandığı için gece yarısını aşan işletmede gider rapordan düşüyordu.
-  const isGunu = aktifOturum(s)?.date ?? today()
+  // Gider iş gününe yazılır (today() gece 04:00'te döner, satışlarla aynı gün).
+  const isGunu = today()
 
   const aylik = s.expenses.filter((e) => e.kind === 'aylik')
   const gunlukSabit = s.expenses.filter((e) => e.kind === 'gunluk-sabit')
