@@ -30,9 +30,9 @@ export function useTema(settings: State['settings'] | undefined) {
     const renkYaz = () => {
       if (!meta) return
       const koyuMu = tema === 'koyu' || (tema === 'sistem' && mq.matches)
-      // Açıkta mevcut marka rengi korunur; koyuda uygulamanın kendi zemini
+      // Durum çubuğu uygulamanın zeminiyle aynı renk
       // (--bg ile aynı değer olmalı, yoksa çubukla sayfa arasında şerit görünür).
-      meta.setAttribute('content', koyuMu ? '#14120e' : '#a3562a')
+      meta.setAttribute('content', koyuMu ? '#121110' : '#f4f3f0')
     }
     renkYaz()
 

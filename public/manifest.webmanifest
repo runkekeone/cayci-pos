@@ -8,8 +8,8 @@
   "scope": "/cayci-pos/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f6f5f3",
-  "theme_color": "#a3562a",
+  "background_color": "#f4f3f0",
+  "theme_color": "#f4f3f0",
   "icons": [
     {
       "src": "/cayci-pos/icon.svg",

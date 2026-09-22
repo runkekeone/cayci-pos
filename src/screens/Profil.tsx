@@ -3,6 +3,7 @@ import { normalize, useStore } from '../store'
 import { today } from '../lib/units'
 import type { User } from '../auth'
 import type { Business } from '../types'
+import { Ikon } from '../lib/Ikon'
 
 /**
  * PROFİL & AYARLAR.
@@ -220,7 +221,7 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
           <button className="btn primary" onClick={isletmeKaydet}>
             Kaydet
           </button>
-          {kayitli && <span className="hint v good">✓ Kaydedildi</span>}
+          {kayitli && <span className="hint v good">Kaydedildi</span>}
         </div>
       </div>
 
@@ -234,9 +235,9 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
         <div className="tema-secim">
           {(
             [
-              { id: 'sistem', ad: 'Sistem', ic: '📱' },
-              { id: 'acik', ad: 'Açık', ic: '☀️' },
-              { id: 'koyu', ad: 'Koyu', ic: '🌙' },
+              { id: 'sistem', ad: 'Sistem', ic: 'telefon' },
+              { id: 'acik', ad: 'Açık', ic: 'gunes' },
+              { id: 'koyu', ad: 'Koyu', ic: 'ay' },
             ] as const
           ).map((t) => (
             <button
@@ -244,7 +245,9 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
               className={`tema-pil ${(s.settings.tema ?? 'sistem') === t.id ? 'on' : ''}`}
               onClick={() => ayar({ tema: t.id })}
             >
-              <span className="tema-ic">{t.ic}</span>
+              <span className="tema-ic">
+                <Ikon ad={t.ic} />
+              </span>
               {t.ad}
             </button>
           ))}
@@ -277,7 +280,9 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
           {s.business.logo ? (
             <img className="logo-onizleme" src={s.business.logo} alt="İşletme logosu" />
           ) : (
-            <div className="logo-onizleme bos">🍵</div>
+            <div className="logo-onizleme bos">
+              <Ikon ad="dukkan" />
+            </div>
           )}
           <label className="btn" style={{ cursor: 'pointer' }}>
             {s.business.logo ? 'Değiştir' : 'Logo seç'}
@@ -340,10 +345,12 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
         </p>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <button className="btn" onClick={yedekAl}>
-            💾 Yedek al (indir)
+            <Ikon ad="indir" boy={18} />
+            Yedek al (indir)
           </button>
           <label className="btn" style={{ cursor: 'pointer' }}>
-            📂 Geri yükle
+            <Ikon ad="yukle" boy={18} />
+            Geri yükle
             <input
               type="file"
               accept="application/json"
@@ -366,7 +373,8 @@ export default function Profil({ user, onOut }: { user: User; onOut: () => void 
             Giriş: <strong>{user.username}</strong>
           </span>
           <button className="btn ghost" onClick={onOut} style={{ color: 'var(--bad)' }}>
-            🚪 Çıkış yap
+            <Ikon ad="cikis" boy={18} />
+            Çıkış yap
           </button>
         </div>
       </div>

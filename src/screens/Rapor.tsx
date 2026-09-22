@@ -3,35 +3,35 @@ import { useStore, aktifOturum } from '../store'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { dayOf, fmtTL, round, today } from '../lib/units'
 import { OdemeGrafik, SaatGrafik, UrunGrafik, type SaatDilim } from '../lib/Grafik'
+import { Ikon } from '../lib/Ikon'
 
-/** Kutucuk: solda ikon, sağda başlık ve tutar. */
-function Kutu({
-  ikon,
-  renk,
-  baslik,
+/** Rapor satırı: ad solda, tutar sağda. `nokta` ödeme türünün grafik rengini gösterir. */
+function Satir({
+  ad,
   tutar,
   ek,
   ton,
+  nokta,
+  isaret,
 }: {
-  ikon: string
-  renk: string
-  baslik: string
+  ad: string
   tutar: number
   ek?: string
   ton?: 'good' | 'bad'
+  nokta?: 'nakit' | 'kart' | 'veresiye'
+  isaret?: '+' | '−'
 }) {
   return (
-    <div className="rbox">
-      <span className="rbox-ic" style={{ background: renk }}>
-        {ikon}
+    <div className="liste-satir">
+      <span className="ls-ad">
+        {nokta && <span className={`nokta ${nokta}`} />}
+        {ad}
       </span>
-      <div className="rbox-txt">
-        <div className="rbox-k">{baslik}</div>
-        <div className={`rbox-v ${ton ?? ''}`}>
-          {fmtTL(tutar)}
-          {ek && <span className="rbox-ek">{ek}</span>}
-        </div>
-      </div>
+      <span className={`ls-deger ${ton ? ton + '-txt' : ''}`}>
+        {isaret}
+        {fmtTL(tutar)}
+        {ek && <small>{ek}</small>}
+      </span>
     </div>
   )
 }
@@ -62,59 +62,46 @@ export default function Rapor() {
 
   return (
     <>
-      <h1>Rapor</h1>
+      <h1>Günlük rapor</h1>
       <p className="sub">Gün eksiyle başlar (sabit gider payı), satış geldikçe artıya geçer.</p>
 
-      <div className="row" style={{ marginBottom: 16 }}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <span className="tag">{fisSayisi} fiş</span>
+      <div className="rapor-ust">
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Gün" />
+        <span className="tag">{fisSayisi} satış</span>
       </div>
 
-      <div className="rgrid">
-        {/* İlk bakışta yalnız üç temel özet; kalanlar isteğe bağlı açılır. */}
-        <Kutu ikon="💵" renk="var(--good-soft)" baslik="Nakit" tutar={r.nakitSatis} ton="good" />
-        <Kutu ikon="💳" renk="var(--kutu-bilgi)" baslik="POS / Kart" tutar={r.kartSatis} />
-        <Kutu ikon="📒" renk="var(--bad-soft)" baslik="Veresiye" tutar={r.veresiyeSatis} ton="bad" />
+      {/* ---- sonuç: tek büyük rakam ---- */}
+      <div className="card ozet-kart">
+        <div className="ozet-etiket">Net kâr</div>
+        <div className={`ozet-rakam ${r.netKar >= 0 ? 'good' : 'bad'}`}>{fmtTL(r.netKar)}</div>
+        <div className="ozet-alt">
+          <span>
+            Ciro <b>{fmtTL(r.ciro)}</b>
+          </span>
+          <span>
+            Brüt kâr <b>{fmtTL(r.brutKar)}</b>
+            {r.ciro > 0 ? ` (%${String(round(karOran, 1)).replace('.', ',')})` : ''}
+          </span>
+        </div>
+      </div>
 
+      {/* ---- para nasıl geldi ---- */}
+      <div className="card liste" style={{ marginTop: 12 }}>
+        <Satir ad="Nakit" nokta="nakit" tutar={r.nakitSatis} />
+        <Satir ad="Kart" nokta="kart" tutar={r.kartSatis} />
+        <Satir ad="Veresiye" nokta="veresiye" tutar={r.veresiyeSatis} />
+        <Satir ad="Kasada olması gereken" tutar={r.beklenenNakit} />
         {detay && (
           <>
-            <Kutu ikon="🧾" renk="var(--kutu-bilgi)" baslik="Toplam Ciro" tutar={r.ciro} />
-            {/* --- para nereye gitti --- */}
-            <Kutu ikon="🤝" renk="var(--good-soft)" baslik="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
-            <Kutu ikon="🚚" renk="var(--kutu-notr)" baslik="Bugünkü alımlar" tutar={alimlar} />
-            <Kutu
-              ikon="💸"
-              renk="var(--bad-soft)"
-              baslik="Giderler"
-              tutar={r.gunlukGider + r.sabitGiderPayi}
-              ton="bad"
-            />
-            <Kutu ikon="🗑️" renk="var(--bad-soft)" baslik="Fire + İkram" tutar={r.fireIkramMaliyeti} ton="bad" />
-
-            {/* --- sonuç --- */}
-            <Kutu ikon="🏦" renk="var(--kutu-bilgi)" baslik="Kasada olması gereken" tutar={r.beklenenNakit} />
-            <Kutu
-              ikon="📈"
-              renk="var(--good-soft)"
-              baslik="Brüt kâr"
-              tutar={r.brutKar}
-              ek={r.ciro > 0 ? `(%${round(karOran, 1)})` : undefined}
-              ton="good"
-            />
-            <Kutu ikon="📦" renk="var(--kutu-notr)" baslik="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
-            <Kutu
-              ikon="🎯"
-              renk={r.netKar >= 0 ? 'var(--good-soft)' : 'var(--bad-soft)'}
-              baslik="NET KÂR"
-              tutar={r.netKar}
-              ton={r.netKar >= 0 ? 'good' : 'bad'}
-            />
+            <Satir ad="Tahsil edilen borç" tutar={r.tahsilat} ton="good" />
+            <Satir ad="Bugünkü alımlar" tutar={alimlar} />
+            <Satir ad="Ürün maliyeti" tutar={r.satilanMalMaliyeti} />
           </>
         )}
       </div>
-
-      <button className="btn" style={{ marginTop: 12 }} onClick={() => setDetay((d) => !d)}>
-        {detay ? '▴ Rapor özetlerini gizle' : '▾ Diğer rapor özetlerini görüntüle'}
+      <button className="btn acma-dugme" onClick={() => setDetay((d) => !d)}>
+        {detay ? 'Daha az göster' : 'Tahsilat, alım ve maliyeti göster'}
+        <Ikon ad={detay ? 'yukari' : 'asagi'} boy={18} />
       </button>
 
       <div className="grafik-izgara">
@@ -132,69 +119,31 @@ export default function Rapor() {
         />
       </div>
 
-      <div className="row" style={{ alignItems: 'flex-start', gap: 16, marginTop: 20 }}>
-        <div className="card" style={{ flex: 1, minWidth: 300 }}>
-          <strong>Günün hesabı</strong>
-          <table style={{ marginTop: 10 }}>
-            <tbody>
-              <tr>
-                <td>Sabit gider payı (aylık ÷ 30)</td>
-                <td className="num v bad" style={{ fontSize: 14 }}>
-                  −{fmtTL(r.sabitGiderPayi)}
-                </td>
-              </tr>
-              <tr>
-                <td>Brüt kâr (satış − maliyet)</td>
-                <td className="num v good" style={{ fontSize: 14 }}>
-                  +{fmtTL(r.brutKar)}
-                </td>
-              </tr>
-              <tr>
-                <td>Günlük giderler</td>
-                <td className="num v bad" style={{ fontSize: 14 }}>
-                  −{fmtTL(r.gunlukGider)}
-                </td>
-              </tr>
-              <tr>
-                <td>Fire + ikram maliyeti</td>
-                <td className="num v bad" style={{ fontSize: 14 }}>
-                  −{fmtTL(r.fireIkramMaliyeti)}
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>Net kâr</strong>
-                </td>
-                <td className="num">
-                  <strong className={r.netKar >= 0 ? 'v good' : 'v bad'}>{fmtTL(r.netKar)}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div className="rapor-iki">
+        <div className="card liste">
+          <p className="liste-baslik" style={{ marginTop: 10 }}>
+            Günün hesabı
+          </p>
+          <Satir ad="Brüt kâr (satış − maliyet)" tutar={r.brutKar} isaret="+" ton="good" />
+          <Satir ad="Sabit gider payı (aylık ÷ 30)" tutar={r.sabitGiderPayi} isaret="−" ton="bad" />
+          <Satir ad="Günlük giderler" tutar={r.gunlukGider} isaret="−" ton="bad" />
+          <Satir ad="Fire + ikram maliyeti" tutar={r.fireIkramMaliyeti} isaret="−" ton="bad" />
+          <div className="liste-satir toplam">
+            <span className="ls-ad">Net kâr</span>
+            <span className={`ls-deger ${r.netKar >= 0 ? 'good-txt' : 'bad-txt'}`}>{fmtTL(r.netKar)}</span>
+          </div>
         </div>
 
-        <div className="card" style={{ flex: 1, minWidth: 300 }}>
-          <strong>Veresiye durumu</strong>
-          <table style={{ marginTop: 10 }}>
-            <tbody>
-              <tr>
-                <td>Bugün yazılan veresiye</td>
-                <td className="num">{fmtTL(r.veresiyeSatis)}</td>
-              </tr>
-              <tr>
-                <td>Bugün tahsil edilen</td>
-                <td className="num">{fmtTL(r.tahsilat)}</td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>Toplam açık veresiye</strong>
-                </td>
-                <td className="num">
-                  <strong>{fmtTL(totalVeresiye(s))}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="card liste">
+          <p className="liste-baslik" style={{ marginTop: 10 }}>
+            Veresiye durumu
+          </p>
+          <Satir ad="Bugün yazılan" tutar={r.veresiyeSatis} />
+          <Satir ad="Bugün tahsil edilen" tutar={r.tahsilat} />
+          <div className="liste-satir toplam">
+            <span className="ls-ad">Toplam açık veresiye</span>
+            <span className="ls-deger">{fmtTL(totalVeresiye(s))}</span>
+          </div>
         </div>
       </div>
 

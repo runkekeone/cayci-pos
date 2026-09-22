@@ -31,7 +31,7 @@ export default function Giris({ onIn }: { onIn: (u: User) => void }) {
     >
       <div className="card" style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{ fontSize: 34 }}>🍵</div>
+          <div className="acilis-logo" style={{ margin: '0 auto' }}>Ç</div>
           <h1 style={{ marginTop: 8 }}>Çay Ocağı POS</h1>
           <p className="hint">
             {mod === 'giris' ? 'İşletmene giriş yap.' : 'Yeni işletme kaydı oluştur.'}
