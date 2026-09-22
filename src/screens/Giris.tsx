@@ -91,12 +91,6 @@ export default function Giris({ onIn }: { onIn: (u: User) => void }) {
           </button>
         </p>
 
-        <p
-          className="hint"
-          style={{ textAlign: 'center', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--line)' }}
-        >
-          Veriler bu cihazda saklanır. Sunucu yok — parola gerçek bir güvenlik katmanı değildir.
-        </p>
       </div>
     </div>
   )

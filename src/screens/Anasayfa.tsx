@@ -27,23 +27,18 @@ function git(id: string) {
 
 /**
  * ANASAYFA.
- * Sol: duyurular (+ Kampanya 1). Sağ: güncel durum raporu (+ Kampanya 2).
+ * Bugünkü satış, işlemler, açık adisyonlar, son satışlar, günün durumu ve
+ * (toptancı yayınladıysa) duyurular.
  * En altta büyük reklam barı (ileride reklam alanı).
  */
 type Duyuru = { id?: string; tarih: string; metin: string }
 
-// Bulut boş/erişilemezse gösterilecek FALLBACK duyurular.
-const DUYURULAR: Duyuru[] = [
-  { tarih: '15 Tem', metin: 'Toptancı fiyat listesi güncellendi — Sipariş ekranından yeni fiyatlara bak.' },
-  { tarih: '14 Tem', metin: 'Yeni: kritik stoğa düşen ürünler Sipariş ekranında otomatik önerilir.' },
-  { tarih: '12 Tem', metin: 'Gün Sonu ekranı eklendi. Günü kapatırken açık hesapları toplamayı unutma.' },
-]
 
 export default function Anasayfa() {
   const { s } = useStore()
   const [hepsi, setHepsi] = useState(false)
   const [onizle, setOnizle] = useState<Table | null>(null) // bekleyen adisyon önizleme
-  const [duyurular, setDuyurular] = useState<Duyuru[]>(DUYURULAR) // toptancı buluttan yayınlar; yoksa fallback
+  const [duyurular, setDuyurular] = useState<Duyuru[]>([]) // toptancı buluttan yayınlar; yoksa bölüm hiç görünmez
 
   // Mount'ta toptancının yayınladığı duyuruları buluttan oku (kv anahtar: "duyurular").
   useEffect(() => {
@@ -81,8 +76,8 @@ export default function Anasayfa() {
       <div className="card ana-net">
         <div className="ana-net-ust">
           <div>
-            <div className="ana-net-etiket">Bugün net kâr</div>
-            <div className={`ana-net-rakam ${r.netKar >= 0 ? 'good' : 'bad'}`}>{fmtTL(r.netKar)}</div>
+            <div className="ana-net-etiket">Bugünkü satış</div>
+            <div className="ana-net-rakam">{fmtTL(r.ciro)}</div>
           </div>
           <button className="btn sm" onClick={() => git('rapor')}>
             Rapor
@@ -91,16 +86,16 @@ export default function Anasayfa() {
         </div>
         <div className="ana-uclu">
           <div>
-            <b>{fmtTL(r.ciro)}</b>
-            <span>Ciro</span>
-          </div>
-          <div>
             <b>{satisAdet}</b>
-            <span>Satış</span>
+            <span>Satış adedi</span>
           </div>
           <div>
-            <b>{fmtTL(r.beklenenNakit)}</b>
-            <span>Kasada</span>
+            <b>{fmtTL(r.nakitSatis)}</b>
+            <span>Nakit</span>
+          </div>
+          <div>
+            <b>{fmtTL(r.veresiyeSatis)}</b>
+            <span>Veresiye</span>
           </div>
         </div>
       </div>
@@ -197,25 +192,19 @@ export default function Anasayfa() {
           </div>
         </div>
 
-        <div>
-          <div className="section-title">Duyurular</div>
-          <div className="card liste">
-            {duyurular.map((d, i) => (
-              <div className="duyuru-satir" key={d.id ?? i}>
-                <span className="duyuru-tarih">{d.tarih}</span>
-                <span className="duyuru-metin">{d.metin}</span>
-              </div>
-            ))}
+        {duyurular.length > 0 && (
+          <div>
+            <div className="section-title">Toptancıdan duyurular</div>
+            <div className="card liste">
+              {duyurular.map((d, i) => (
+                <div className="duyuru-satir" key={d.id ?? i}>
+                  <span className="duyuru-tarih">{d.tarih}</span>
+                  <span className="duyuru-metin">{d.metin}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* ---- ileride kampanya / reklam alanı ---- */}
-      <div className="kampanya-alani">
-        <div className="kampanya-kutu">
-          <b>Kampanyalar</b>
-          Toptancının kampanyaları burada görünecek.
-        </div>
+        )}
       </div>
 
       {/* Bekleyen adisyon önizleme: içeriği hızlıca gör, istersen "Aç" ile satışa geç. */}

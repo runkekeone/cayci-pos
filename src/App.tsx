@@ -19,7 +19,6 @@ import Rapor from './screens/Rapor'
 import Takvim from './screens/Takvim'
 import Profil from './screens/Profil'
 import Siparis from './screens/Siparis'
-import Hizmetler from './screens/Hizmetler'
 import Anasayfa from './screens/Anasayfa'
 import { Ikon, type IkonAd } from './lib/Ikon'
 
@@ -35,7 +34,6 @@ const EKRANLAR: Record<string, ComponentType> = {
   kasa: Kasa,
   takvim: Takvim,
   siparis: Siparis,
-  hizmetler: Hizmetler,
 }
 
 type MenuLeaf = { id: string; ad: string; kisa: string; ic: IkonAd }
@@ -56,8 +54,6 @@ const MENU: MenuItem[] = [
   // Masaüstü sidebar'da görünmeye devam eder.
   { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: 'fis', ana: false },
   { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: 'kamyon', ana: true },
-  // Masaüstü sidebar'da görünür; mobilde nav-gizli — alt çubukta ayrı only-mobile düğmesi var.
-  { id: 'hizmetler', ad: 'Hizmetler', kisa: 'Hizmet', ic: 'hediye', ana: false },
   {
     id: 'rapor',
     ad: 'Raporlar',
@@ -204,11 +200,11 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <span className="nav-kisa">Satış</span>
         </button>
         <button
-          className={`nav only-mobile ${sayfa === 'hizmetler' ? 'on' : ''}`}
-          onClick={() => git('hizmetler')}
+          className={`nav only-mobile ${sayfa === 'musteriler' ? 'on' : ''}`}
+          onClick={() => git('musteriler')}
         >
-          <Ikon ad="hediye" boy={22} />
-          <span className="nav-kisa">Hizmetler</span>
+          <Ikon ad="defter" boy={22} />
+          <span className="nav-kisa">Veresiye</span>
         </button>
         <button
           className={`nav only-mobile ${sayfa === 'rapor' ? 'on' : ''}`}
