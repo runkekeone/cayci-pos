@@ -4,6 +4,7 @@ import { dayReport, totalVeresiye } from '../lib/report'
 import { dayOf, fmtTL, round, today } from '../lib/units'
 import { CizgiGrafik, OdemeGrafik, SaatGrafik, UrunGrafik, type SaatDilim } from '../lib/Grafik'
 import { Ikon } from '../lib/Ikon'
+import GunSatislari from './GunSatislari'
 
 /** Rapor satırı: ad solda, tutar sağda. `nokta` ödeme türünün grafik rengini gösterir. */
 function Satir({
@@ -27,7 +28,7 @@ function Satir({
         {nokta && <span className={`nokta ${nokta}`} />}
         {ad}
       </span>
-      <span className={`ls-deger ${ton ? ton + '-txt' : ''}`}>
+      <span className={`ls-deger ${ton && tutar !== 0 ? ton + '-txt' : ''}`}>
         {tutar !== 0 && isaret}
         {fmtTL(tutar)}
         {ek && <small>{ek}</small>}
@@ -210,6 +211,8 @@ export default function Rapor() {
           />
         )}
       </div>
+
+      <GunSatislari gun={date} />
 
       <div className="grafik-izgara">
         <SaatGrafik key={date} veri={saatlik} />

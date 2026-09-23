@@ -1,6 +1,9 @@
 import type { State } from '../types'
 import { dayOf } from './units'
 
+/** Hesaba yapılan indirim, adisyonda eksi tutarlı ayrı bir satır olarak durur. */
+export const INDIRIM_ID = 'indirim'
+
 /**
  * İki ayrı çizgi tutulur, karıştırılmaz:
  *
@@ -109,6 +112,7 @@ export function dayReport(s: State, date: string): DayReport {
   const map = new Map<string, { itemId: string; name: string; qty: number; ciro: number; kar: number }>()
   for (const sale of sales) {
     for (const l of sale.lines) {
+      if (l.itemId === INDIRIM_ID) continue // indirim ürün değil; ciroda zaten düşülü
       const urunAdi = s.items.find((i) => i.id === l.itemId)?.name ?? l.name
       const cur = map.get(l.itemId) ?? { itemId: l.itemId, name: urunAdi, qty: 0, ciro: 0, kar: 0 }
       cur.qty += l.qty

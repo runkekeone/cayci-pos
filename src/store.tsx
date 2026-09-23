@@ -119,6 +119,8 @@ interface Store {
     variant?: Variant,
     waste?: 'ikram' | 'fire',
   ) => void
+  /** Masaya hazır bir satır yaz (indirim gibi üründen gelmeyen satırlar). Aynı itemId varsa yerine geçer. */
+  setTableExtraLine: (tableId: string, line: SaleLine | null, itemId: string) => void
   removeFromTable: (tableId: string, index: number) => void
   setTableQty: (tableId: string, index: number, qty: number) => void
   setTableLinePrice: (tableId: string, index: number, unitPrice: number) => void
@@ -520,6 +522,16 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
                 ? t.lines.map((l, i) => (i === idx ? { ...l, qty: l.qty + qty } : l))
                 : [...t.lines, line]
             return { ...t, lines, openedAt: t.openedAt ?? new Date().toISOString() }
+          }),
+        })),
+
+      setTableExtraLine: (tableId, line, itemId) =>
+        set((st) => ({
+          ...st,
+          tables: st.tables.map((t) => {
+            if (t.id !== tableId) return t
+            const lines = t.lines.filter((l) => l.itemId !== itemId)
+            return { ...t, lines: line ? [...lines, line] : lines }
           }),
         })),
 
