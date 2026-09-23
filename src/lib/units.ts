@@ -147,6 +147,9 @@ export function uid(): string {
 }
 
 /** ISO tarihten şimdiye kaç dakika geçti. Geçersiz/boşsa 0. */
+/** Bu kadar dakikadır açık duran masa kırmızıya döner. */
+export const UZUN_MASA_DK = 45
+
 export function gecenDakika(iso?: string): number {
   if (!iso) return 0
   const t = new Date(iso).getTime()

@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useStore } from '../store'
 import { availableQty, lowStock, stokTakipli, unitCost, variantCost } from '../lib/cost'
 import { Ikon } from '../lib/Ikon'
+import { KATEGORI_SIRA, katRenk } from '../lib/kategori'
 import { fmtSure, fmtTL, gecenDakika, uid } from '../lib/units'
 import type { Business, Item, Payment, PaymentPart, Sale, SaleLine, Variant } from '../types'
 
 type Target = { kind: 'hizli' } | { kind: 'masa'; id: string }
 
-/** Bu kadar dakikadır açık duran masa şeritte uyarı rengine döner. */
-const UZUN_MASA_DK = 45
 
 /**
  * Adet kutusu. Doğrudan store'a yazan input, kutu boşaltılınca (5 sil → 12 yaz)
@@ -88,6 +87,7 @@ export default function Satis() {
   const [parcali, setParcali] = useState(false)
   // Telefonda sepet alttan açılan sayfa; masaüstünde hep yanda durur.
   const [sepetAcik, setSepetAcik] = useState(false)
+  const [odemeAcik, setOdemeAcik] = useState(false)
   // Yapılmış satışı incele/düzenle modalı.
   const [incele, setIncele] = useState<Sale | null>(null)
   // Satış bitince çıkan onay balonu — "oldu mu olmadı mı" belirsizliğini bitirir.
@@ -111,13 +111,12 @@ export default function Satis() {
 
   const sellable = s.items.filter((i) => i.sellable)
   // Kategori sırası sabit; kullanıcının eklediği yeni kategoriler sona düşer.
-  const SIRA = ['Sıcak', 'Soğuk', 'Yiyecek', 'Atıştırmalık']
+  const SIRA = KATEGORI_SIRA
   const mevcut = [...new Set(sellable.map((i) => i.category))].sort((a, b) => {
     const ia = SIRA.indexOf(a)
     const ib = SIRA.indexOf(b)
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
   })
-  const cats = ['Hepsi', ...mevcut]
   const aranan = ara.trim().toLowerCase()
   const shown = (cat === 'Hepsi' ? sellable : sellable.filter((i) => i.category === cat))
     .filter((i) => !aranan || i.name.toLowerCase().includes(aranan))
@@ -242,6 +241,7 @@ export default function Satis() {
     setCustomerId('')
     setMusteriSor(false)
     setSepetAcik(false)
+    setOdemeAcik(false)
     // Satış olduğunu göster: eskiden ekran sessizce temizleniyordu.
     setOnay({ tutar, payment })
   }
@@ -294,15 +294,6 @@ export default function Satis() {
     setSepetAcik(false)
   }
 
-  // Masa şeridi özeti — telefonda tek bakışta: kaç masa dolu, ne kadar açık hesap,
-  // en uzun süredir bekleyen masa kaç dakikadır açık.
-  const doluMasalar = s.tables.filter((t) => t.lines.length > 0)
-  const acikTutar = doluMasalar.reduce(
-    (n, t) => n + t.lines.reduce((m, l) => m + l.qty * l.unitPrice, 0),
-    0,
-  )
-  const enUzunDk = doluMasalar.reduce((n, t) => Math.max(n, gecenDakika(t.openedAt)), 0)
-  const gorunenMasalar = s.tables
 
   // Sepetteki adet, ürün kartının köşesinde görünür — "ekledim mi?" sorusu biter.
   const adetMap = new Map<string, number>()
@@ -310,196 +301,235 @@ export default function Satis() {
   const toplamAdet = lines.reduce((n, l) => n + l.qty, 0)
   const hedefAd = target.kind === 'masa' ? (table?.name ?? 'Masa') : 'Tezgâh'
   const musteriAd = aktifMusteri ? s.customers.find((c) => c.id === aktifMusteri)?.name : undefined
+  const masaDk = table && table.lines.length > 0 ? gecenDakika(table.openedAt) : 0
 
-  return (
-    <>
-      <div className="sayfa-ust">
-        <div>
-          <h1>Satış</h1>
-          <p className="sub">
-            {target.kind === 'hizli'
-              ? 'Tezgâh satışı — ürüne dokun, ödemeyi al.'
-              : `${table?.name} adisyonu açık.`}
-          </p>
+  // Müşteri seçici: sadece veresiyeye basılınca ya da müşteri seçiliyken görünür.
+  const musteriSecici =
+    (!table?.customerId || target.kind === 'hizli') && (musteriSor || customerId) ? (
+      <div className={`field ${musteriSor && !customerId ? 'sor' : ''}`}>
+        <label>{musteriSor && !customerId ? 'Veresiye kime yazılsın?' : 'Müşteri'}</label>
+        <div className="row" style={{ flexWrap: 'nowrap' }}>
+          <select style={{ flex: 1 }} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <option value="">Seçilmedi</option>
+            {s.customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.balance > 0 ? ` (borç ${fmtTL(c.balance)})` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn sm"
+            onClick={() =>
+              setYeniAd(() => (ad: string) => {
+                const id = uid()
+                saveCustomer({ id, name: ad, balance: 0 })
+                if (target.kind === 'masa') setTableCustomer(target.id, id)
+                else setCustomerId(id)
+              })
+            }
+          >
+            + Yeni
+          </button>
         </div>
-        <button
-          className={`btn sm ${detayli ? 'primary' : ''}`}
-          onClick={() => {
-            const on = !detayli
-            setDetayli(on)
-            if (!on) setZayiMod(null)
-          }}
-          title="Çeşit seçimi, masaya müşteri atama, ikram/zayi açılır"
-        >
-          {detayli && <Ikon ad="tik" boy={16} kalinlik={2.4} />}
-          Detaylı
+      </div>
+    ) : null
+
+  function masalaraGit() {
+    window.dispatchEvent(new CustomEvent('cayci-git', { detail: 'masalar' }))
+  }
+
+  // Sepet ve ödeme içeriği — masaüstünde yan panel, telefonda alttan açılan sayfa.
+  const sepetIcerik = (
+    <>
+      <div className="cart-bas">
+        <div>
+          <strong>Sepet</strong>
+          <div className="cart-hedef">
+            {hedefAd}
+            {masaDk > 0 ? ` · ${fmtSure(masaDk)}dır açık` : ''}
+            {musteriAd ? ` · ${musteriAd}` : ''}
+          </div>
+        </div>
+        <button className="x cart-kapat" onClick={() => setSepetAcik(false)} aria-label="Sepeti kapat">
+          <Ikon ad="kapat" />
         </button>
       </div>
 
-      {/* ---- nereye yazılsın: tezgâh ya da masa ---- */}
-      <div className="satis-masa-secimi">
-        <div className="masa-baslik">
-          <span className="serit-etiket">Nereye yazılsın?</span>
-        </div>
-
-        {doluMasalar.length > 0 && (
-          <div className="masa-ozet">
-            <span className="mo-par">
-              <b>{doluMasalar.length}</b> masa dolu
-            </span>
-            <span className="mo-par">
-              <b>{fmtTL(acikTutar)}</b> açık hesap
-            </span>
-            {enUzunDk >= UZUN_MASA_DK && (
-              <span className="mo-par uyari">en uzun {fmtSure(enUzunDk)}</span>
-            )}
-          </div>
-        )}
-
-        <div className="tables">
-          <button
-            className={`table-btn hizli ${target.kind === 'hizli' ? 'on' : ''}`}
-            onClick={() => setTarget({ kind: 'hizli' })}
-          >
-            <div className="nm">Tezgâh</div>
-            <div className="am">hızlı satış</div>
-          </button>
-
-          {gorunenMasalar.map((t) => {
-            const amt = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-            const adet = t.lines.reduce((n, l) => n + l.qty, 0)
-            // Ölçüt tutarın değil satırın varlığı — yalnız ikram verilmiş masa da açıktır.
-            const dolu = t.lines.length > 0
-            const dk = dolu ? gecenDakika(t.openedAt) : 0
-            const uzun = dolu && dk >= UZUN_MASA_DK
-            const on = target.kind === 'masa' && target.id === t.id
-            const musteri = s.customers.find((c) => c.id === t.customerId)
-            return (
-              <button
-                key={t.id}
-                className={`table-btn ${dolu ? 'busy' : ''} ${uzun ? 'uzun' : ''} ${on ? 'on' : ''}`}
-                onClick={() => setTarget({ kind: 'masa', id: t.id })}
-                onDoubleClick={() => setAdlandir(t.id)}
-                title={
-                  dolu
-                    ? `${t.name} — ${adet} ürün, ${fmtSure(dk)}tır açık. Çift tıkla: isim ver`
-                    : 'Çift tıkla: isim ver'
-                }
-              >
-                {dolu && (
-                  <div className="t-ust">
-                    <span className="t-sure">{fmtSure(dk)}</span>
-                  </div>
-                )}
-                <div className="nm">{t.name}</div>
-                <div className="am">{dolu ? fmtTL(amt) : 'boş'}</div>
-                {(dolu || musteri) && (
-                  <div className="t-count">
-                    {dolu ? `${adet} ürün` : ''}
-                    {dolu && musteri ? ' · ' : ''}
-                    {musteri?.name ?? ''}
-                  </div>
-                )}
+      <div className="cart-lines">
+        {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
+        {lines.map((l, idx) => (
+          <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}>
+            <div className="adet-kutu">
+              <button onClick={() => azalt(idx)} aria-label="Bir azalt">
+                −
               </button>
-            )
-          })}
-        </div>
-
-        {target.kind === 'masa' && (
-          <div className="masa-araclar">
-            <button className="btn sm" onClick={() => setAdlandir(target.id)}>
-              <Ikon ad="kalem" boy={16} />
-              Masaya isim ver
-            </button>
-            {detayli && (
-              <>
-                <select
-                  value={table?.customerId ?? ''}
-                  onChange={(e) => setTableCustomer(target.id, e.target.value || undefined)}
-                  style={{ minWidth: 180 }}
-                  aria-label="Masadaki müşteri"
-                >
-                  <option value="">Masada müşteri yok</option>
-                  {s.customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.balance > 0 ? ` (borç ${fmtTL(c.balance)})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="btn sm"
-                  onClick={() =>
-                    setYeniAd(() => (ad: string) => {
-                      const id = uid()
-                      saveCustomer({ id, name: ad, balance: 0 })
-                      if (target.kind === 'masa') setTableCustomer(target.id, id)
-                    })
-                  }
-                >
-                  + Yeni müşteri
-                </button>
-              </>
-            )}
+              <QtyInput qty={l.qty} onQty={(n) => setQty(idx, n)} />
+              <button onClick={() => artir(idx)} aria-label="Bir artır">
+                +
+              </button>
+            </div>
+            <span
+              className="nm sepet-duzenlenebilir"
+              onClick={() => setSepetDuzenle(idx)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && setSepetDuzenle(idx)}
+              title="Adet veya fiyatı düzenle"
+            >
+              {l.name}
+              <small>{l.waste ? 'ikram · 0 ₺' : fmtTL(l.unitPrice)}</small>
+            </span>
+            <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
           </div>
+        ))}
+      </div>
+
+      <div className="cart-araclar">
+        <button className="btn sm" onClick={() => setMusteriSor((v) => !v)}>
+          <Ikon ad="kisi" boy={16} />
+          {musteriAd ?? 'Müşteri seç'}
+        </button>
+        {lines.length > 0 && (
+          <button className="btn sm" onClick={() => setParcali(true)}>
+            Hesabı böl
+          </button>
+        )}
+        <button
+          className={`btn sm ${zayiMod === 'ikram' ? 'primary' : ''}`}
+          onClick={() => {
+            setZayiMod(zayiMod === 'ikram' ? null : 'ikram')
+            setSepetAcik(false)
+          }}
+        >
+          İkram
+        </button>
+        {lines.length > 0 && (
+          <button className="btn sm ghost" onClick={temizle}>
+            Temizle
+          </button>
         )}
       </div>
 
+      {musteriSecici}
+
+      <div className="total">
+        <span>Toplam</span>
+        <span className="v">{fmtTL(total)}</span>
+      </div>
+      <button
+        className="btn primary ode-dugme"
+        disabled={!lines.length}
+        onClick={() => {
+          setSepetAcik(false)
+          setOdemeAcik(true)
+        }}
+      >
+        Öde · {fmtTL(total)}
+      </button>
+    </>
+  )
+
+  return (
+    <>
+      <div className="satis-ust">
+        <button className="hedef-dugme" onClick={masalaraGit} title="Masa değiştir">
+          <b>{hedefAd}</b>
+          <span>
+            {target.kind === 'masa'
+              ? table && table.lines.length > 0
+                ? masaDk > 0
+                  ? `${fmtSure(masaDk)}dır açık`
+                  : 'yeni açıldı'
+                : 'boş masa'
+              : 'hızlı satış'}
+            <Ikon ad="asagi" boy={16} />
+          </span>
+        </button>
+        <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+          {target.kind === 'masa' && (
+            <button className="btn sm" onClick={() => setAdlandir(target.id)} aria-label="Masaya isim ver">
+              <Ikon ad="kalem" boy={16} />
+            </button>
+          )}
+          <button
+            className={`btn sm ${detayli ? 'primary' : ''}`}
+            onClick={() => {
+              const on = !detayli
+              setDetayli(on)
+              if (!on) setZayiMod(null)
+            }}
+            title="Çeşit seçimi (duble, şekersiz...), zayi"
+          >
+            Çeşitli
+          </button>
+        </div>
+      </div>
+
+      {zayiMod && (
+        <div className="uyari-band" style={{ marginBottom: 12, alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <strong>{zayiMod === 'ikram' ? 'İkram' : 'Zayi'} modu</strong>
+            Ürüne dokun, 0 ₺ olarak yazılır.
+          </div>
+          <button className="btn sm" onClick={() => setZayiMod(null)}>
+            Bitir
+          </button>
+        </div>
+      )}
+
       {azalanlar.length > 0 && (
-        <div className="uyari-band" style={{ marginTop: 14 }}>
+        <div className="uyari-band" style={{ marginBottom: 12 }}>
           <Ikon ad="dikkat" />
           <div>
             <strong>Stok azaldı</strong>
-            {azalanlar.map((i) => i.name).join(' · ')} — satış devam eder, alım yapmayı unutma.
+            {azalanlar.map((i) => i.name).join(' · ')}
           </div>
         </div>
       )}
 
-      {/* ---- ürünler + sepet ---- */}
-      <div className="grid2 satis-grid" style={{ marginTop: 16 }}>
+      <div className="grid2 satis-grid">
         <div>
-          {detayli && (
-            <div className="row" style={{ marginBottom: 12, gap: 8 }}>
-              <span className="hint">İkram / Zayi:</span>
+          {/* bölümler: her birinin kendi rengi var, ürün kartının kenarı da o renkte */}
+          <div className="kat-bloklar">
+            {mevcut.map((c) => (
               <button
-                className={`btn sm ${zayiMod === 'ikram' ? 'primary' : ''}`}
-                onClick={() => setZayiMod(zayiMod === 'ikram' ? null : 'ikram')}
+                key={c}
+                className={`kat-blok ${cat === c ? 'on' : ''}`}
+                style={{ '--k': katRenk(c, mevcut) } as CSSProperties}
+                onClick={() => setCat(cat === c ? 'Hepsi' : c)}
               >
-                İkram
+                <b>{c}</b>
+                <small>{sellable.filter((i) => i.category === c).length} ürün</small>
               </button>
+            ))}
+          </div>
+
+          {detayli && (
+            <div className="row" style={{ marginBottom: 10, gap: 8 }}>
               <button
                 className={`btn sm ${zayiMod === 'fire' ? 'primary' : ''}`}
                 onClick={() => setZayiMod(zayiMod === 'fire' ? null : 'fire')}
               >
-                Zayi
+                Zayi düş
               </button>
-              {zayiMod && (
-                <span className="tag warn">
-                  {zayiMod === 'ikram' ? 'İkram' : 'Zayi'} modu — ürüne dokun, 0 ₺ yazılır
-                </span>
-              )}
+              <span className="hint">Çeşidi olan üründe çeşit sorulur.</span>
             </div>
           )}
+
           <div className="ara-kutu">
             <Ikon ad="ara" boy={18} />
-            <input
-              value={ara}
-              onChange={(e) => setAra(e.target.value)}
-              placeholder="Ürün ara"
-              aria-label="Ürün ara"
-            />
+            <input value={ara} onChange={(e) => setAra(e.target.value)} placeholder="Ürün ara" aria-label="Ürün ara" />
             {ara && (
               <button className="ara-sil" onClick={() => setAra('')} aria-label="Aramayı temizle">
                 <Ikon ad="kapat" boy={16} />
               </button>
             )}
-          </div>
-          <div className="row cat-row" style={{ marginBottom: 12 }}>
-            {cats.map((c) => (
-              <button key={c} className={`kat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>
-                {c}
+            {cat !== 'Hepsi' && !ara && (
+              <button className="ara-sil kat-temizle" onClick={() => setCat('Hepsi')}>
+                {cat} ✕
               </button>
-            ))}
+            )}
           </div>
 
           <div className={`tiles ${zayiMod ? 'zayi-acik' : ''}`}>
@@ -510,6 +540,7 @@ export default function Satis() {
                 <button
                   key={i.id}
                   className={`tile ${stokTakipli(i) && kalan <= 0 ? 'out' : ''} ${adet > 0 ? 'secili' : ''}`}
+                  style={{ '--k': katRenk(i.category, mevcut) } as CSSProperties}
                   onClick={() => tikla(i)}
                   title={
                     zayiMod
@@ -530,136 +561,83 @@ export default function Satis() {
 
         {sepetAcik && <div className="backdrop" onClick={() => setSepetAcik(false)} />}
         <div className={`card cart ${sepetAcik ? 'acik' : ''}`}>
-          <div className="cart-bas">
-            <div>
-              <strong>Sepet</strong>
-              <div className="cart-hedef">
-                {hedefAd}
-                {musteriAd ? ` · ${musteriAd}` : ''}
-              </div>
-            </div>
-            <button className="x cart-kapat" onClick={() => setSepetAcik(false)} aria-label="Sepeti kapat">
-              <Ikon ad="kapat" />
-            </button>
-          </div>
-
-          <div className="cart-lines">
-            {lines.length === 0 && <p className="hint">Ürüne dokun, buraya düşsün.</p>}
-            {lines.map((l, idx) => (
-              <div className="cline" key={`${l.itemId}-${l.variantId ?? ''}-${l.waste ?? ''}`}>
-                <button className="x" onClick={() => azalt(idx)} aria-label="Bir azalt">
-                  −
-                </button>
-                <QtyInput qty={l.qty} onQty={(n) => setQty(idx, n)} />
-                <button className="x" onClick={() => artir(idx)} aria-label="Bir artır">
-                  +
-                </button>
-                <span
-                  className="nm sepet-duzenlenebilir"
-                  onClick={() => setSepetDuzenle(idx)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && setSepetDuzenle(idx)}
-                  title="Adet veya fiyatı düzenle"
-                >
-                  {l.name}
-                </span>
-                <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="cart-araclar">
-            <button
-              className="btn sm"
-              onClick={() => setMusteriSor((v) => !v)}
-              title="Adisyona müşteri bağla (veresiye için gerekli)"
-            >
-              <Ikon ad="kisi" boy={16} />
-              {musteriAd ?? 'Müşteri seç'}
-            </button>
-            {lines.length > 0 && (
-              <>
-                <button className="btn sm" onClick={() => setParcali(true)} title="Toplamı böl, her parçayı ayrı öde">
-                  Hesabı böl
-                </button>
-                <button className="btn sm ghost" onClick={temizle}>
-                  Temizle
-                </button>
-              </>
-            )}
-          </div>
-
-          <div className="total" style={{ marginTop: 12 }}>
-            <span>Toplam</span>
-            <span className="v">{fmtTL(total)}</span>
-          </div>
-
-          {/* Müşteri seçici: sadece veresiyeye basılınca ya da müşteri seçiliyken. */}
-          {(!table?.customerId || target.kind === 'hizli') && (musteriSor || customerId) && (
-            <div className={`field ${musteriSor && !customerId ? 'sor' : ''}`}>
-              <label>{musteriSor && !customerId ? 'Veresiye kime yazılsın?' : 'Müşteri'}</label>
-              <div className="row" style={{ flexWrap: 'nowrap' }}>
-                <select style={{ flex: 1 }} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="">Seçilmedi</option>
-                  {s.customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.balance > 0 ? ` (borç ${fmtTL(c.balance)})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="btn sm"
-                  onClick={() =>
-                    setYeniAd(() => (ad: string) => {
-                      const id = uid()
-                      saveCustomer({ id, name: ad, balance: 0 })
-                      if (target.kind === 'masa') setTableCustomer(target.id, id)
-                      else setCustomerId(id)
-                    })
-                  }
-                >
-                  + Yeni
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Üçü de satışı bitirir. */}
-          <div className="pays">
-            <button className="pay nakit" disabled={!lines.length} onClick={() => ode('nakit')}>
-              <b>Nakit</b>
-              <small>parayı aldım</small>
-            </button>
-            <button className="pay kart" disabled={!lines.length} onClick={() => ode('kart')}>
-              <b>Kart</b>
-              <small>POS cihazı</small>
-            </button>
-            <button className="pay veresiye" disabled={!lines.length} onClick={() => ode('veresiye')}>
-              <b>Veresiye</b>
-              <small>deftere yaz</small>
-            </button>
-          </div>
+          <div className="tutamak" />
+          {sepetIcerik}
         </div>
       </div>
 
-      {/* telefonda: sepet özeti altta durur, dokununca sepet açılır */}
-      {lines.length > 0 && !sepetAcik && (
-        <button className="sepet-bar" onClick={() => setSepetAcik(true)}>
-          <span className="sb-adet">{toplamAdet}</span>
-          <span className="sb-orta">
-            <span className="sb-hedef">
-              {hedefAd}
-              {musteriAd ? ` · ${musteriAd}` : ''}
-            </span>
-            <span className="sb-tut">{fmtTL(total)}</span>
-          </span>
-          <span className="sb-btn">
-            Ödeme al
-            <Ikon ad="sag" boy={18} kalinlik={2.2} />
-          </span>
-        </button>
+      {/* telefonda altta: sepet + büyük siyah Öde */}
+      {!sepetAcik && (
+        <div className="odebar">
+          <button className="ob-sepet" onClick={() => setSepetAcik(true)} aria-label="Sepeti aç">
+            <Ikon ad="sepet" boy={24} />
+            {toplamAdet > 0 && <i>{toplamAdet}</i>}
+          </button>
+          <button className="ob-ode" disabled={!lines.length} onClick={() => setOdemeAcik(true)}>
+            {lines.length ? `Öde · ${fmtTL(total)}` : 'Ürüne dokun'}
+          </button>
+        </div>
+      )}
+
+      {/* ---- ödeme ---- */}
+      {odemeAcik && lines.length > 0 && (
+        <div className="modal-bg" onClick={() => setOdemeAcik(false)}>
+          <div className="modal odeme-sayfa" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-bas">
+              <strong>{hedefAd} · Ödeme</strong>
+              <button className="x" onClick={() => setOdemeAcik(false)} aria-label="Kapat">
+                <Ikon ad="kapat" />
+              </button>
+            </div>
+            <div className="odeme-tutar">
+              <div className="v">{fmtTL(total)}</div>
+              <span className="hint">
+                {toplamAdet} ürün{masaDk > 0 ? ` · ${fmtSure(masaDk)}dır açık` : ''}
+              </span>
+            </div>
+            <div className="odeme-kalemler">
+              {lines.map((l, i) => (
+                <div className="liste-satir" key={i}>
+                  <span className="ls-ad">
+                    {l.qty} × {l.name}
+                  </span>
+                  <span className="ls-deger">{fmtTL(l.qty * l.unitPrice)}</span>
+                </div>
+              ))}
+            </div>
+
+            {musteriSecici}
+
+            <div className="odeme-yontem">
+              <button className="pay nakit" onClick={() => ode('nakit')}>
+                <b>Nakit</b>
+                <small>parayı aldım</small>
+              </button>
+              <button className="pay kart" onClick={() => ode('kart')}>
+                <b>Kart</b>
+                <small>POS cihazı</small>
+              </button>
+              <button className="pay veresiye" onClick={() => ode('veresiye')}>
+                <b>Veresiye</b>
+                <small>{musteriAd ? `${musteriAd} deftere` : 'deftere yaz'}</small>
+              </button>
+            </div>
+            <div className="odeme-alt">
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  setOdemeAcik(false)
+                  setParcali(true)
+                }}
+              >
+                Hesabı böl
+              </button>
+              <button className="btn ghost sm" onClick={() => setMusteriSor((v) => !v)}>
+                Müşteri seç
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {sepetDuzenle != null && lines[sepetDuzenle] && (

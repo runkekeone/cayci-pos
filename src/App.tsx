@@ -16,11 +16,13 @@ import Rapor from './screens/Rapor'
 import Profil from './screens/Profil'
 import Siparis from './screens/Siparis'
 import Anasayfa from './screens/Anasayfa'
+import Masalar from './screens/Masalar'
 import { Ikon, type IkonAd } from './lib/Ikon'
 
 /** id → ekran bileşeni. */
 const EKRANLAR: Record<string, ComponentType> = {
   anasayfa: Anasayfa,
+  masalar: Masalar,
   satis: Satis,
   rapor: Rapor,
   urunler: Urunler,
@@ -30,58 +32,44 @@ const EKRANLAR: Record<string, ComponentType> = {
   siparis: Siparis,
 }
 
-type MenuLeaf = { id: string; ad: string; kisa: string; ic: IkonAd }
-type MenuItem = MenuLeaf & { ana?: boolean; alt?: MenuLeaf[] }
+type Sayfa = { id: string; ad: string; ic: IkonAd }
 
-/**
- * Sol menü. `ana` olanlar telefonda alt çubukta çıkar; gerisi "Daha" panelinde.
- * `alt` olan bir grup (Raporlar) masaüstünde açılıp alt başlıklarını gösterir.
- */
-/**
- * Telefonda alt çubuk mockup düzeni: Ana Ekran / Satış / (+) Hızlı Satış /
- * Adisyonlar / Profil. Diğer modüllere Anasayfa'daki Hızlı İşlemler
- * ızgarasından gidilir; masaüstünde hepsi solda durur.
- */
-const MENU: MenuItem[] = [
-  { id: 'anasayfa', ad: 'Anasayfa', kisa: 'Ana Ekran', ic: 'ev', ana: true },
-  // Mobilde alt çubukta gösterilmez (nav-gizli): (+) Hızlı Satış zaten satış ekranına gidiyor.
-  // Masaüstü sidebar'da görünmeye devam eder.
-  { id: 'satis', ad: 'Satış', kisa: 'Satış', ic: 'fis', ana: false },
-  { id: 'siparis', ad: 'Sipariş', kisa: 'Sipariş', ic: 'kamyon', ana: true },
-  {
-    id: 'rapor',
-    ad: 'Raporlar',
-    kisa: 'Rapor',
-    ic: 'grafik',
-    ana: false,
-    alt: [
-      { id: 'rapor', ad: 'Rapor', kisa: 'Rapor', ic: 'grafik' },
-      { id: 'urunler', ad: 'Ürünler', kisa: 'Ürünler', ic: 'dukkan' },
-      { id: 'stok', ad: 'Stok', kisa: 'Stok', ic: 'kutu' },
-      { id: 'musteriler', ad: 'Müşteriler', kisa: 'Müşteri', ic: 'kisiler' },
-      { id: 'giderler', ad: 'Giderler', kisa: 'Giderler', ic: 'defter' },
-    ],
-  },
+/** Masaüstünde solda hepsi durur. */
+const MENU: Sayfa[] = [
+  { id: 'anasayfa', ad: 'Ana', ic: 'ev' },
+  { id: 'masalar', ad: 'Masalar', ic: 'izgara' },
+  { id: 'satis', ad: 'Satış', ic: 'fis' },
+  { id: 'rapor', ad: 'Rapor', ic: 'grafik' },
+  { id: 'musteriler', ad: 'Veresiye', ic: 'defter' },
+  { id: 'siparis', ad: 'Sipariş', ic: 'kamyon' },
+  { id: 'urunler', ad: 'Ürünler', ic: 'dukkan' },
+  { id: 'stok', ad: 'Stok', ic: 'kutu' },
+  { id: 'giderler', ad: 'Giderler', ic: 'para' },
+  { id: 'profil', ad: 'Ayarlar', ic: 'ayar' },
 ]
+
+/** Telefonda alt çubukta görünenler; gerisi "Daha" sayfasında. */
+const ALT_CUBUK = ['anasayfa', 'masalar', 'satis', 'rapor']
 
 /** Giriş yapılmış kullanıcının verisiyle çalışan asıl uygulama. */
 function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   const { s } = useStore()
   const [sayfa, setSayfa] = useState('anasayfa')
-  const [acikGruplar, setAcikGruplar] = useState<string[]>(['rapor'])
+  const [daha, setDaha] = useState(false)
 
-  // Anasayfa'daki Hızlı İşlemler ızgarası gibi ekran dışı yerlerden sayfa
-  // değiştirmek için: window'a 'cayci-git' olayı at, burada yakala.
+  // Ekran dışı yerlerden (ana ekran kısayolları, masalar) sayfa değiştirmek için.
   useEffect(() => {
-    const f = (e: Event) => setSayfa((e as CustomEvent<string>).detail)
-    window.addEventListener('cayci-git', f)
-    return () => {
-      window.removeEventListener('cayci-git', f)
+    const f = (e: Event) => {
+      setSayfa((e as CustomEvent<string>).detail)
+      setDaha(false)
+      window.scrollTo(0, 0)
     }
+    window.addEventListener('cayci-git', f)
+    return () => window.removeEventListener('cayci-git', f)
   }, [])
 
-  // Tema/yazı boyutu <html> niteliklerine yazılır — erken çıkışlardan ÖNCE,
-  // yoksa Kurulum ve Gün Başlat ekranları temasız kalırdı.
+  // Tema/yazı boyutu <html> niteliklerine yazılır — erken çıkıştan ÖNCE,
+  // yoksa Kurulum ekranı temasız kalırdı.
   useTema(s.settings)
 
   // Kurulum bitmeden uygulamaya girilemez.
@@ -94,8 +82,9 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
 
   function git(id: string) {
     setSayfa(id)
+    setDaha(false)
+    window.scrollTo(0, 0)
   }
-
 
   return (
     <div className="app">
@@ -108,98 +97,34 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
           <small>çay ocağı POS</small>
         </div>
 
-        {MENU.map((p) => {
-          // Grup değilse: düz menü satırı.
-          if (!p.alt) {
-            return (
-              <button
-                key={p.id}
-                className={`nav ${sayfa === p.id ? 'on' : ''} ${p.ana ? '' : 'nav-gizli'}`}
-                onClick={() => git(p.id)}
-              >
-                <Ikon ad={p.ic} />
-                <span className="nav-ad">{p.ad}</span>
-                <span className="nav-kisa">{p.kisa}</span>
-              </button>
-            )
-          }
-          // Grup: masaüstünde açılır alt başlıklar; telefonda çubukta ilk alta gider.
-          const acik = acikGruplar.includes(p.id)
-          const cocukAktif = p.alt.some((a) => a.id === sayfa)
-          return (
-            <div key={p.id} className="nav-grup">
-              <button
-                className={`nav nav-gizli ${cocukAktif ? 'on' : ''}`}
-                onClick={() => {
-                  git(p.alt![0].id)
-                  setAcikGruplar((c) => (c.includes(p.id) ? c.filter((x) => x !== p.id) : [...c, p.id]))
-                }}
-              >
-                <Ikon ad={p.ic} />
-                <span className="nav-ad">{p.ad}</span>
-                <span className="nav-kisa">{p.kisa}</span>
-                <span className="nav-caret nav-ad">
-                  <Ikon ad={acik ? 'asagi' : 'sag'} boy={16} />
-                </span>
-              </button>
-              {acik &&
-                p.alt.map((a) => (
-                  <button
-                    key={a.id}
-                    className={`nav nav-alt nav-gizli ${sayfa === a.id ? 'on' : ''}`}
-                    onClick={() => git(a.id)}
-                  >
-                    <Ikon ad={a.ic} boy={18} />
-                    <span className="nav-ad">{a.ad}</span>
-                  </button>
-                ))}
-            </div>
-          )
-        })}
+        {MENU.map((p) => (
+          <button
+            key={p.id}
+            className={`nav ${sayfa === p.id && !daha ? 'on' : ''} ${ALT_CUBUK.includes(p.id) ? '' : 'nav-gizli'}`}
+            onClick={() => git(p.id)}
+          >
+            <span className="nav-ic">
+              <Ikon ad={p.ic} boy={22} />
+              {p.id === 'masalar' && doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
+            </span>
+            <span className="nav-ad">{p.ad}</span>
+          </button>
+        ))}
 
-        {/* telefonda: ortada yükseltilmiş (+) hızlı satış, adisyonlar, profil */}
         <button
-          className="nav only-mobile nav-arti"
-          onClick={() => {
-            git('satis')
-            window.dispatchEvent(new CustomEvent('cayci-hizli'))
-          }}
-          aria-label="Hızlı Satış"
+          className={`nav only-mobile ${daha || !ALT_CUBUK.includes(sayfa) ? 'on' : ''}`}
+          onClick={() => setDaha(true)}
         >
-          <span className="arti-yuvarlak">
-            <Ikon ad="arti" boy={22} kalinlik={2.2} />
-            {doluMasa > 0 && <span className="nav-rozet">{doluMasa}</span>}
+          <span className="nav-ic">
+            <Ikon ad="menu" boy={22} />
           </span>
-          <span className="nav-kisa">Satış</span>
-        </button>
-        <button
-          className={`nav only-mobile ${sayfa === 'musteriler' ? 'on' : ''}`}
-          onClick={() => git('musteriler')}
-        >
-          <Ikon ad="defter" boy={22} />
-          <span className="nav-kisa">Veresiye</span>
-        </button>
-        <button
-          className={`nav only-mobile ${sayfa === 'rapor' ? 'on' : ''}`}
-          onClick={() => git('rapor')}
-        >
-          <Ikon ad="grafik" boy={22} />
-          <span className="nav-kisa">Rapor</span>
+          <span className="nav-ad">Daha</span>
         </button>
 
         <div className="side-alt">
           <div className="hint" style={{ padding: '8px 12px' }}>
             Bugünkü satış: <strong className="v">{fmtTL(r.ciro)}</strong>
           </div>
-          <button
-            className={`nav ${sayfa === 'profil' ? 'on' : ''}`}
-            onClick={() => git('profil')}
-          >
-            <Ikon ad="kisi" />
-            <span>
-              Profil <span className="hint">({user.username})</span>
-            </span>
-          </button>
         </div>
       </aside>
 
@@ -207,6 +132,29 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
         {sayfa === 'profil' ? <Profil user={user} onOut={onOut} /> : <Ekran />}
       </main>
 
+      {daha && (
+        <div className="modal-bg" onClick={() => setDaha(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-bas">
+              <strong>Daha fazla</strong>
+              <button className="x" onClick={() => setDaha(false)} aria-label="Kapat">
+                <Ikon ad="kapat" />
+              </button>
+            </div>
+            <div className="daha-izgara">
+              {MENU.filter((p) => !ALT_CUBUK.includes(p.id)).map((p) => (
+                <button key={p.id} className={`daha-kutu ${sayfa === p.id ? 'on' : ''}`} onClick={() => git(p.id)}>
+                  <Ikon ad={p.ic} boy={26} />
+                  <span>{p.ad}</span>
+                </button>
+              ))}
+            </div>
+            <p className="hint" style={{ marginTop: 12 }}>
+              Giriş: {user.username}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

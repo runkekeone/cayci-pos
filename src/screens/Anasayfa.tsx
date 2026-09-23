@@ -11,12 +11,11 @@ import type { Table } from '../types'
  * Hızlı İşlemler — ilk 4'ü hep görünür, gerisi ⋯ ile açılır.
  * Alt çubuğa sığmayan tüm modüllerin tek erişim yolu burası.
  */
-const ISLEMLER: { id: string; ad: string; ic: IkonAd }[] = [
-  { id: 'giderler', ad: 'Giderler', ic: 'defter' },
-  { id: 'musteriler', ad: 'Müşteriler', ic: 'kisiler' },
-  { id: 'urunler', ad: 'Ürünler', ic: 'dukkan' },
-  { id: 'stok', ad: 'Stok', ic: 'kutu' },
-  { id: 'profil', ad: 'Ayarlar', ic: 'ayar' },
+/** Ana ekranın üst bandındaki kısayollar. */
+const HIZLI: { id: string; ad: string; ic: IkonAd }[] = [
+  { id: 'musteriler', ad: 'Veresiye', ic: 'defter' },
+  { id: 'siparis', ad: 'Sipariş', ic: 'kamyon' },
+  { id: 'giderler', ad: 'Gider', ic: 'para' },
 ]
 
 function git(id: string) {
@@ -34,7 +33,6 @@ type Duyuru = { id?: string; tarih: string; metin: string }
 
 export default function Anasayfa() {
   const { s } = useStore()
-  const [hepsi, setHepsi] = useState(false)
   const [onizle, setOnizle] = useState<Table | null>(null) // bekleyen adisyon önizleme
   const [duyurular, setDuyurular] = useState<Duyuru[]>([]) // toptancı buluttan yayınlar; yoksa bölüm hiç görünmez
 
@@ -62,58 +60,74 @@ export default function Anasayfa() {
     weekday: 'long',
   })
 
+  // Son 7 günün cirosu (bugün dahil) — SumUp tarzı çubuk grafik.
+  const GUN_KISA = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct']
+  const yediGun = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(gun + 'T12:00:00')
+    d.setDate(d.getDate() - (6 - i))
+    const tarih = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return { etiket: GUN_KISA[d.getDay()], ciro: dayReport(s, tarih).ciro, bugun: i === 6 }
+  })
+  const enYuksek = Math.max(...yediGun.map((g) => g.ciro), 1)
+  const cayAdet = s.sales
+    .filter((x) => (x.bizDay ?? x.date.slice(0, 10)) === gun)
+    .reduce((n, x) => n + x.lines.filter((l) => l.itemId === 'cay-bardak').reduce((m, l) => m + l.qty, 0), 0)
+
   return (
     <>
-      <h1 className="anasayfa-baslik">
-        {s.business.logo && <img className="baslik-logo" src={s.business.logo} alt="" />}
-        {s.business.name || 'Çay Ocağı'}
-      </h1>
-      <p className="sub">{tarihYazi}</p>
+      {/* ---- siyah üst bant + hızlı işlemler ---- */}
+      <div className="ana-bant">
+        <div className="ana-bant-ust">
+          <span className="anasayfa-baslik">
+            {s.business.logo && <img className="baslik-logo" src={s.business.logo} alt="" />}
+            {s.business.name || 'Çay Ocağı'}
+          </span>
+          <span className="ana-tarih">{tarihYazi}</span>
+        </div>
+        <div className="ana-hizli">
+          {HIZLI.map((h) => (
+            <button key={h.id} onClick={() => git(h.id)}>
+              <Ikon ad={h.ic} boy={22} />
+              <span>{h.ad}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ---- bugünün özeti ---- */}
-      <div className="card ana-net">
-        <div className="ana-net-ust">
-          <div>
-            <div className="ana-net-etiket">Bugünkü satış</div>
-            <div className="ana-net-rakam">{fmtTL(r.ciro)}</div>
+      <div className="ana-panel">
+        <div>
+          <div className="ana-net-etiket">Bugünkü satış</div>
+          <div className="ana-net-rakam">{fmtTL(r.ciro)}</div>
+          <div className="hint">
+            {cayAdet > 0 ? `${cayAdet} çay · ` : ''}
+            {satisAdet} satış
           </div>
-          <button className="btn sm" onClick={() => git('rapor')}>
-            Rapor
-            <Ikon ad="sag" boy={16} />
-          </button>
         </div>
-        <div className="ana-uclu">
-          <div>
-            <b>{satisAdet}</b>
-            <span>Satış adedi</span>
+
+        <div>
+          <div className="ana-net-etiket" style={{ marginBottom: 6 }}>
+            Son 7 gün
           </div>
-          <div>
-            <b>{fmtTL(r.nakitSatis)}</b>
-            <span>Nakit</span>
+          <div className="yedi-gun" role="img" aria-label="Son 7 günün cirosu">
+            {yediGun.map((g, i) => (
+              <span key={i} className={`yg-sutun ${g.bugun ? 'bugun' : ''}`}>
+                <i style={{ height: `${Math.max((g.ciro / enYuksek) * 100, g.ciro > 0 ? 4 : 1)}%` }} />
+                <em>{g.etiket}</em>
+              </span>
+            ))}
           </div>
-          <div>
-            <b>{fmtTL(r.veresiyeSatis)}</b>
-            <span>Veresiye</span>
-          </div>
+        </div>
+
+        <div>
+          <Satir ad="Nakit" deger={fmtTL(r.nakitSatis)} />
+          <Satir ad="Kart" deger={fmtTL(r.kartSatis)} />
+          <Satir ad="Veresiye" deger={fmtTL(r.veresiyeSatis)} />
+          {alacak > 0 && <Satir ad="Toplam alacak" deger={fmtTL(alacak)} />}
+          {kritik > 0 && <Satir ad="Azalan stok" deger={`${kritik} ürün`} iyi={false} />}
         </div>
       </div>
 
-      {/* ---- işlemler: ilk 4 hep görünür ---- */}
-      <div className="section-title">İşlemler</div>
-      <div className="ana-grid">
-        {(hepsi ? ISLEMLER : ISLEMLER.slice(0, 3)).map((p) => (
-          <button key={p.id} className="ana-islem" onClick={() => git(p.id)}>
-            <Ikon ad={p.ic} boy={24} />
-            <span>{p.ad}</span>
-          </button>
-        ))}
-        <button className="ana-islem" onClick={() => setHepsi((v) => !v)}>
-          <Ikon ad={hepsi ? 'yukari' : 'menu'} boy={24} />
-          <span>{hepsi ? 'Daha az' : 'Tümü'}</span>
-        </button>
-      </div>
-
-      {/* ---- bekleyen adisyonlar + son satışlar ---- */}
       <div className="grid2">
         <div>
           <div className="section-title">
@@ -172,32 +186,19 @@ export default function Anasayfa() {
         </div>
       </div>
 
-      <div className="grid2">
-        <div>
-          <div className="section-title">Günün durumu</div>
+      {duyurular.length > 0 && (
+        <>
+          <div className="section-title">Toptancıdan duyurular</div>
           <div className="card liste">
-            <Satir ad="Nakit" deger={fmtTL(r.nakitSatis)} />
-            <Satir ad="Kart" deger={fmtTL(r.kartSatis)} />
-            <Satir ad="Veresiye (bugün)" deger={fmtTL(r.veresiyeSatis)} />
-            <Satir ad="Toplam alacak" deger={fmtTL(alacak)} iyi={alacak <= 0} />
-            <Satir ad="Kritik stok" deger={kritik > 0 ? `${kritik} ürün` : 'yok'} iyi={kritik === 0} />
+            {duyurular.map((d, i) => (
+              <div className="duyuru-satir" key={d.id ?? i}>
+                <span className="duyuru-tarih">{d.tarih}</span>
+                <span className="duyuru-metin">{d.metin}</span>
+              </div>
+            ))}
           </div>
-        </div>
-
-        {duyurular.length > 0 && (
-          <div>
-            <div className="section-title">Toptancıdan duyurular</div>
-            <div className="card liste">
-              {duyurular.map((d, i) => (
-                <div className="duyuru-satir" key={d.id ?? i}>
-                  <span className="duyuru-tarih">{d.tarih}</span>
-                  <span className="duyuru-metin">{d.metin}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Bekleyen adisyon önizleme: içeriği hızlıca gör, istersen "Aç" ile satışa geç. */}
       {onizle && (
