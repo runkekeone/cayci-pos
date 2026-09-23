@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { cloudGet } from '../lib/cloud'
+import { TOPTANCI_AD, cloudGet } from '../lib/cloud'
 import { dayReport, totalVeresiye } from '../lib/report'
 import { lowStock } from '../lib/cost'
-import { fmtTL, today } from '../lib/units'
+import { UZUN_MASA_DK, fmtSure, fmtTL, gecenDakika, today } from '../lib/units'
 import { Ikon, type IkonAd } from '../lib/Ikon'
-import type { Table } from '../types'
 
-/**
- * Hızlı İşlemler — ilk 4'ü hep görünür, gerisi ⋯ ile açılır.
- * Alt çubuğa sığmayan tüm modüllerin tek erişim yolu burası.
- */
 /** Ana ekranın üst bandındaki kısayollar. */
 const HIZLI: { id: string; ad: string; ic: IkonAd }[] = [
   { id: 'musteriler', ad: 'Veresiye', ic: 'defter' },
   { id: 'siparis', ad: 'Sipariş', ic: 'kamyon' },
   { id: 'giderler', ad: 'Gider', ic: 'para' },
 ]
+
+/** Satış ekranına geç, masayı açık getir. */
+function masayaGit(masaId: string) {
+  ;(window as unknown as { __cayMasaAc?: string }).__cayMasaAc = masaId
+  git('satis')
+}
 
 function git(id: string) {
   window.dispatchEvent(new CustomEvent('cayci-git', { detail: id }))
@@ -33,7 +34,6 @@ type Duyuru = { id?: string; tarih: string; metin: string }
 
 export default function Anasayfa() {
   const { s } = useStore()
-  const [onizle, setOnizle] = useState<Table | null>(null) // bekleyen adisyon önizleme
   const [duyurular, setDuyurular] = useState<Duyuru[]>([]) // toptancı buluttan yayınlar; yoksa bölüm hiç görünmez
 
   // Mount'ta toptancının yayınladığı duyuruları buluttan oku (kv anahtar: "duyurular").
@@ -53,7 +53,7 @@ export default function Anasayfa() {
   const alacak = totalVeresiye(s)
   const satisAdet = s.sales.filter((x) => (x.bizDay ?? x.date.slice(0, 10)) === gun).length
   const doluMasalar = s.tables.filter((t) => t.lines.length > 0)
-  const sonSatislar = [...s.sales].reverse().slice(0, 4)
+  const acikToplam = doluMasalar.reduce((n, t) => n + t.lines.reduce((m, l) => m + l.qty * l.unitPrice, 0), 0)
   const tarihYazi = new Date(gun + 'T12:00:00').toLocaleDateString('tr-TR', {
     day: 'numeric',
     month: 'long',
@@ -128,121 +128,80 @@ export default function Anasayfa() {
         </div>
       </div>
 
-      <div className="grid2">
-        <div>
-          <div className="section-title">
-            Açık adisyonlar
-            {doluMasalar.length > 0 && <span className="tag warn">{doluMasalar.length}</span>}
-          </div>
-          <div className="card liste">
-            {doluMasalar.length === 0 && (
-              <div className="ana-satir">
-                <span className="hint">Açık adisyon yok.</span>
-              </div>
-            )}
-            {doluMasalar.map((t) => {
-              const tutar = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-              const musteri = s.customers.find((c) => c.id === t.customerId)
-              return (
-                <button key={t.id} className="ana-satir" onClick={() => setOnizle(t)}>
-                  <span>
-                    <b>{t.name}</b>
-                    {musteri && <span className="hint"> · {musteri.name}</span>}
-                  </span>
-                  <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                    <strong className="v">{fmtTL(tutar)}</strong>
-                    <Ikon ad="sag" boy={18} />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div>
-          <div className="section-title">Son satışlar</div>
-          <div className="card liste">
-            {sonSatislar.length === 0 && (
-              <div className="ana-satir">
-                <span className="hint">Henüz satış yok.</span>
-              </div>
-            )}
-            {sonSatislar.map((x) => {
-              const ilk = x.lines[0]
-              const saat = new Date(x.date).toLocaleTimeString('tr-TR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-              return (
-                <div key={x.id} className="ana-satir">
-                  <span>
-                    <span className="hint v">{saat}</span> <b>{ilk?.name ?? 'Satış'}</b>
-                    {x.lines.length > 1 && <span className="hint"> +{x.lines.length - 1}</span>}
-                  </span>
-                  <strong className="v">{fmtTL(x.total)}</strong>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      {/* ---- açık adisyonlar: her masa bir kart ---- */}
+      <div className="ana-bolum-bas">
+        <h2>Açık adisyonlar</h2>
+        {doluMasalar.length > 0 && (
+          <span className="ana-bolum-ek">
+            {doluMasalar.length} masa · {fmtTL(acikToplam)}
+          </span>
+        )}
       </div>
+      {doluMasalar.length === 0 ? (
+        <div className="adisyon-bos">
+          <Ikon ad="izgara" boy={22} />
+          <span>Açık adisyon yok. Masaya ürün yazınca burada görünür.</span>
+        </div>
+      ) : (
+        <div className="adisyon-kartlar">
+          {doluMasalar.map((t) => {
+            const tutar = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
+            const adet = t.lines.reduce((n, l) => n + l.qty, 0)
+            const dk = gecenDakika(t.openedAt)
+            const uzun = dk >= UZUN_MASA_DK
+            const musteri = s.customers.find((c) => c.id === t.customerId)
+            // Aynı ürün birden çok satırda olabilir (çeşit, ikram): ada göre topla.
+            const kalemler = new Map<string, number>()
+            for (const l of t.lines) {
+              const ad = s.items.find((i) => i.id === l.itemId)?.name ?? l.name
+              kalemler.set(ad, (kalemler.get(ad) ?? 0) + l.qty)
+            }
+            // Adet ile ad ayrı satıra düşmesin: aralarında bölünmez boşluk.
+            const icerik = [...kalemler].map(([ad, q]) => `${q} ${ad}`).join(' · ')
+            return (
+              <button key={t.id} className={`adisyon-kart ${uzun ? 'uzun' : ''}`} onClick={() => masayaGit(t.id)}>
+                <span className="ak-ust">
+                  <b>{t.name}</b>
+                  <span className="ak-sure">{dk > 0 ? fmtSure(dk) : 'az önce'}</span>
+                </span>
+                <span className="ak-tutar">{fmtTL(tutar)}</span>
+                <span className="ak-icerik">{icerik}</span>
+                <span className="ak-alt">
+                  {adet} ürün{musteri ? ` · ${musteri.name}` : ''}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
+      {/* ---- toptancıdan duyurular ---- */}
       {duyurular.length > 0 && (
-        <>
-          <div className="section-title">Toptancıdan duyurular</div>
-          <div className="card liste">
-            {duyurular.map((d, i) => (
-              <div className="duyuru-satir" key={d.id ?? i}>
-                <span className="duyuru-tarih">{d.tarih}</span>
-                <span className="duyuru-metin">{d.metin}</span>
+        <div className="duyuru-kutu">
+          <div className="dk-bas">
+            <span className="dk-ikon">
+              <Ikon ad="duyuru" boy={22} />
+            </span>
+            <span className="dk-baslik">
+              <b>{TOPTANCI_AD}</b>
+              <small>Toptancından duyurular</small>
+            </span>
+          </div>
+          <div className="dk-liste">
+            {duyurular.slice(0, 4).map((d, i) => (
+              <div className={`dk-madde ${i === 0 ? 'ilk' : ''}`} key={d.id ?? i}>
+                <span className="dk-tarih">
+                  {d.tarih}
+                  {i === 0 && <em>yeni</em>}
+                </span>
+                <p>{d.metin}</p>
               </div>
             ))}
           </div>
-        </>
-      )}
-
-      {/* Bekleyen adisyon önizleme: içeriği hızlıca gör, istersen "Aç" ile satışa geç. */}
-      {onizle && (
-        <div className="modal-bg" onClick={() => setOnizle(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <h2>{onizle.name}</h2>
-            {(() => {
-              const m = s.customers.find((c) => c.id === onizle.customerId)
-              return m ? <p className="hint">Müşteri: {m.name}</p> : null
-            })()}
-            <div className="cart-lines" style={{ maxHeight: '50vh' }}>
-              {onizle.lines.length === 0 && <p className="hint">Bu adisyon boş.</p>}
-              {onizle.lines.map((l, i) => (
-                <div className="cline" key={i}>
-                  <span className="nm">{l.name}</span>
-                  <span className="q">{l.qty}×</span>
-                  <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="total" style={{ marginTop: 10 }}>
-              <span>Toplam</span>
-              <span className="v">
-                {fmtTL(onizle.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0))}
-              </span>
-            </div>
-            <div className="row" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn ghost" style={{ flex: 1 }} onClick={() => setOnizle(null)}>
-                Kapat
-              </button>
-              <button
-                className="btn primary"
-                style={{ flex: 1 }}
-                onClick={() => {
-                  // Satış ekranı mount olunca okuması için bekleyen masa id'sini bırak.
-                  ;(window as unknown as { __cayMasaAc?: string }).__cayMasaAc = onizle.id
-                  setOnizle(null)
-                  git('satis')
-                }}
-              >
-                Adisyonu aç
-              </button>
-            </div>
-          </div>
+          <button className="dk-dugme" onClick={() => git('siparis')}>
+            Sipariş ver
+            <Ikon ad="sag" boy={18} />
+          </button>
         </div>
       )}
     </>

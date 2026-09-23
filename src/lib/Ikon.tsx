@@ -42,6 +42,7 @@ const YOLLAR = {
   menu: 'M4 7h16M4 12h16M4 17h16',
   dukkan: 'M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6',
   izgara: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  duyuru: 'M3 10v4h3l5 4V6l-5 4H3zM15 9a3.5 3.5 0 0 1 0 6M18 6a7.5 7.5 0 0 1 0 12',
   sepet: 'M3 4h2l2.2 11h10.6L20 7H6.2M9 20h.01M17 20h.01',
 } as const
 

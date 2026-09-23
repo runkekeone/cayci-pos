@@ -22,6 +22,9 @@ const KEY =
 
 export const cloudEnabled = Boolean(URL && KEY)
 
+/** Siparişlerin gittiği ve duyuru yayınlayan toptancı (babuco paneli). */
+export const TOPTANCI_AD = 'Özgür Ticaret'
+
 let _client: SupabaseClient | null = null
 function client(): SupabaseClient | null {
   if (!cloudEnabled) return null
