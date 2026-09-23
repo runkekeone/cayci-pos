@@ -19,6 +19,19 @@ const DURUM_ETIKET: Record<string, string> = {
 type Sepet = Record<string, OrderLine> // key: catalogItemId|birim
 
 const BOS_KATALOG: CatalogItem[] = []
+
+/**
+ * Toptancı bazı ürün adlarına koli içeriğini parantezle yazıyor:
+ * "Eti Cin Tek Lokmalık (Koli içi 18 adet · birim fiyatı ₺21,38)".
+ * Başlıkta sadece ürünün adı kalsın, parantez içi küçük yazıyla altına insin.
+ * Siparişe giden satırın adı DEĞİŞMEZ — toptancı tarafındaki eşleşme bozulmasın.
+ */
+function adAyir(ad: string): { baslik: string; icerik?: string } {
+  const m = ad.match(/^(.*?)\s*\(([^()]*)\)\s*$/)
+  if (!m || !m[1].trim()) return { baslik: ad }
+  const icerik = m[2].replace(/birim fiyatı\s*₺\s*/i, 'tanesi ').replace(/\s+/g, ' ').trim()
+  return { baslik: m[1].trim(), icerik: icerik ? icerik.replace(/tanesi ([\d.,]+)/, 'tanesi $1 ₺') : undefined }
+}
 const BABUQO2 = 'babuqo2'
 const BABUQO2_BAKIYE_LIMITI = 10_000
 
@@ -31,6 +44,8 @@ export default function Siparis() {
   const [qr, setQr] = useState<string | null>(null)
   // Telefonda sipariş sepeti alttan açılan sayfa.
   const [sepetAcik, setSepetAcik] = useState(false)
+  // Gönderilen bir siparişin ayrıntısı (ve "tekrarla").
+  const [acikSiparis, setAcikSiparis] = useState<Order | null>(null)
   const [gonderildi, setGonderildi] = useState<Order | null>(null)
   const [paymentType, setPaymentType] = useState<'nakit' | 'kart' | 'bakiye' | 'parcali'>('nakit')
   const [parcaliNakit, setParcaliNakit] = useState('0')
@@ -110,6 +125,16 @@ export default function Siparis() {
       ...(parcaliKartTutar > 0 ? [{ payment: 'kart' as const, amount: parcaliKartTutar }] : []),
       ...(parcaliBakiye > 0 ? [{ payment: 'bakiye' as const, amount: parcaliBakiye }] : []),
     ]
+  }
+
+  /** Siparişin durumu: bulutla gidenlerde toptancının işaretlediği aşama, diğerlerinde gönderim yolu. */
+  function durumBilgi(o: Order): { ad: string; renk: 'yeni' | 'onay' | 'yolda' | 'teslim' | 'diger' } {
+    if (o.gonderim !== 'bulut') {
+      return { ad: o.gonderim === 'whatsapp' ? 'WhatsApp' : o.gonderim === 'qr' ? 'QR' : 'Dosya', renk: 'diger' }
+    }
+    const d = durumlar[o.id] ?? o.durum ?? 'yeni'
+    const renk = d === 'onay' ? 'onay' : d === 'dagitim' ? 'yolda' : d === 'teslim' ? 'teslim' : 'yeni'
+    return { ad: DURUM_ETIKET[d] ?? 'Gönderildi', renk }
   }
 
   // Buluttan gönderilmiş siparişlerin toptancı-tarafı durumunu periyodik çek.
@@ -217,6 +242,9 @@ export default function Siparis() {
       return
     }
     setDurumlar((d) => ({ ...d, [order.id]: 'yeni' }))
+    // Gönderildi: sepet boşalsın ki aynı sipariş yanlışlıkla ikinci kez gitmesin.
+    setSepet({})
+    setNot('')
   }
 
   async function qrGoster() {
@@ -285,7 +313,7 @@ export default function Siparis() {
             return (
               <div className="eksik-satir" key={it.id}>
                 <span className="es-ad">
-                  <b>{k.name}</b>
+                  <b>{adAyir(k.name).baslik}</b>
                   <small>{it.stock <= 0 ? 'Stok bitti' : `Kalan ${Math.round(it.stock)}`}</small>
                 </span>
                 <span className="es-fiyat">{fmtTL(opt.price)}</span>
@@ -295,28 +323,6 @@ export default function Siparis() {
               </div>
             )
           })}
-        </div>
-      )}
-
-      {gonderilenler.length > 0 && (
-        <div style={{ marginTop: 4 }}>
-          <div className="section-title">Önceki siparişler</div>
-          <div className="onceki-serit">
-            {gonderilenler.slice(0, 6).map((o) => {
-              const tut = o.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-              const tarih = new Date(o.date).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })
-              return (
-                <button
-                  key={o.id}
-                  className="btn sm onceki-cip"
-                  onClick={() => setSepet(Object.fromEntries(o.lines.map((l) => [`${l.catalogItemId}|${l.birim}`, { ...l }])))}
-                  title="Bu siparişi sepete yükle"
-                >
-                  {tarih} · {o.lines.length} kalem · {fmtTL(tut)}
-                </button>
-              )
-            })}
-          </div>
         </div>
       )}
 
@@ -356,14 +362,16 @@ export default function Siparis() {
               <div className="sip-liste">
                 {urunler.map((k) => {
                   const opts = secenekler(k)
+                  const { baslik, icerik } = adAyir(k.name)
                   return (
                     <div className="sip-satir" key={k.id}>
                       <span className="sip-serit" aria-hidden="true" />
                       <span className="as-ad">
-                        <b>{k.name}</b>
+                        <b>{baslik}</b>
                         <small>
                           {k.brand ? `${k.brand} · ` : ''}
                           {opts.length > 1 ? `${k.packSize} ${k.unit}/${k.buyUnit}` : k.buyUnit}
+                          {icerik ? ` · ${icerik}` : ''}
                         </small>
                       </span>
                       <span className="sip-dugmeler">
@@ -410,7 +418,8 @@ export default function Siparis() {
                   <input className="qty" type="number" min={0} value={l.qty} onChange={(e) => setQty(key, Number(e.target.value))} />
                   <button className="x" onClick={() => setQty(key, l.qty + 1)}>+</button>
                   <span className="nm">
-                    {l.name} <span className="hint">({l.birim})</span>
+                    {adAyir(l.name).baslik}
+                    <small>{l.birim}</small>
                   </span>
                   <span className="am">{fmtTL(l.qty * l.unitPrice)}</span>
                 </div>
@@ -503,40 +512,84 @@ export default function Siparis() {
       </div>
 
       {gonderilenler.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div className="section-title">Gönderilen siparişler</div>
-          <div className="card">
-            {gonderilenler.slice(0, 8).map((o) => {
+        <>
+          <div className="ana-bolum-bas">
+            <h2>Gönderilen siparişler</h2>
+            <span className="ana-bolum-ek">{gonderilenler.length} sipariş</span>
+          </div>
+          <div className="adisyon-satirlar">
+            {gonderilenler.slice(0, 10).map((o) => {
               const tut = o.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-              const durum = durumlar[o.id] ?? o.durum
-              const bulut = o.gonderim === 'bulut'
-              const etiket = bulut
-                ? (DURUM_ETIKET[durum ?? 'yeni'] ?? 'Gönderildi')
-                : o.gonderim === 'whatsapp'
-                  ? 'WhatsApp'
-                  : o.gonderim === 'qr'
-                    ? 'QR'
-                    : 'Dosya'
+              const d = durumBilgi(o)
+              const tarih = new Date(o.date).toLocaleString('tr-TR', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+              const icerik = o.lines.map((l) => `${l.qty} ${adAyir(l.name).baslik}`).join(', ')
               return (
-                <div key={o.id} className="ana-satir">
-                  <span>
-                    <b>
-                      {new Date(o.date).toLocaleString('tr-TR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </b>
-                    <span className="hint">
-                      {' '}
-                      · {o.lines.length} kalem · {fmtTL(tut)}
-                    </span>
+                <button key={o.id} className={`gs-satir d-${d.renk}`} onClick={() => setAcikSiparis(o)}>
+                  <span className="as-serit" aria-hidden="true" />
+                  <span className="as-ad">
+                    <b>{tarih}</b>
+                    <small>{icerik}</small>
                   </span>
-                  <span className={`tag ${bulut ? '' : 'warn'}`}>{etiket}</span>
-                </div>
+                  <span className="gs-durum">{d.ad}</span>
+                  <span className="as-tutar">{fmtTL(tut)}</span>
+                </button>
               )
             })}
+          </div>
+        </>
+      )}
+
+      {acikSiparis && (
+        <div className="modal-bg" onClick={() => setAcikSiparis(null)}>
+          <div className="modal duzenle-sayfa" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-bas">
+              <div>
+                <strong>
+                  {new Date(acikSiparis.date).toLocaleString('tr-TR', {
+                    day: 'numeric',
+                    month: 'long',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </strong>
+                <div className="cart-hedef">{durumBilgi(acikSiparis).ad}</div>
+              </div>
+              <button className="x" onClick={() => setAcikSiparis(null)} aria-label="Kapat">
+                <Ikon ad="kapat" />
+              </button>
+            </div>
+            <div className="odeme-kalemler" style={{ marginTop: 12 }}>
+              {acikSiparis.lines.map((l, i) => (
+                <div className="liste-satir" key={i}>
+                  <span className="ls-ad">
+                    {l.qty} {l.birim} · {adAyir(l.name).baslik}
+                  </span>
+                  <span className="ls-deger">{fmtTL(l.qty * l.unitPrice)}</span>
+                </div>
+              ))}
+              <div className="liste-satir toplam">
+                <span className="ls-ad">Toplam</span>
+                <span className="ls-deger">
+                  {fmtTL(acikSiparis.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0))}
+                </span>
+              </div>
+            </div>
+            {acikSiparis.note && <p className="hint">Not: {acikSiparis.note}</p>}
+            <button
+              className="btn primary ode-dugme"
+              onClick={() => {
+                setSepet(Object.fromEntries(acikSiparis.lines.map((l) => [`${l.catalogItemId}|${l.birim}`, { ...l }])))
+                setAcikSiparis(null)
+                setSepetAcik(true)
+              }}
+            >
+              Aynısını tekrar sepete koy
+            </button>
           </div>
         </div>
       )}
