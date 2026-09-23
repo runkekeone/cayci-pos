@@ -132,8 +132,18 @@ export async function babucoKatalogGetir(): Promise<CatalogItem[] | null> {
     if (error || !data) return null
     const urunler = (data.value as { products?: BabucoUrun[] } | null)?.products
     if (!Array.isArray(urunler) || urunler.length === 0) return null
-    return urunler
-      .filter((u) => u.gorunur !== false && u.ad)
+    // Toptancının listesinde aynı ürün iki kez kayıtlı olabiliyor: biri
+    // "(Koli içi 18 adet · birim fiyatı ₺21,38)", biri "(Koli içi 18 adet)".
+    // Parantez dışı ad + grup aynıysa ilkini tut, çay ocağına tek görünsün.
+    const gorulen = new Set<string>()
+    const tekil = urunler.filter((u) => {
+      if (u.gorunur === false || !u.ad) return false
+      const anahtar = `${u.ad.replace(/\s*\([^()]*\)\s*$/, '').trim().toLocaleLowerCase('tr-TR')}|${u.grup ?? ''}`
+      if (gorulen.has(anahtar)) return false
+      gorulen.add(anahtar)
+      return true
+    })
+    return tekil
       .map((u): CatalogItem => {
         const fiyat = Number(u.satis) || 0
         return {
