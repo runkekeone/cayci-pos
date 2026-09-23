@@ -143,10 +143,9 @@ export default function Anasayfa() {
           <span>Açık adisyon yok. Masaya ürün yazınca burada görünür.</span>
         </div>
       ) : (
-        <div className="adisyon-kartlar">
+        <div className="adisyon-satirlar">
           {doluMasalar.map((t) => {
             const tutar = t.lines.reduce((n, l) => n + l.qty * l.unitPrice, 0)
-            const adet = t.lines.reduce((n, l) => n + l.qty, 0)
             const dk = gecenDakika(t.openedAt)
             const uzun = dk >= UZUN_MASA_DK
             const musteri = s.customers.find((c) => c.id === t.customerId)
@@ -156,19 +155,19 @@ export default function Anasayfa() {
               const ad = s.items.find((i) => i.id === l.itemId)?.name ?? l.name
               kalemler.set(ad, (kalemler.get(ad) ?? 0) + l.qty)
             }
-            // Adet ile ad ayrı satıra düşmesin: aralarında bölünmez boşluk.
-            const icerik = [...kalemler].map(([ad, q]) => `${q} ${ad}`).join(' · ')
+            const icerik = [...kalemler].map(([ad, q]) => `${q} ${ad}`).join(', ')
             return (
-              <button key={t.id} className={`adisyon-kart ${uzun ? 'uzun' : ''}`} onClick={() => masayaGit(t.id)}>
-                <span className="ak-ust">
+              <button key={t.id} className={`adisyon-satir ${uzun ? 'uzun' : ''}`} onClick={() => masayaGit(t.id)}>
+                <span className="as-serit" aria-hidden="true" />
+                <span className="as-ad">
                   <b>{t.name}</b>
-                  <span className="ak-sure">{dk > 0 ? fmtSure(dk) : 'az önce'}</span>
+                  <small>
+                    {musteri ? `${musteri.name} · ` : ''}
+                    {icerik}
+                  </small>
                 </span>
-                <span className="ak-tutar">{fmtTL(tutar)}</span>
-                <span className="ak-icerik">{icerik}</span>
-                <span className="ak-alt">
-                  {adet} ürün{musteri ? ` · ${musteri.name}` : ''}
-                </span>
+                <span className="as-sure">{dk > 0 ? fmtSure(dk) : 'az önce'}</span>
+                <span className="as-tutar">{fmtTL(tutar)}</span>
               </button>
             )
           })}

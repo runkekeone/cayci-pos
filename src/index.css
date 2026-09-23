@@ -3765,100 +3765,6 @@ h1 {
   font-size: 14.5px;
 }
 
-.adisyon-kartlar {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.adisyon-kart {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  min-width: 0;
-  padding: 14px 14px 12px;
-  border: 0;
-  border-top: 6px solid #f59f00;
-  border-radius: 18px;
-  background: var(--panel);
-  color: var(--ink);
-  text-align: left;
-}
-
-.adisyon-kart.uzun {
-  border-top-color: #e03131;
-}
-
-.adisyon-kart:active {
-  transform: scale(0.98);
-}
-
-.ak-ust {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.ak-ust b {
-  font-size: 16px;
-  font-weight: 750;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ak-sure {
-  flex: none;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1;
-  padding: 4px 7px;
-  border-radius: 6px;
-  background: #fff1d6;
-  color: #7a4a00;
-  font-variant-numeric: tabular-nums;
-}
-
-.adisyon-kart.uzun .ak-sure {
-  background: #e03131;
-  color: #fff;
-}
-
-.ak-tutar {
-  margin-top: 6px;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.ak-icerik {
-  font-size: 13.5px;
-  line-height: 1.35;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.7em;
-}
-
-.ak-alt {
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line-soft);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .duyuru-kutu {
   margin-top: 26px;
   border-radius: 22px;
@@ -3961,30 +3867,117 @@ h1 {
   font-weight: 750;
 }
 
-:root[data-tema='koyu'] .ak-sure {
-  background: #3d2c0b;
-  color: #f5c46b;
-}
-
 :root[data-tema='koyu'] .dk-ikon {
   background: #f1efe9;
   color: #151412;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-tema='acik']) .ak-sure {
-    background: #3d2c0b;
-    color: #f5c46b;
-  }
-
   :root:not([data-tema='acik']) .dk-ikon {
     background: #f1efe9;
     color: #151412;
   }
 }
 
-@media (max-width: 860px) {
-  .adisyon-kartlar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+/* ---- açık adisyonlar: hizalı satırlar (süre ve tutar sütun gibi) ---- */
+.adisyon-satirlar {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.adisyon-satir {
+  display: grid;
+  grid-template-columns: 5px minmax(0, 1fr) 68px 96px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 8px 16px 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+
+.adisyon-satir:last-child {
+  border-bottom: 0;
+}
+
+.adisyon-satir:active {
+  background: var(--panel-2);
+}
+
+.as-serit {
+  align-self: stretch;
+  border-radius: 3px;
+  background: #f59f00;
+}
+
+.adisyon-satir.uzun .as-serit {
+  background: #e03131;
+}
+
+.as-ad {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.as-ad b {
+  font-size: 16px;
+  font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-ad small {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-sure {
+  justify-self: center;
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #fff1d6;
+  color: #7a4a00;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.adisyon-satir.uzun .as-sure {
+  background: #e03131;
+  color: #fff;
+}
+
+.as-tutar {
+  justify-self: end;
+  font-size: 17px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-tema='koyu'] .as-sure {
+  background: #3d2c0b;
+  color: #f5c46b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='acik']) .as-sure {
+    background: #3d2c0b;
+    color: #f5c46b;
   }
 }
