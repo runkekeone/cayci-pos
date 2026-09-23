@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useStore } from '../store'
-import { lowStock } from '../lib/cost'
+import { stokTakipli } from '../lib/cost'
+import { katRenk } from '../lib/kategori'
 import { fmtTL, uid } from '../lib/units'
 import { encodeOrder, orderToQr, whatsappLink } from '../lib/siparisTransport'
 import { babucoKatalogGetir, siparisGonderBulut, siparisDurumGetir } from '../lib/cloud'
@@ -59,15 +60,22 @@ export default function Siparis() {
 
   const katalog = bulutKatalog ?? BOS_KATALOG
   const kategoriler = ['Hepsi', ...new Set(katalog.map((k) => k.category))]
+  const katAdlari = [...new Set(katalog.map((k) => k.category))]
   const shown = katalog.filter(
     (k) =>
       (cat === 'Hepsi' || k.category === cat) &&
       (!ara.trim() || `${k.name} ${k.brand ?? ''}`.toLowerCase().includes(ara.trim().toLowerCase())),
   )
 
+  const gruplar: [string, CatalogItem[]][] = katAdlari
+    .map((g): [string, CatalogItem[]] => [g, shown.filter((k) => k.category === g)])
+    .filter(([, u]) => u.length > 0)
+
   // Kritik stok önerisi: azalan kalemleri isimle katalogla eşleştir.
   const oneriler = useMemo(() => {
-    const azalan = lowStock(s.items)
+    const azalan = s.items.filter(
+      (i) => stokTakipli(i) && (i.minStock != null ? i.stock <= i.minStock : i.stock <= 0),
+    )
     return azalan
       .map((it) => {
         const eslesme = katalog.find(
@@ -263,18 +271,30 @@ export default function Siparis() {
       )}
 
       {oneriler.length > 0 && (
-        <div className="uyari-band" style={{ marginBottom: 16, flexDirection: 'column' }}>
-          <strong>Stoğu azalanlar — sipariş etmelisin</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            {oneriler.map(({ it, k }) => {
-              const opt = secenekler(k)[0]
-              return (
-                <button key={it.id} className="btn sm" onClick={() => ekle(k, opt.birim, opt.price)}>
-                  + {k.name} ({opt.label})
-                </button>
-              )
-            })}
+        <div className="eksik-kutu">
+          <div className="eksik-bas">
+            <Ikon ad="dikkat" boy={22} />
+            <span>
+              <b>Eksik ürünler</b>
+              <small>Stoğun bitti ya da azaldı — sipariş etmelisin</small>
+            </span>
           </div>
+          {oneriler.map(({ it, k }) => {
+            const opt = secenekler(k)[0]
+            const sepette = sepet[`${k.id}|${opt.birim}`]?.qty ?? 0
+            return (
+              <div className="eksik-satir" key={it.id}>
+                <span className="es-ad">
+                  <b>{k.name}</b>
+                  <small>{it.stock <= 0 ? 'Stok bitti' : `Kalan ${Math.round(it.stock)}`}</small>
+                </span>
+                <span className="es-fiyat">{fmtTL(opt.price)}</span>
+                <button className={`es-ekle ${sepette ? 'var' : ''}`} onClick={() => ekle(k, opt.birim, opt.price)}>
+                  {sepette ? `${sepette} ${opt.label}` : `+ ${opt.label}`}
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -301,53 +321,74 @@ export default function Siparis() {
       )}
 
       <div className="grid2 siparis-grid" style={{ marginTop: 8 }}>
-        {/* ---- katalog ---- */}
+        {/* ---- katalog: bölüm bölüm, her bölüm kendi renginde ---- */}
         <div>
-          <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-            <div className="ara-kutu" style={{ flex: 1, minWidth: 140, marginBottom: 0 }}>
-              <Ikon ad="ara" boy={18} />
-              <input placeholder="Ürün ara" value={ara} onChange={(e) => setAra(e.target.value)} aria-label="Ürün ara" />
-            </div>
+          <div className="ara-kutu">
+            <Ikon ad="ara" boy={18} />
+            <input placeholder="Ürün ara" value={ara} onChange={(e) => setAra(e.target.value)} aria-label="Ürün ara" />
+            {ara && (
+              <button className="ara-sil" onClick={() => setAra('')} aria-label="Aramayı temizle">
+                <Ikon ad="kapat" boy={16} />
+              </button>
+            )}
           </div>
-          <div className="row cat-row" style={{ marginBottom: 12 }}>
+          <div className="row cat-row" style={{ marginBottom: 14 }}>
             {kategoriler.map((c) => (
-              <button key={c} className={`kat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>
+              <button
+                key={c}
+                className={`kat renkli ${cat === c ? 'on' : ''}`}
+                style={c === 'Hepsi' ? undefined : ({ '--k': katRenk(c, katAdlari) } as CSSProperties)}
+                onClick={() => setCat(c)}
+              >
+                {c !== 'Hepsi' && <i className="kat-nokta" />}
                 {c}
               </button>
             ))}
           </div>
 
-          <div className="katalog-grid">
-            {shown.map((k) => {
-              const opts = secenekler(k)
-              return (
-                <button
-                  type="button"
-                  className="kat-kart katalog-kart-button"
-                  key={k.id}
-                  onClick={() => ekle(k, opts[0].birim, opts[0].price)}
-                  title={`${opts[0].label} olarak sepete ekle`}
-                >
-                  <div className="kk-ad">
-                    <strong>{k.name}</strong>
-                    <span className="hint">
-                      {k.brand} {k.brand ? '· ' : ''}
-                      {opts.length > 1 ? `${k.packSize} ${k.unit}/${k.buyUnit}` : k.buyUnit}
-                    </span>
-                  </div>
-                  <div className="kk-fiyat">
-                    {opts.map((o) => (
-                      <span key={o.birim}>
-                        {o.label} <b>{fmtTL(o.price)}</b>
+          {gruplar.map(([grup, urunler]) => (
+            <section className="sip-bolum" key={grup} style={{ '--k': katRenk(grup, katAdlari) } as CSSProperties}>
+              <div className="sip-bolum-bas">
+                <i className="kat-nokta" />
+                <b>{grup}</b>
+                <span>{urunler.length} ürün</span>
+              </div>
+              <div className="sip-liste">
+                {urunler.map((k) => {
+                  const opts = secenekler(k)
+                  return (
+                    <div className="sip-satir" key={k.id}>
+                      <span className="sip-serit" aria-hidden="true" />
+                      <span className="as-ad">
+                        <b>{k.name}</b>
+                        <small>
+                          {k.brand ? `${k.brand} · ` : ''}
+                          {opts.length > 1 ? `${k.packSize} ${k.unit}/${k.buyUnit}` : k.buyUnit}
+                        </small>
                       </span>
-                    ))}
-                  </div>
-                  <span className="kk-ekle">+ {opts[0].label} ekle</span>
-                </button>
-              )
-            })}
-            {shown.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
-          </div>
+                      <span className="sip-dugmeler">
+                        {opts.map((o) => {
+                          const adet = sepet[`${k.id}|${o.birim}`]?.qty ?? 0
+                          return (
+                            <button
+                              key={o.birim}
+                              className={`sip-ekle ${adet ? 'var' : ''}`}
+                              onClick={() => ekle(k, o.birim, o.price)}
+                              aria-label={`${k.name} ${o.label} ekle`}
+                            >
+                              <b>{fmtTL(o.price)}</b>
+                              <small>{adet ? `${adet} ${o.label} ✓` : `+ ${o.label}`}</small>
+                            </button>
+                          )
+                        })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+          {shown.length === 0 && <p className="hint">Ürün bulunamadı.</p>}
         </div>
 
         {/* ---- sepet ---- */}

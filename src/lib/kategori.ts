@@ -10,7 +10,8 @@ const SABIT: Record<string, string> = {
   Atıştırmalık: '#8e32a8',
 }
 
-const DIGER = ['#0b7285', '#c2255c', '#6b4f2a', '#5f3dc4', '#495057']
+// Toptancının kendi grupları (Su, Gazlı, Çay, Şeker…) sırayla bu renkleri alır.
+const DIGER = ['#0b7285', '#c2255c', '#6b4f2a', '#5f3dc4', '#2f7d32', '#b35c00', '#1864ab', '#862e9c', '#a61e4d', '#495057']
 
 /** Kategori sırası sabit; kullanıcının eklediği yeni kategoriler sona düşer. */
 export const KATEGORI_SIRA = ['Sıcak', 'Soğuk', 'Yiyecek', 'Atıştırmalık']
