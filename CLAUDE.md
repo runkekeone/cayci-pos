@@ -32,7 +32,7 @@ urun-fiyat <urun> <alis|satis> <fiyat>   ürün kartının fiyatını değiştir
 ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
-kalem-ekle <belgeNo> <urun> <adet> [fiyat]   var olan fişe kalem ekle
+kalem-ekle <belgeNo> <urun> <adet> [fiyat] [--odeme=nakit|pos]   var olan fişe kalem ekle (varsayılan açık hesap)
 tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG]   (geçmiş güne yaz)
 gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]

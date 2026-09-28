@@ -819,15 +819,26 @@ function provaUyari(ornek) {
     console.log("Belge " + s.belgeNo + " · " + (c ? c.ad : "(perakende)") + " · " + new Date(s.tarih).toLocaleString("tr-TR"));
     s.items.forEach((it) => console.log("   " + it.adet + " x " + it.ad + " @ " + money(it.fiyat)));
     console.log("  + EKLENECEK: " + adet + " x " + p.ad + " @ " + money(fiyat) + (ozel != null && fiyat === ozel ? " (özel fiyat)" : "") + " = " + money(ekTutar));
-    console.log("  Toplam : " + money(s.toplam) + " -> " + money(kurus(s.toplam + ekTutar)));
-    console.log("  Açık   : " + money(s.odeme.acik) + " -> " + money(kurus((Number(s.odeme.acik) || 0) + ekTutar)));
-    if (c) { const eski = customerBorc(store, c.id); console.log("  Bakiye : " + money(eski) + " -> " + money(kurus(eski + ekTutar))); }
-    if (!kaydet) { provaUyari("kalem-ekle " + s.belgeNo + ' "' + p.ad + '" ' + adet); return; }
+    /* --odeme=nakit|pos: eklenen kalemin parası o an alındıysa açık hesaba değil oraya yazılır
+       (varsayılan açık hesap). Saf pos satışta %2 komisyon yeni toplamdan yeniden hesaplanır. */
+    const oArg = args.find((a) => a.indexOf("--odeme=") === 0);
+    const odemeAlan = oArg ? ({ nakit: "nakit", pos: "pos", kart: "pos", acik: "acik" })[oArg.slice(8)] : "acik";
+    if (!odemeAlan) throw new Error("--odeme= nakit | pos | acik");
+    const yeniToplam = kurus(s.toplam + ekTutar);
+    const posSaf = odemeAlan === "pos" && !(Number(s.odeme.nakit) || 0) && !(Number(s.odeme.acik) || 0);
+    const yeniKomisyon = (posSaf && !s.odemeAdi) ? Math.round(yeniToplam * 0.02 * 100) / 100 : (Number(s.komisyon) || 0);
+    const etiket = { nakit: "Nakit ", pos: "Kart  ", acik: "Açık  " }[odemeAlan];
+    console.log("  Toplam : " + money(s.toplam) + " -> " + money(yeniToplam));
+    console.log("  " + etiket + ": " + money(s.odeme[odemeAlan]) + " -> " + money(kurus((Number(s.odeme[odemeAlan]) || 0) + ekTutar)));
+    if (yeniKomisyon !== (Number(s.komisyon) || 0)) console.log("  Pos komisyonu: " + money(s.komisyon) + " -> " + money(yeniKomisyon));
+    if (c) { const eski = customerBorc(store, c.id); console.log("  Bakiye : " + money(eski) + " -> " + money(kurus(eski + (odemeAlan === "acik" ? ekTutar : 0)))); }
+    if (!kaydet) { provaUyari("kalem-ekle " + s.belgeNo + ' "' + p.ad + '" ' + adet + (oArg ? " " + oArg : "")); return; }
     s.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: adet, iskyuzde: 0 });
     s.brut = kurus((Number(s.brut) || 0) + ekTutar);
     s.toplam = kurus((Number(s.toplam) || 0) + ekTutar);
     s.maliyet = kurus((Number(s.maliyet) || 0) + ekMaliyet);
-    s.odeme.acik = kurus((Number(s.odeme.acik) || 0) + ekTutar);
+    s.odeme[odemeAlan] = kurus((Number(s.odeme[odemeAlan]) || 0) + ekTutar);
+    s.komisyon = yeniKomisyon;
     const pr = store.products.find((x) => x.id === p.id);
     if (s.stokKaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) - adet;
     else pr.stok = (Number(pr.stok) || 0) - adet;
