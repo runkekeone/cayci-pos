@@ -915,7 +915,9 @@ function provaUyari(ornek) {
        haftalar ay sınırında kesilir (31.08–06.09 haftası → 01.09–06.09). */
     const ay = /^\d{4}-\d{2}$/.test(pos[1] || "") ? pos[1] : null;
     const ayda = (iso) => !ay || localDateStr(new Date(iso)).slice(0, 7) === ay;
-    const pzt = (iso) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return localDateStr(d); };
+    /* --servis: hafta yerine servis günü servis günü (satış olmayan günler — sadece havale/gider — ayrı satır). */
+    const gunluk = args.includes("--servis");
+    const pzt = (iso) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); if (!gunluk) d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return localDateStr(d); };
     const hf = {};
     const h = (iso) => { const k = pzt(iso); return (hf[k] = hf[k] || { top: 0, baba: 0, masraf: 0, gun: new Set() }); };
     store.sales.forEach((x) => {
@@ -925,6 +927,7 @@ function provaUyari(ornek) {
       w.baba += Number(x.maliyet) || 0;
       w.masraf += Number(x.komisyon) || 0;
       w.gun.add(x.servisGun || String(x.tarih).slice(0, 10));
+      w.fis = (w.fis || 0) + 1;
     });
     store.payments.forEach((p) => {
       if (!(Number(p.tutar) > 0) || /düzeltme/i.test(p.not || "") || !ayda(p.tarih)) return;
@@ -934,7 +937,8 @@ function provaUyari(ornek) {
     (store.incomes || []).forEach((e) => { if (ayda(e.tarih)) h(e.tarih).masraf -= Number(e.tutar) || 0; });
     const kisa = (ymd) => ymd.slice(8, 10) + "." + ymd.slice(5, 7);
     const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-    const L = ["# Haftalık cep" + (ay ? " — " + AYLAR[Number(ay.slice(5, 7)) - 1] + " " + ay.slice(0, 4) : ""), "", "| Hafta | Servis | Toplanan | Babaya | Masraf | **Cepte kalan** |", "|---|---:|---:|---:|---:|---:|"];
+    const GUNLER = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+    const L = [(gunluk ? "# Servis servis cep" : "# Haftalık cep") + (ay ? " — " + AYLAR[Number(ay.slice(5, 7)) - 1] + " " + ay.slice(0, 4) : ""), "", gunluk ? "| Gün | Fiş | Toplanan | Babaya | Masraf | **Cepte kalan** |" : "| Hafta | Servis | Toplanan | Babaya | Masraf | **Cepte kalan** |", "|---|---:|---:|---:|---:|---:|"];
     const T = { top: 0, baba: 0, masraf: 0 };
     Object.keys(hf).sort().forEach((k) => {
       const w = hf[k]; const bit = new Date(k + "T12:00:00"); bit.setDate(bit.getDate() + 6);
@@ -942,7 +946,8 @@ function provaUyari(ornek) {
       if (ay) { if (bas.slice(0, 7) < ay) bas = ay + "-01"; if (son.slice(0, 7) > ay) { const s2 = new Date(Number(ay.slice(0, 4)), Number(ay.slice(5, 7)), 0); son = localDateStr(s2); } }
       const cep = w.top - w.baba - w.masraf;
       T.top += w.top; T.baba += w.baba; T.masraf += w.masraf;
-      L.push("| " + kisa(bas) + " – " + kisa(son) + " | " + w.gun.size + " | " + money(w.top) + " | " + money(w.baba) + " | " + money(w.masraf) + " | **" + money(cep) + "** |");
+      const etiket = gunluk ? GUNLER[new Date(k + "T12:00:00").getDay()] + " " + kisa(k) + (w.fis ? "" : " _(servis yok)_") : kisa(bas) + " – " + kisa(son);
+      L.push("| " + etiket + " | " + (gunluk ? (w.fis || "–") : w.gun.size) + " | " + money(w.top) + " | " + money(w.baba) + " | " + money(w.masraf) + " | **" + money(cep) + "** |");
     });
     L.push("| **TOPLAM** | | **" + money(T.top) + "** | **" + money(T.baba) + "** | **" + money(T.masraf) + "** | **" + money(T.top - T.baba - T.masraf) + "** |");
     L.push("", "_Toplanan = fişte peşin alınan + eski borçtan tahsilat (nakit, kart, havale hepsi). Babaya = satılan malın maliyeti. Masraf = gider + POS komisyonu. Cepte = toplanan − babaya − masraf._");

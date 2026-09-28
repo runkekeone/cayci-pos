@@ -27,7 +27,7 @@ musteri-ekle <ad> [telefon]  yeni müşteri kartı aç
 ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
 tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
 aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
-haftalik [YYYY-AA]           hafta hafta: toplanan · babaya · masraf · cepte kalan (kullanıcının şablonu; ay verilirse sadece o ay)
+haftalik [YYYY-AA]           hafta hafta: toplanan · babaya · masraf · cepte kalan (kullanıcının şablonu; ay verilirse sadece o ay, --servis ile servis servis)
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
 urun-fiyat <urun> <alis|satis> <fiyat>   ürün kartının fiyatını değiştir (geçmiş fişler değişmez)
 ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
