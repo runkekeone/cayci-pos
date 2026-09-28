@@ -18,7 +18,7 @@
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
- *   node babuco.js haftalik                                          hafta hafta toplanan / babaya / cepte kalan
+ *   node babuco.js haftalik [YYYY-AA]                                hafta hafta toplanan / babaya / cepte kalan
  *   node babuco.js urun-fiyat <urun> <alis|satis> <fiyat>            (--kaydet)
  *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
  *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
@@ -911,10 +911,15 @@ function provaUyari(ornek) {
      Masraf  = gider + POS komisyonu − gelir.  Cepte = toplanan − babaya − masraf.
      "Bakiye düzeltmesi" notlu tahsilatlar para girişi değil, geçmişe dönük kayıt — sayılmaz. */
   if (komut === "haftalik") {
+    /* haftalik [YYYY-AA]: ay verilirse sadece o aya düşen kayıtlar sayılır; ayı taşan
+       haftalar ay sınırında kesilir (31.08–06.09 haftası → 01.09–06.09). */
+    const ay = /^\d{4}-\d{2}$/.test(pos[1] || "") ? pos[1] : null;
+    const ayda = (iso) => !ay || localDateStr(new Date(iso)).slice(0, 7) === ay;
     const pzt = (iso) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return localDateStr(d); };
     const hf = {};
     const h = (iso) => { const k = pzt(iso); return (hf[k] = hf[k] || { top: 0, baba: 0, masraf: 0, gun: new Set() }); };
     store.sales.forEach((x) => {
+      if (!ayda(x.tarih)) return;
       const w = h(x.tarih);
       w.top += (Number(x.odeme.nakit) || 0) + (Number(x.odeme.pos) || 0);
       w.baba += Number(x.maliyet) || 0;
@@ -922,19 +927,22 @@ function provaUyari(ornek) {
       w.gun.add(x.servisGun || String(x.tarih).slice(0, 10));
     });
     store.payments.forEach((p) => {
-      if (!(Number(p.tutar) > 0) || /düzeltme/i.test(p.not || "")) return;
+      if (!(Number(p.tutar) > 0) || /düzeltme/i.test(p.not || "") || !ayda(p.tarih)) return;
       h(p.tarih).top += Number(p.tutar);
     });
-    (store.expenses || []).forEach((e) => { h(e.tarih).masraf += Number(e.tutar) || 0; });
-    (store.incomes || []).forEach((e) => { h(e.tarih).masraf -= Number(e.tutar) || 0; });
+    (store.expenses || []).forEach((e) => { if (ayda(e.tarih)) h(e.tarih).masraf += Number(e.tutar) || 0; });
+    (store.incomes || []).forEach((e) => { if (ayda(e.tarih)) h(e.tarih).masraf -= Number(e.tutar) || 0; });
     const kisa = (ymd) => ymd.slice(8, 10) + "." + ymd.slice(5, 7);
-    const L = ["# Haftalık cep", "", "| Hafta | Servis | Toplanan | Babaya | Masraf | **Cepte kalan** |", "|---|---:|---:|---:|---:|---:|"];
+    const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const L = ["# Haftalık cep" + (ay ? " — " + AYLAR[Number(ay.slice(5, 7)) - 1] + " " + ay.slice(0, 4) : ""), "", "| Hafta | Servis | Toplanan | Babaya | Masraf | **Cepte kalan** |", "|---|---:|---:|---:|---:|---:|"];
     const T = { top: 0, baba: 0, masraf: 0 };
     Object.keys(hf).sort().forEach((k) => {
       const w = hf[k]; const bit = new Date(k + "T12:00:00"); bit.setDate(bit.getDate() + 6);
+      let bas = k, son = localDateStr(bit);
+      if (ay) { if (bas.slice(0, 7) < ay) bas = ay + "-01"; if (son.slice(0, 7) > ay) { const s2 = new Date(Number(ay.slice(0, 4)), Number(ay.slice(5, 7)), 0); son = localDateStr(s2); } }
       const cep = w.top - w.baba - w.masraf;
       T.top += w.top; T.baba += w.baba; T.masraf += w.masraf;
-      L.push("| " + kisa(k) + " – " + kisa(localDateStr(bit)) + " | " + w.gun.size + " | " + money(w.top) + " | " + money(w.baba) + " | " + money(w.masraf) + " | **" + money(cep) + "** |");
+      L.push("| " + kisa(bas) + " – " + kisa(son) + " | " + w.gun.size + " | " + money(w.top) + " | " + money(w.baba) + " | " + money(w.masraf) + " | **" + money(cep) + "** |");
     });
     L.push("| **TOPLAM** | | **" + money(T.top) + "** | **" + money(T.baba) + "** | **" + money(T.masraf) + "** | **" + money(T.top - T.baba - T.masraf) + "** |");
     L.push("", "_Toplanan = fişte peşin alınan + eski borçtan tahsilat (nakit, kart, havale hepsi). Babaya = satılan malın maliyeti. Masraf = gider + POS komisyonu. Cepte = toplanan − babaya − masraf._");
