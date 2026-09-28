@@ -31,7 +31,7 @@ ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
 kalem-ekle <belgeNo> <urun> <adet> [fiyat]   var olan fişe kalem ekle
-tahsilat <musteri> <tutar> [not]
+tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG]   (geçmiş güne yaz)
 gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]
 sil-satis <belgeNo>          satışı geri al (stok + borç geri döner)

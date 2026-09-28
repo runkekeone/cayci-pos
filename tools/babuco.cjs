@@ -23,7 +23,7 @@
  *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
  *                                              eski düz metin özet için --duz.
  *   node babuco.js alim <dosya.json|json>      Mal girişi: stok ekle (--kaydet)
- *   node babuco.js tahsilat <musteri> <tutar> [not]                 (--kaydet)
+ *   node babuco.js tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG]                 (--kaydet)
  *   node babuco.js gider <tutar> <aciklama> [kategori]              (--kaydet)
  *   node babuco.js gelir <tutar> <aciklama> [tur]                   (--kaydet)
  *   node babuco.js sil-satis <belgeNo>         Satışı geri al       (--kaydet)
@@ -680,10 +680,15 @@ function provaUyari(ornek) {
     const tutar = kurus(String(pos[2]).replace(",", "."));
     if (!(tutar > 0)) throw new Error("Tutar gecersiz.");
     const not = pos.slice(3).join(" ") || "Saha tahsilat";
+    /* --tarih=YYYY-AA-GG: geçmiş bir günde alınmış ödeme bugünün kasasına düşmesin
+       (panelin "Ödeme Al" tarih alanıyla aynı: o günün öğlesi). */
+    const tArg = args.find((a) => a.indexOf("--tarih=") === 0);
+    const tarih = tArg ? new Date(tArg.slice(8) + "T12:00:00") : new Date();
+    if (isNaN(tarih)) throw new Error("Tarih gecersiz: " + tArg + " (ornek --tarih=2026-09-24)");
     const eski = customerBorc(store, c.id);
-    console.log(c.ad + " — tahsilat " + money(tutar) + "\nBakiye: " + money(eski) + " -> " + money(kurus(eski - tutar)) + "\nNot: " + not);
-    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar); return; }
-    store.payments.push({ id: genId(store), musteriId: c.id, tutar: tutar, not: not, tarih: new Date().toISOString() });
+    console.log(c.ad + " — tahsilat " + money(tutar) + "\nTarih : " + tarih.toLocaleDateString("tr-TR") + "\nBakiye: " + money(eski) + " -> " + money(kurus(eski - tutar)) + "\nNot: " + not);
+    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar + (tArg ? " " + tArg : "")); return; }
+    store.payments.push({ id: genId(store), musteriId: c.id, tutar: tutar, not: not, tarih: tarih.toISOString() });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;
