@@ -18,6 +18,7 @@
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
+ *   node babuco.js urun-fiyat <urun> <alis|satis> <fiyat>            (--kaydet)
  *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
  *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
@@ -830,6 +831,27 @@ function provaUyari(ornek) {
     const pr = store.products.find((x) => x.id === p.id);
     if (s.stokKaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) - adet;
     else pr.stok = (Number(pr.stok) || 0) - adet;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- urun-fiyat: ürün kartındaki alış/satış fiyatını değiştir ----------
+     Sadece bundan sonraki fişleri etkiler; geçmiş fişlerin maliyeti satış anında yazılmıştır.
+     Panel fiyatı iki alanda tutuyor (alis/adetAlis, satis/adetSatis) — ikisi birlikte güncellenir. */
+  if (komut === "urun-fiyat") {
+    const p = urunBul(store, pos[1]);
+    const tur = String(pos[2] || "").toLocaleLowerCase("tr");
+    if (tur !== "alis" && tur !== "alış" && tur !== "satis" && tur !== "satış") throw new Error('Tür: alis | satis — ornek: urun-fiyat "Kardelen Filiz" alis 1400');
+    const alan = tur.startsWith("a") ? "alis" : "satis";
+    const yeni = kurus(String(pos[3]).replace(",", "."));
+    if (!(yeni >= 0) || pos[3] == null) throw new Error("Fiyat gecersiz.");
+    console.log(p.ad + "\n  " + alan + ": " + money(p[alan]) + "  ->  " + money(yeni) +
+      "\n  (alış " + money(alan === "alis" ? yeni : p.alis) + " · satış " + money(alan === "satis" ? yeni : p.satis) + " · birim kâr " + money((alan === "satis" ? yeni : Number(p.satis)) - (alan === "alis" ? yeni : Number(p.alis))) + ")");
+    if (!kaydet) { provaUyari('urun-fiyat "' + p.ad + '" ' + alan + " " + yeni); return; }
+    const pr = store.products.find((x) => x.id === p.id);
+    pr[alan] = String(yeni);
+    pr[alan === "alis" ? "adetAlis" : "adetSatis"] = yeni;
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;

@@ -28,6 +28,7 @@ ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
 tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
 aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
+urun-fiyat <urun> <alis|satis> <fiyat>   ürün kartının fiyatını değiştir (geçmiş fişler değişmez)
 ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
