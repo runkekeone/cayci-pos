@@ -18,6 +18,7 @@
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
+ *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
  *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
@@ -829,6 +830,21 @@ function provaUyari(ornek) {
     const pr = store.products.find((x) => x.id === p.id);
     if (s.stokKaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) - adet;
     else pr.stok = (Number(pr.stok) || 0) - adet;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- musteri-ekle: yeni müşteri kartı (panelin "Yeni Müşteri" alanlarıyla) ---------- */
+  if (komut === "musteri-ekle") {
+    const ad = (pos[1] || "").trim();
+    if (!ad) throw new Error('Ad gerekli: musteri-ekle "Onur Gül" [telefon]');
+    const telefon = (pos[2] || "").trim();
+    const benzer = store.customers.filter((c) => norm(c.ad).includes(norm(ad)) || norm(ad).includes(norm(c.ad)));
+    if (benzer.length) console.log("Dikkat, benzer isimli müşteri var: " + benzer.map((c) => c.ad).join(" · "));
+    console.log("Yeni müşteri: " + ad + (telefon ? " · " + telefon : " · telefon yok"));
+    if (!kaydet) { provaUyari('musteri-ekle "' + ad + '"' + (telefon ? " " + telefon : "")); return; }
+    store.customers.push({ id: genId(store), ad: ad, telefon: telefon, acilis: 0, adres: "", vergiNo: "" });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;

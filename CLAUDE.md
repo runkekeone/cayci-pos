@@ -23,6 +23,7 @@ Araç depoda: **`node tools/babuco.cjs <komut>`** (depo kökünden çalıştır)
 durum                        bulut yedeğinin son hâli, kayıt sayıları
 rapor [YYYY-AA-GG]           günlük rapor (Markdown; boş = bugün)
 musteri [arama]              müşteri + borç + telefon + özel fiyatları
+musteri-ekle <ad> [telefon]  yeni müşteri kartı aç
 ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
 tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
 aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
