@@ -27,7 +27,7 @@ ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
 tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
 aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
-ozel-fiyat <musteri> <urun> <fiyat|sil>
+ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
 kalem-ekle <belgeNo> <urun> <adet> [fiyat]   var olan fişe kalem ekle
@@ -63,6 +63,13 @@ Satış JSON'u:
   "not": "", "stokKaynak": "arac" }
 ```
 - `fiyat` yazılmazsa müşterinin **özel fiyatı**, o da yoksa liste fiyatı uygulanır.
+- **Fiyat ailesi:** bir müşteride bir ailenin **tek fiyatı** olur (toz içeceklerin hepsi
+  75 ise kuşburnu da nane limon da 75; vişne 600 ise şeftali de 600). Aile = aynı
+  `altKategori` + aynı liste fiyatı (Beypazarı/Kızılay sade soda gibi farklı fiyatlı
+  markalar ayrı kalır). Araç bunu kendisi uygular: fişte bir çeşide fiyat yazılırsa
+  kardeşleri de o fiyatı alır, özel fiyat yoksa kardeşin özel fiyatı kullanılır,
+  `ozel-fiyat` bütün aileye yazar (`--tek` sadece o ürüne). Fişte "Aynı ailede farklı
+  fiyat" ya da "en son X ile satıldı" notu çıkarsa kaydetmeden önce kullanıcıya sor.
 - `odeme`: `"nakit"` / `"pos"` / `"acik"` kısayolu ya da `{nakit,pos,acik}`.
   Ödenen tutar satıştan **azsa** kalan açık hesaba, **fazlaysa** fazlası borca
   tahsilat olarak yazılır — panelin davranışının aynısı.

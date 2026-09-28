@@ -18,7 +18,7 @@
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
- *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet)
+ *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
  *                                              eski düz metin özet için --duz.
@@ -207,17 +207,59 @@ function raporMd(store, gun, updatedAt) {
   return L.join("\n");
 }
 
+/* ---------- fiyat ailesi ----------
+   Kullanıcının kuralı: bir müşteride bir ailenin TEK fiyatı olur — toz içeceklerin
+   hepsi 75 ise kuşburnu da 75, nane limon da 75; vişneyi 600'den verdiyse şeftali de 600.
+   Aile = aynı altKategori (panelin varyant gruplaması) + aynı liste fiyatı. Liste fiyatı
+   şartı, markası farklı olup ayrı fiyatlanan ürünleri (Beypazarı 315 / Kızılay 285 sade
+   soda, Kola 625 / Sarıyer 700) birbirine bağlamamak için. */
+function aile(store, p) {
+  const alt = (p.altKategori || "").trim();
+  if (!alt) return [p];
+  return store.products.filter((x) => (x.altKategori || "").trim() === alt && Number(x.satis) === Number(p.satis));
+}
+function ozelOku(c, id) {
+  const oz = (c && c.ozelFiyatlar) || {};
+  return (oz[id] != null && oz[id] !== "") ? Number(oz[id]) : null;
+}
+/* Bu müşteriye bu aileden en son hangi fiyattan satıldı (fişteki kontrol notu için). */
+function aileSonSatis(store, c, p) {
+  if (!c) return null;
+  const ids = aile(store, p).map((x) => x.id);
+  let son = null;
+  store.sales.forEach((s) => {
+    if (s.musteriId !== c.id) return;
+    s.items.forEach((it) => { if (ids.includes(it.urunId) && (!son || s.tarih > son.tarih)) son = { fiyat: Number(it.fiyat), tarih: s.tarih }; });
+  });
+  return son;
+}
+/* Müşterinin bu ürün için geçerli özel fiyatı: ürünün kendi özel fiyatı, yoksa aile
+   kardeşlerinden biri. Kardeşler çelişirse aileden en son satılan fiyata uyan kazanır. */
+function aileOzelFiyat(store, c, p) {
+  const kendi = ozelOku(c, p.id);
+  if (kendi != null) return kendi;
+  const fiyatlar = [...new Set(aile(store, p).map((x) => ozelOku(c, x.id)).filter((v) => v != null))];
+  if (!fiyatlar.length) return null;
+  if (fiyatlar.length === 1) return fiyatlar[0];
+  const son = aileSonSatis(store, c, p);
+  return (son && fiyatlar.includes(son.fiyat)) ? son.fiyat : fiyatlar[0];
+}
+
 /* ---------- satış: panelin kaydetSatis() mantığı ---------- */
 function satisHazirla(store, girdi) {
   const c = girdi.musteri ? musteriBul(store, girdi.musteri) : null;
-  const ozel = (c && c.ozelFiyatlar) || {};
-  const kalemler = (girdi.kalemler || []).map((k) => {
-    const p = urunBul(store, k.urun);
-    const varsayilan = (ozel[p.id] != null && ozel[p.id] !== "") ? Number(ozel[p.id]) : (Number(p.satis) || 0);
+  const ham = (girdi.kalemler || []).map((k) => ({ k: k, p: urunBul(store, k.urun) }));
+  /* Fişte ailenin bir üyesine elle fiyat verildiyse, fiyatı yazılmayan kardeşleri de onu alır
+     ("toz içecekler 75" dendiğinde her çeşide tek tek fiyat yazmaya gerek kalmasın). */
+  const elleAile = {};
+  ham.forEach(({ k, p }) => { if (k.fiyat != null && k.fiyat !== "") aile(store, p).forEach((x) => { if (elleAile[x.id] == null) elleAile[x.id] = Number(k.fiyat); }); });
+  const kalemler = ham.map(({ k, p }) => {
+    const ozelFiyat = aileOzelFiyat(store, c, p);
+    const varsayilan = elleAile[p.id] != null ? elleAile[p.id] : (ozelFiyat != null ? ozelFiyat : (Number(p.satis) || 0));
     const fiyat = (k.fiyat != null && k.fiyat !== "") ? Number(k.fiyat) : varsayilan;
     const adet = Number(k.adet) || 0;
     if (adet <= 0) throw new Error('"' + p.ad + '" icin adet gecersiz.');
-    return { p: p, ad: p.ad, urunId: p.id, adet: adet, fiyat: fiyat, alis: Number(p.alis) || 0, listeFiyat: Number(p.satis) || 0, ozelFiyat: ozel[p.id] != null ? Number(ozel[p.id]) : null };
+    return { p: p, ad: p.ad, urunId: p.id, adet: adet, fiyat: fiyat, alis: Number(p.alis) || 0, listeFiyat: Number(p.satis) || 0, ozelFiyat: ozelFiyat, sonSatis: aileSonSatis(store, c, p) };
   });
   if (!kalemler.length) throw new Error("Satista kalem yok.");
   const brut = kurus(kalemler.reduce((a, k) => a + k.adet * k.fiyat, 0));
@@ -322,6 +364,19 @@ function satisFis(store, h, kaydedildi, belgeNo) {
   }
   L.push("| Kâr | " + q(h.toplam - h.maliyet) + " ₺ · " + karOrani(h.toplam, h.maliyet) + " |");
   L.push("");
+  /* Aile kontrolü: aynı ailede farklı fiyat, ya da bu müşteriye aileden en son başka
+     fiyattan satılmış olması — ikisi de genelde eski/yanlış özel fiyat demek. */
+  const gorulen = {};
+  h.kalemler.forEach((k) => {
+    const anahtar = aile(store, k.p).map((x) => x.id).sort().join(",");
+    (gorulen[anahtar] = gorulen[anahtar] || []).push(k);
+  });
+  Object.values(gorulen).forEach((ks) => {
+    const fiyatlar = [...new Set(ks.map((k) => k.fiyat))];
+    if (fiyatlar.length > 1) L.push("⚠ **Aynı ailede farklı fiyat:** " + ks.map((k) => k.ad + " " + q(k.fiyat)).join(" · "));
+    const son = ks[0].sonSatis;
+    if (son && fiyatlar.length === 1 && son.fiyat !== fiyatlar[0]) L.push("ℹ Bu müşteriye bu aileden en son **" + q(son.fiyat) + "** ile satıldı (" + new Date(son.tarih).toLocaleDateString("tr-TR") + ")");
+  });
   const im = [];
   if (elle) im.push("⚠ = elle fiyat (listeden farklı)");
   if (ozelV) im.push("⭐ = müşterinin özel fiyatı");
@@ -748,7 +803,10 @@ function provaUyari(ornek) {
     const adet = Number(pos[3]) || 0;
     if (adet <= 0) throw new Error("Adet gecersiz.");
     const c = store.customers.find((x) => x.id === s.musteriId);
-    const ozel = (c && c.ozelFiyatlar && c.ozelFiyatlar[p.id] != null && c.ozelFiyatlar[p.id] !== "") ? Number(c.ozelFiyatlar[p.id]) : null;
+    /* Fişte aynı aileden kalem varsa onun fiyatı, yoksa müşterinin aile özel fiyatı. */
+    const aileIds = aile(store, p).map((x) => x.id);
+    const fisteki = s.items.find((it) => aileIds.includes(it.urunId));
+    const ozel = fisteki ? Number(fisteki.fiyat) : aileOzelFiyat(store, c, p);
     const fiyat = pos[4] != null ? Number(String(pos[4]).replace(",", ".")) : (ozel != null ? ozel : Number(p.satis) || 0);
     const ekTutar = kurus(adet * fiyat), ekMaliyet = kurus(adet * (Number(p.alis) || 0));
     console.log("Belge " + s.belgeNo + " · " + (c ? c.ad : "(perakende)") + " · " + new Date(s.tarih).toLocaleString("tr-TR"));
@@ -776,15 +834,16 @@ function provaUyari(ornek) {
     const c = musteriBul(store, pos[1]);
     const p = urunBul(store, pos[2]);
     c.ozelFiyatlar = c.ozelFiyatlar || {};
-    const eski = c.ozelFiyatlar[p.id];
     if (pos[3] == null) throw new Error('Fiyat gerekli. Silmek icin: ozel-fiyat "' + c.ad + '" "' + p.ad + '" sil');
     const sil = String(pos[3]).toLocaleLowerCase("tr") === "sil";
     const fiyat = sil ? null : kurus(String(pos[3]).replace(",", "."));
-    console.log(c.ad + " · " + p.ad);
-    console.log("  özel fiyat : " + (eski != null ? money(eski) : "(yok)") + "  ->  " + (sil ? "(silinecek)" : money(fiyat)));
+    // Aile kuralı: fiyat ailenin bütün çeşitlerine birden yazılır (--tek ile sadece bu ürün).
+    const hedef = args.includes("--tek") ? [p] : aile(store, p);
+    console.log(c.ad + (hedef.length > 1 ? " · " + (p.altKategori || "").trim() + " ailesi (" + hedef.length + " çeşit)" : ""));
+    hedef.forEach((x) => { const e = ozelOku(c, x.id); console.log("  " + x.ad.padEnd(34) + (e != null ? money(e) : "(yok)").padStart(14) + "  ->  " + (sil ? "(silinecek)" : money(fiyat))); });
     console.log("  liste fiyatı: " + money(p.satis) + " · alış " + money(p.alis));
     if (!kaydet) { provaUyari('ozel-fiyat "' + c.ad + '" "' + p.ad + '" ' + (sil ? "sil" : fiyat)); return; }
-    if (sil) delete c.ozelFiyatlar[p.id]; else c.ozelFiyatlar[p.id] = fiyat;
+    hedef.forEach((x) => { if (sil) delete c.ozelFiyatlar[x.id]; else c.ozelFiyatlar[x.id] = fiyat; });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;
