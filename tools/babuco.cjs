@@ -19,6 +19,7 @@
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js haftalik [YYYY-AA]                                hafta hafta toplanan / babaya / cepte kalan
+ *   node babuco.js iade <musteri> <urun> <adet> [fiyat] [--dukkan]       (--kaydet)
  *   node babuco.js urun-fiyat <urun> <alis|satis> <fiyat>            (--kaydet)
  *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
  *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
@@ -845,6 +846,55 @@ function provaUyari(ornek) {
     else pr.stok = (Number(pr.stok) || 0) - adet;
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- iade: müşteriden mal geri alındı ----------
+     Eksi adetli bir "iade fişi" olarak yazılır: tutar müşterinin borcundan düşer (açık hesap eksi),
+     ciro ve maliyet o gün eksiye gider (kâr ve babaya ödenecek maliyet doğru kalsın), mal araca/dükkana
+     geri girer. Tahsilat olarak YAZILMAZ — ortada para girişi yok, haftalık cep tablosunu şişirmesin.
+     Panelin "İade" listesinde de görünsün diye store.iadeler'e de kayıt düşer. */
+  if (komut === "iade") {
+    const c = musteriBul(store, pos[1]);
+    const p = urunBul(store, pos[2]);
+    const adet = Number(pos[3]) || 0;
+    if (adet <= 0) throw new Error('Adet gecersiz: iade "<musteri>" "<urun>" <adet> [fiyat]');
+    // Fiyat verilmezse müşteriye bu ürünün en son satıldığı fiyat (iade, ödediği fiyattan düşülür).
+    let fiyat = pos[4] != null ? kurus(String(pos[4]).replace(",", ".")) : null;
+    if (fiyat == null) {
+      const son = store.sales.filter((x) => x.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih))
+        .map((x) => x.items.find((it) => it.urunId === p.id && it.adet > 0)).find(Boolean);
+      fiyat = son ? Number(son.fiyat) : Number(p.satis) || 0;
+    }
+    const tutar = kurus(adet * fiyat), maliyet = kurus(adet * (Number(p.alis) || 0));
+    const kaynak = args.includes("--dukkan") ? "dukkan" : "arac";
+    const eski = customerBorc(store, c.id);
+    const q = (n) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
+    console.log("### ↩ İADE — " + c.ad + "\n**" + new Date().toLocaleDateString("tr-TR") + "** · " + (kaynak === "arac" ? "araca" : "dükkana") + " geri\n");
+    console.log("| Adet | Ürün | Fiyat | Tutar |\n|---:|---|---:|---:|");
+    console.log("| −" + adet + " | " + p.ad + " | " + q(fiyat) + " | −" + q(tutar) + " |");
+    console.log("| | | **İADE TOPLAM** | **−" + q(tutar) + " ₺** |\n");
+    console.log("| | |\n|---|---:|");
+    console.log("| **Bakiye** | " + q(eski) + " → **" + q(kurus(eski - tutar)) + " ₺** |");
+    console.log("| Bugünün cirosundan düşer | −" + q(tutar) + " ₺ |");
+    console.log("| Bugünün maliyetinden düşer (mal geri geldi) | −" + q(maliyet) + " ₺ |");
+    console.log("| Kârdan düşer | −" + q(tutar - maliyet) + " ₺ |\n");
+    if (!kaydet) { console.log("**KAYDEDİLMEDİ** — onayını bekliyorum"); provaUyari('iade "' + c.ad + '" "' + p.ad + '" ' + adet + " " + fiyat); return; }
+    const now = new Date();
+    store.counters.sale = (store.counters.sale || 0) + 1;
+    const belgeNo = now.getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
+    store.sales.push({
+      id: genId(store), belgeNo: belgeNo, musteriId: c.id, personelId: null, not: "İADE — " + adet + " x " + p.ad, odemeAdi: "İade",
+      items: [{ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: -adet, iskyuzde: 0 }],
+      brut: -tutar, iskonto: 0, toplam: -tutar, maliyet: -maliyet, komisyon: 0,
+      odeme: { nakit: 0, pos: 0, acik: -tutar }, tarih: now.toISOString(), servisGun: localDateStr(now), hafta: haftaNo(now), stokKaynak: kaynak,
+    });
+    const pr = store.products.find((x) => x.id === p.id);
+    if (kaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) + adet; else pr.stok = (Number(pr.stok) || 0) + adet;
+    store.iadeler = store.iadeler || [];
+    store.iadeler.push({ id: genId(store), urunId: p.id, ad: p.ad, adet: adet, tutar: tutar, musteriId: c.id, tarih: now.toISOString() });
+    const y = await storeYaz(store, updatedAt);
+    console.log("**KAYDEDİLDİ** — İade belgesi " + belgeNo + " · yedek: " + path.basename(y.yedek));
     return;
   }
 

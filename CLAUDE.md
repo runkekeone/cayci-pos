@@ -38,6 +38,7 @@ tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG]   (geçmiş güne yaz)
 gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]
 sil-satis <belgeNo>          satışı geri al (stok + borç geri döner)
+iade <musteri> <urun> <adet> [fiyat]   müşteriden mal geri alındı: borçtan düşer, ciro/maliyet eksiye, stok geri (tahsilat DEĞİL)
 ```
 
 Bağlantı bilgisi `public/toptanci/app.js` içindeki `SB_URL`/`SB_KEY`'den okunur —
