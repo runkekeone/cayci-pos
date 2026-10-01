@@ -20,6 +20,7 @@
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
  *   node babuco.js haftalik [YYYY-AA]                                hafta hafta toplanan / babaya / cepte kalan
  *   node babuco.js iade <musteri> <urun> <adet> [fiyat] [--dukkan]       (--kaydet)
+ *   node babuco.js urun-ekle <ad> <alis> <satis> [grup]               (--kaydet)
  *   node babuco.js urun-fiyat <urun> <alis|satis> <fiyat>            (--kaydet)
  *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
  *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
@@ -895,6 +896,24 @@ function provaUyari(ornek) {
     store.iadeler.push({ id: genId(store), urunId: p.id, ad: p.ad, adet: adet, tutar: tutar, musteriId: c.id, tarih: now.toISOString() });
     const y = await storeYaz(store, updatedAt);
     console.log("**KAYDEDİLDİ** — İade belgesi " + belgeNo + " · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- urun-ekle: listede olmayan ürünü aç (panelin ürün kartı alanlarıyla) ---------- */
+  if (komut === "urun-ekle") {
+    const ad = (pos[1] || "").trim();
+    const alis = kurus(String(pos[2] || "").replace(",", ".")), satis = kurus(String(pos[3] || "").replace(",", "."));
+    if (!ad || !(alis >= 0) || !(satis > 0)) throw new Error('Kullanim: urun-ekle "<ad>" <alis> <satis> [grup]');
+    const grup = (pos[4] || "").trim() || "Diğer";
+    const benzer = store.products.filter((p) => norm(p.ad).includes(norm(ad)) || norm(ad).includes(norm(p.ad)));
+    if (benzer.find((p) => norm(p.ad) === norm(ad))) throw new Error("Bu adla urun zaten var: " + ad);
+    if (benzer.length) console.log("Dikkat, benzer isimli ürün var: " + benzer.map((p) => p.ad + " (" + money(p.satis) + ")").join(" · "));
+    console.log("Yeni ürün: " + ad + " · alış " + money(alis) + " · satış " + money(satis) + " · grup " + grup);
+    if (!kaydet) { provaUyari('urun-ekle "' + ad + '" ' + alis + " " + satis + ' "' + grup + '"'); return; }
+    store.products.push({ id: genId(store), ad: ad, kdv: "0", not: "", alis: String(alis), adetAlis: alis, satis: String(satis), adetSatis: satis,
+      grup: grup, stok: 0, aracStok: 0, birim: "Adet", birimIciAdet: 1, barkod: "", kritik: "", gorunur: true, altKategori: "" });
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;
   }
 

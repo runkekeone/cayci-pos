@@ -30,6 +30,7 @@ aylik                        aylık servis günü / ciro / kâr / sahadaki alaca
 haftalik [YYYY-AA]           hafta hafta: toplanan · babaya · masraf · cepte kalan (kullanıcının şablonu; ay verilirse sadece o ay, --servis ile servis servis)
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
 urun-fiyat <urun> <alis|satis> <fiyat>   ürün kartının fiyatını değiştir (geçmiş fişler değişmez)
+urun-ekle <ad> <alis> <satis> [grup]     listede olmayan ürünü aç
 ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
