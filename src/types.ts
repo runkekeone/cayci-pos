@@ -149,6 +149,16 @@ export interface CustomerPayment {
   bizDay?: string
 }
 
+/** Satışa bağlı olmadan müşteriye elle yazılan borç (eski defterden devir vb.). Ciroya girmez. */
+export interface ElleBorc {
+  id: string
+  date: string
+  customerId: string
+  amount: number
+  note?: string
+  bizDay?: string
+}
+
 export interface Expense {
   id: string
   /** Sadece 'gunluk' için dolu. Sabit giderlerde boş. */
@@ -290,6 +300,8 @@ export interface State {
   tables: Table[]
   customers: Customer[]
   payments: CustomerPayment[]
+  /** Elle yazılan borçlar. Eski kayıtlarda yok. */
+  borclar?: ElleBorc[]
   expenses: Expense[]
   wastes: Waste[]
   cashDays: CashDay[]

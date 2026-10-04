@@ -5,12 +5,15 @@ import { totalVeresiye } from '../lib/report'
 import type { Customer } from '../types'
 
 export default function Musteriler() {
-  const { s, saveCustomer, collect } = useStore()
+  const { s, saveCustomer, collect, borcYaz } = useStore()
   const [yeni, setYeni] = useState('')
   const [kart, setKart] = useState<string | null>(null)
 
-  /** Bir müşterinin hesabına yazılan tutar (parçalı ödemede sadece o parçalar). */
+  /** Bir müşterinin hesabına yazılan tutar (parçalı ödemede sadece o parçalar + elle borçlar). */
   function borcYazilan(customerId: string): number {
+    const elle = (s.borclar ?? [])
+      .filter((b) => b.customerId === customerId)
+      .reduce((n, b) => n + b.amount, 0)
     return s.sales.reduce((n, sale) => {
       const parts = sale.payments ?? [
         { payment: sale.payment, amount: sale.total, customerId: sale.customerId },
@@ -21,7 +24,7 @@ export default function Musteriler() {
           .filter((p) => p.payment === 'veresiye' && p.customerId === customerId)
           .reduce((m, p) => m + p.amount, 0)
       )
-    }, 0)
+    }, elle)
   }
 
   function odenen(customerId: string): number {
@@ -102,6 +105,7 @@ export default function Musteriler() {
           customerId={kart}
           onClose={() => setKart(null)}
           onCollect={(amount, method) => collect(kart, amount, method)}
+          onBorc={(amount, note) => borcYaz(kart, amount, note)}
           onSave={saveCustomer}
         />
       )}
@@ -114,11 +118,13 @@ function MusteriKarti({
   customerId,
   onClose,
   onCollect,
+  onBorc,
   onSave,
 }: {
   customerId: string
   onClose: () => void
   onCollect: (amount: number, method: 'nakit' | 'kart') => void
+  onBorc: (amount: number, note?: string) => void
   onSave: (c: Customer) => void
 }) {
   const { s } = useStore()
@@ -126,6 +132,8 @@ function MusteriKarti({
   const [tutar, setTutar] = useState(c.balance)
   const [yontem, setYontem] = useState<'nakit' | 'kart'>('nakit')
   const [telefon, setTelefon] = useState(c.phone ?? '')
+  const [borc, setBorc] = useState('')
+  const [borcNot, setBorcNot] = useState('')
 
   // Bu müşterinin hesabına yazılan satışlar — parçalı ödemede sadece ona düşen parça.
   const hareketler = [
@@ -150,6 +158,15 @@ function MusteriKarti({
         date: p.date,
         tutar: p.amount,
         aciklama: `Tahsilat (${p.method})`,
+        parcali: false,
+      })),
+    ...(s.borclar ?? [])
+      .filter((b) => b.customerId === customerId)
+      .map((b) => ({
+        tip: 'borc' as const,
+        date: b.date,
+        tutar: b.amount,
+        aciklama: b.note ? `Elle borç: ${b.note}` : 'Elle borç',
         parcali: false,
       })),
   ].sort((a, b) => b.date.localeCompare(a.date))
@@ -217,6 +234,42 @@ function MusteriKarti({
             }}
           >
             Tahsil et
+          </button>
+        </div>
+
+        <div className="section-title">Borç yaz</div>
+        <p className="hint" style={{ marginTop: 0 }}>
+          Satış girmeden borca ekler (eski defterden devir gibi). Ciroya ve kasaya girmez.
+        </p>
+        <div className="row">
+          <input
+            type="number"
+            inputMode="decimal"
+            style={{ width: 120 }}
+            value={borc}
+            placeholder="0"
+            onChange={(e) => setBorc(e.target.value)}
+          />
+          <span className="hint">₺</span>
+          <input
+            style={{ flex: 1, minWidth: 140 }}
+            value={borcNot}
+            placeholder="Not (isteğe bağlı)"
+            onChange={(e) => setBorcNot(e.target.value)}
+          />
+          <button
+            className="btn primary"
+            disabled={!(Number(borc) > 0)}
+            onClick={() => {
+              const tutarB = Number(borc)
+              // Geri alma yok — yanlış basılan bir hane sonsuza dek borçta kalır, önce sor.
+              if (!confirm(`${c.name} hesabına ${fmtTL(tutarB)} borç yazılsın mı?`)) return
+              onBorc(tutarB, borcNot.trim())
+              setBorc('')
+              setBorcNot('')
+            }}
+          >
+            Borç yaz
           </button>
         </div>
 

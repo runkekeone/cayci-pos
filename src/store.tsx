@@ -149,6 +149,8 @@ interface Store {
   // müşteri
   saveCustomer: (c: Customer) => void
   collect: (customerId: string, amount: number, method: 'nakit' | 'kart') => void
+  /** Satış olmadan müşteriye borç yaz: bakiye artar, ciro ve kasa değişmez. */
+  borcYaz: (customerId: string, amount: number, note?: string) => void
 
   // gider / kasa
   saveExpense: (e: Expense) => void
@@ -831,6 +833,25 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
               customerId,
               amount,
               method,
+              bizDay: today(),
+            },
+          ],
+        })),
+
+      borcYaz: (customerId, amount, note) =>
+        set((st) => ({
+          ...st,
+          customers: st.customers.map((c) =>
+            c.id === customerId ? { ...c, balance: round(c.balance + amount) } : c,
+          ),
+          borclar: [
+            ...(st.borclar ?? []),
+            {
+              id: uid(),
+              date: new Date().toISOString(),
+              customerId,
+              amount,
+              note: note || undefined,
               bizDay: today(),
             },
           ],
