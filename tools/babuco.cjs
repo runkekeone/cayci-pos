@@ -152,7 +152,7 @@ function raporMd(store, gun, updatedAt) {
   const ciro = sum((s) => s.toplam), mal = sum((s) => s.maliyet);
   const gider = store.expenses.filter((e) => inR(e.tarih)).reduce((a, e) => a + (Number(e.tutar) || 0), 0);
   const gelir = store.incomes.filter((e) => inR(e.tarih)).reduce((a, e) => a + (Number(e.tutar) || 0), 0);
-  const tahsilat = store.payments.filter((p) => inR(p.tarih)).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
+  const tahsilat = store.payments.filter((p) => inR(p.tarih) && !/düzeltme/i.test(p.not || "")).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
   const firmaOde = (store.firmaPayments || []).filter((p) => inR(p.tarih)).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
 
@@ -683,8 +683,12 @@ function provaUyari(ornek) {
   if (komut === "tahsilat") {
     const c = musteriBul(store, pos[1]);
     const tutar = kurus(String(pos[2]).replace(",", "."));
-    if (!(tutar > 0)) throw new Error("Tutar gecersiz.");
-    const not = pos.slice(3).join(" ") || "Saha tahsilat";
+    /* --duzeltme: bakiyeyi elle düzeltir (eksi tutar = borcu artırır). Notu "Bakiye düzeltme"
+       ile başlar; haftalik/kasa raporları "düzeltme" notlu kayıtları toplanan paraya saymaz. */
+    const duzeltme = args.indexOf("--duzeltme") >= 0;
+    if (duzeltme ? !tutar || isNaN(tutar) : !(tutar > 0)) throw new Error("Tutar gecersiz.");
+    const not = duzeltme ? "Bakiye düzeltme" + (pos.slice(3).length ? ": " + pos.slice(3).join(" ") : "")
+                         : (pos.slice(3).join(" ") || "Saha tahsilat");
     /* --tarih=YYYY-AA-GG: geçmiş bir günde alınmış ödeme bugünün kasasına düşmesin
        (panelin "Ödeme Al" tarih alanıyla aynı: o günün öğlesi). */
     const tArg = args.find((a) => a.indexOf("--tarih=") === 0);
@@ -692,7 +696,7 @@ function provaUyari(ornek) {
     if (isNaN(tarih)) throw new Error("Tarih gecersiz: " + tArg + " (ornek --tarih=2026-09-24)");
     const eski = customerBorc(store, c.id);
     console.log(c.ad + " — tahsilat " + money(tutar) + "\nTarih : " + tarih.toLocaleDateString("tr-TR") + "\nBakiye: " + money(eski) + " -> " + money(kurus(eski - tutar)) + "\nNot: " + not);
-    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar + (tArg ? " " + tArg : "")); return; }
+    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar + (tArg ? " " + tArg : "") + (duzeltme ? " --duzeltme" : "")); return; }
     store.payments.push({ id: genId(store), musteriId: c.id, tutar: tutar, not: not, tarih: tarih.toISOString() });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
