@@ -86,6 +86,15 @@ teslimatı yeniden anlatıp bir kalem ekletmek ister ("bir de fanta bıraktım")
 gün o müşteriye kesilmiş fiş var mı bak; varsa yeni satış açma, `kalem-ekle` ile
 mevcut belgeye ekle — yoksa bakiye iki katına çıkar.
 
+### Müşteri cari hesap linki
+Müşteriler tek linkten telefon numarasıyla girip kendi hesaplarını servis servis görür:
+**https://claude.ai/artifact/U9gQeM5RxPebtwk9CEAAKE** (herkese açık). Sayfa statik bir
+anlık görüntüdür; her müşterinin hesabı kendi telefonundan türetilen anahtarla şifreli
+gömülüdür (kaynakta düz veri yok). **Kullanıcının isteği: her `--kaydet`'ten sonra
+otomatik güncelle** — `sh tools/cari/guncelle.sh <scratchpad>/portal.html`, sonra o dosyayı
+Artifact ile `url` = yukarıdaki link olarak yayınla (link değişmez). Telefonu kartta
+olmayan müşteri giremez; çıktıdaki "atlanan" listesine bak.
+
 ### Çakışma
 Panel tüm veriyi tek bulut anahtarına yazar, **son yazan kazanır**. Araç bunu
 compare-and-swap ile korur: okuduğundan beri bulut değiştiyse yazmayı reddeder ve
