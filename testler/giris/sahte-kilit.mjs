@@ -38,6 +38,7 @@ export async function kilitliBulut(a = {}) {
     yetkililer: new Set(a.yetkililer || [TOPTANCI.id]),
     jetonSuresi: a.jetonSuresi || 3600,
     girisHata: null,                                  // sayı verilirse /auth/v1/token o durum koduyla düşer
+    jsonYoluYok: false,                               // true: select=...->... 400 döner (sunucu bu seçimi anlamıyormuş gibi)
   };
   const jetonlar = new Map();                         // access_token → { uid, bitis, yenileme }
   const yenilemeler = new Map();                      // refresh_token → uid
@@ -146,6 +147,7 @@ export async function kilitliBulut(a = {}) {
     }
     // JSON yolundan seçme (select=ad:value->alan, value->>alan): ortak taklit bilmiyor, burada yanıtla
     const select = url.searchParams.get("select") || "";
+    if (req.method === "GET" && select.includes("->") && durum.jsonYoluYok) { yanit(400, { code: "PGRST100", details: null, hint: null, message: "sahte: JSON yolundan secme desteklenmiyor" }); return true; }
     if (req.method === "GET" && select.includes("->")) {
       const anahtarSuz = url.searchParams.get("key") || "";
       const istenen = anahtarSuz.startsWith("eq.") ? [anahtarSuz.slice(3)] : anahtarSuz.startsWith("in.") ? anahtarSuz.slice(4, -1).split(",").map((x) => x.replace(/^"|"$/g, "")) : null;

@@ -638,8 +638,14 @@ async function katalogYayinla() {
 async function katalogDenetle() {
   if (!SB || _kapiSoz || !oturumKayitli()) return false;
   try {
-    const { data, error } = await SB.from("kv").select("key, ozet:value->>ozet, urunler:value->products").in("key", [BULUT_KEY, KATALOG_KEY]);
-    if (error || !Array.isArray(data)) return false;
+    // Yalnız gereken parçalar istenir (bütün store inmesin). Sunucu bu seçimi anlamazsa satırların tamamı okunur.
+    let { data, error } = await SB.from("kv").select("key, ozet:value->>ozet, urunler:value->products").in("key", [BULUT_KEY, KATALOG_KEY]);
+    if (error) {
+      const tam = await SB.from("kv").select("key, value").in("key", [BULUT_KEY, KATALOG_KEY]);
+      if (tam.error || !Array.isArray(tam.data)) return false;
+      data = tam.data.map((r) => ({ key: r.key, ozet: r.value && r.value.ozet, urunler: r.value && r.value.products }));
+    }
+    if (!Array.isArray(data)) return false;
     const depo = data.find((r) => r.key === BULUT_KEY), kat = data.find((r) => r.key === KATALOG_KEY);
     if (!depo || !Array.isArray(depo.urunler)) return false;        // bulutta ürün listesi görünmüyor: dokunma
     const liste = katalogUrunleri(depo.urunler);

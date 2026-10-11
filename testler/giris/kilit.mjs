@@ -131,6 +131,13 @@ for (const kip of ["kilitsiz", "kilitli"]) {
     await page.evaluate(() => { findProduct("u3").satis = 1; });      // yalnız bellekte, buluta gitmedi
     d.esit(await page.evaluate(() => katalogDenetle()), true, kip + ": katalog denetimi çalıştı");
     d.esit(bulut.deger("babuco:katalog").urunler.find((u) => u.id === "u3").satis, 700, kip + ": denetim buluttaki fiyatı esas aldı (eski yerel kopya kataloğu bozmadı)");
+    // sunucu "yalnız şu parçayı ver" seçimini anlamazsa satırın tamamını okuyup yine doğru kataloğu çıkarır
+    bulut.durum.jsonYoluYok = true;
+    bulut.kv.delete("babuco:katalog");
+    await page.evaluate(() => { _katalogSonOzet = ""; });
+    d.esit(await page.evaluate(() => katalogDenetle()), true, kip + ": parça seçimi desteklenmese de katalog denetimi çalıştı");
+    d.esit((bulut.deger("babuco:katalog") || { urunler: [] }).urunler.length, 5, kip + ": o durumda da katalog yeniden yayınlandı");
+    bulut.durum.jsonYoluYok = false;
     // boş ürün listesi yayınlanmaz
     d.esit(await page.evaluate(() => katalogYaz(katalogUrunleri([]))), false, kip + ": boş katalog yayınlanmıyor");
     d.esit(bulut.deger("babuco:katalog").urunler.length, 5, kip + ": katalog boşalmadı");
