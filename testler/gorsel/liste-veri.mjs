@@ -44,7 +44,7 @@ export function listeStore() {
   for (let i = 0; i < 28; i++) {
     const ad = AD1[i % AD1.length] + " " + AD2[(i * 3) % AD2.length];
     const ek = {};
-    if (i % 4 === 0) ek.acilis = 350 + i * 135;            // borçlu
+    if (i % 4 === 0) { ek.acilis = 350 + i * 135; if (i % 12) ek.vade = 365; } // borçlu (üçte biri gecikmiş, kalanı uzun vadeli)
     if (i % 7 === 3) ek.telefon = "";                       // telefonsuz
     if (i % 9 === 4) { ek.acilis = 2600 + i * 10; ek.limit = 2000; } // limit aşmış
     mus("m" + (13 + i), ad, ek);
@@ -95,9 +95,24 @@ export function listeStore() {
 /** Sahte bulut + panel (390 px; genislik verilirse o). Dönen: { page, git, kapat, hatalar, diyaloglar } */
 export async function listeAc(store = listeStore(), sec = {}) {
   const bulut = await sahteBulut({ satirlar: ornekSatirlar(store) });
-  const p = await panelAc({ bulutUrl: bulut.url, genislik: sec.genislik, yukseklik: sec.yukseklik, diyalog: sec.diyalog });
+  // GL_PANEL=<klasör>: denemeyi başka bir panel kopyasına (ör. değişiklikten önceki _wt/g-taban/public/toptanci) karşı çalıştırır — denemenin gerçekten yakaladığını görmek için.
+  const p = await panelAc({ bulutUrl: bulut.url, genislik: sec.genislik, yukseklik: sec.yukseklik, diyalog: sec.diyalog, panelDizin: process.env.GL_PANEL ? path.resolve(process.env.GL_PANEL) : undefined });
   const { page } = p;
   await page.waitForFunction((n) => store.customers.length === n, store.customers.length, { timeout: 15000 });
   const git = async (yol) => { await page.evaluate((y) => { document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()); if (location.hash === "#/" + y) render(); else location.hash = "#/" + y; }, yol); await bekle(350); await page.evaluate(() => window.scrollTo(0, 0)); };
   return { page, git, bulut, hatalar: p.hatalar, diyaloglar: p.diyaloglar, kapat: async () => { await p.kapat(); await bulut.dur(); } };
 }
+
+/** Denemelerde: Türkçe harfleri sadeleştirir (panelin glNorm'undan BAĞIMSIZ yazıldı; beklenen sonucu hesaplamak için). */
+export const sade = (s) => String(s).replace(/[İIı]/g, "i").replace(/[Şş]/g, "s").replace(/[Ğğ]/g, "g").replace(/[Üü]/g, "u").replace(/[Öö]/g, "o").replace(/[Çç]/g, "c").toLowerCase();
+/** Sayfadaki ölçüler: yana taşma, görünen en küçük yazı (px) — `kok` seçicisinin içinde. */
+export const olcu = (page, kok) => page.evaluate((k) => {
+  const gorunur = (e) => { const r = e.getBoundingClientRect(), c = getComputedStyle(e); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+  let enKucuk = 99;
+  document.querySelectorAll(k + " *").forEach((e) => { if (!gorunur(e)) return; if (![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) return; enKucuk = Math.min(enKucuk, parseFloat(getComputedStyle(e).fontSize)); });
+  return { tasma: document.documentElement.scrollWidth - window.innerWidth, enKucukYazi: enKucuk };
+}, kok);
+/** Açık penceredeki (modal) menü öğesine / düğmeye yazısıyla basar. */
+export const menuBas = async (page, yazi) => { const oldu = await page.evaluate((y) => { const b = [...document.querySelectorAll(".modal-overlay .gl-menu-oge")].find((x) => x.querySelector("b").textContent.startsWith(y)); if (b) b.click(); return !!b; }, yazi); if (!oldu) throw new Error("menüde yok: " + yazi); await bekle(250); };
+export const modalBaslik = (page) => page.evaluate(() => { const h = [...document.querySelectorAll(".modal-overlay .modal-head h3")].pop(); return h ? h.textContent.trim() : ""; });
+export const modalKapat = (page) => page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()));

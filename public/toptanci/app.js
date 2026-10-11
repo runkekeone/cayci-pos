@@ -840,7 +840,7 @@ function tableCard(columns, rowsHTML, info) {
   return `<div class="card gl-tablo${cls}">
     <div class="table-tools"><div class="len"><select><option>10</option><option>25</option><option>50</option><option>100</option></select> kayıt göster</div><div class="search"><span class="gl-t-ara-ik">${ikon("ara", 20)}</span><input type="text" class="tbl-search" inputmode="search" placeholder="Bu listede ara" aria-label="Bu listede ara" autocomplete="off" /></div></div>
     <div class="table-wrap"><table class="grid"><thead><tr>${ths}</tr></thead><tbody>${body}</tbody></table></div>
-    <div class="tbl-info">${info || ""}</div>
+    <div class="tbl-info">${n > GL_TABLO_SAYFA ? (info || "") : ""}</div>
     <div class="pager"></div>
   </div>`;
 }
@@ -1135,7 +1135,7 @@ function renderMusteriler() {
       <span class="gl-ok">${ikon("sag", 18)}</span>
     </button>`;
   }).join("");
-  return pageHead("Müşteriler", `${liste.length} müşteri · Toplam borç: ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " müşterinin vadesi geçmiş" : ""}`, [{ label: ikon("arti", 18) + " Yeni müşteri", act: "yeni-musteri" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
+  return pageHead("Müşteriler", `${liste.length} müşteri · Toplam borç ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " vadesi geçmiş" : ""}`, [{ label: ikon("arti", 18) + " Yeni müşteri", act: "yeni-musteri" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
     (liste.length ? glAramaHTML("glMusAra", "Müşteri ara") +
       `<div class="card gl-kart" id="glMusKart">
         <div class="gl-sayi" hidden></div>
