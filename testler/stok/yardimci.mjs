@@ -17,6 +17,8 @@ export function aracKopya() {
     fs.mkdirSync(path.join(dizin, "tools"));
     _aracKopya = path.join(dizin, "tools/babuco.cjs");
     fs.copyFileSync(ARAC, _aracKopya);
+    // Aracın yanındaki yardımcı modüller (kimlik vb.) de gelsin; yedek klasörü ve saklı oturum dosyası gelmesin.
+    for (const d of fs.readdirSync(path.dirname(ARAC))) if (/\.cjs$/.test(d) && d !== "babuco.cjs") fs.copyFileSync(path.join(path.dirname(ARAC), d), path.join(dizin, "tools", d));
   }
   return _aracKopya;
 }
@@ -26,7 +28,7 @@ export function arac(bulutUrl, argumanlar, secenek = {}) {
   return new Promise((coz) => {
     const c = spawn(process.execPath, [secenek.arac || aracKopya(), ...argumanlar], {
       cwd: secenek.cwd || DEPO,
-      env: { ...process.env, BABUCO_SB_URL: bulutUrl, BABUCO_SB_KEY: "sahte", ...(secenek.env || {}) },
+      env: { ...process.env, BABUCO_SB_URL: bulutUrl, BABUCO_SB_KEY: "sahte", BABUCO_EPOSTA: "", BABUCO_SIFRE: "", ...(secenek.env || {}) },
     });
     let stdout = "", stderr = "";
     c.stdout.on("data", (d) => (stdout += d)); c.stderr.on("data", (d) => (stderr += d));

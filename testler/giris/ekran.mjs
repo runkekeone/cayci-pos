@@ -9,7 +9,7 @@ import { girisFormu } from "./yardimci.mjs";
 const hedef = process.argv[2] || path.resolve(DEPO, "../ekran/giris");
 fs.mkdirSync(hedef, { recursive: true });
 const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), kilit: true });
-const p = await panelAc({ bulutUrl: bulut.url });
+const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
 const { page } = p;
 const cek = (ad) => page.screenshot({ path: path.join(hedef, ad + ".png") });
 try {

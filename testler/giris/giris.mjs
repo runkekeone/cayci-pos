@@ -13,7 +13,7 @@ const veriIstekleri = (bulut) => bulut.istekler.filter((i) => i.yol.startsWith("
 {
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar() });
   const taban = tabanPaneli();
-  const p = await panelAc({ bulutUrl: bulut.url, panelDizin: taban.dizin });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url, panelDizin: taban.dizin });
   try {
     await p.page.waitForFunction(() => window.app.getStore().customers.length === 4, null, { timeout: 10000 });
     d.dogru(await panelGorunuyor(p.page), "ÖNCE (eski sürüm): şifre sormadan açılıyor, 4 müşteri ekranda");
@@ -24,7 +24,7 @@ const veriIstekleri = (bulut) => bulut.istekler.filter((i) => i.yol.startsWith("
 for (const kip of ["kilitsiz", "kilitli"]) {
   console.log("\n— veritabanı " + kip + " —");
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), kilit: kip === "kilitli" });
-  const p = await panelAc({ bulutUrl: bulut.url });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
   const { page } = p;
   try {
     // 1) oturumsuz açılış
@@ -128,7 +128,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
   console.log("\n— izin listesinde olmayan hesap —");
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), kilit: true });
   const once = JSON.stringify(bulut.deger("babuco:store"));
-  const p = await panelAc({ bulutUrl: bulut.url });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
   try {
     d.esit(await girisFormu(p.page, YABANCI.eposta, YABANCI.sifre), "Bu hesabın panele girme izni yok.", "izinsiz hesap: sade ret mesajı");
     await bekle(1500);
@@ -156,7 +156,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
 {
   console.log("\n— internet yokken çıkış —");
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), kilit: true });
-  const p = await panelAc({ bulutUrl: bulut.url });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
   try {
     await girisFormu(p.page, TOPTANCI.eposta, TOPTANCI.sifre);
     await p.page.waitForFunction(() => window.app.getStore().customers.length === 4);
@@ -177,7 +177,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
 {
   console.log("\n— kilit öncesi: eski politika yalnız oturumsuz role açık —");
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), oncekiDuzen: "yalniz-anon" });
-  const p = await panelAc({ bulutUrl: bulut.url });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
   try {
     d.esit(await girisFormu(p.page, TOPTANCI.eposta, TOPTANCI.sifre), "", "eski düzen: giriş yapıldı");
     await p.page.waitForFunction(() => window.app.getStore().customers.length === 4, null, { timeout: 10000 });

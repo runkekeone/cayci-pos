@@ -12,7 +12,7 @@ const buluttaMusteri = (bulut) => bulut.deger("babuco:store").customers.length;
 {
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar() });
   const taban = tabanPaneli();
-  const p = await panelAc({ bulutUrl: bulut.url, panelDizin: taban.dizin, yol: "#/profilim" });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url, panelDizin: taban.dizin, yol: "#/profilim" });
   try {
     await p.page.waitForFunction(() => window.app.getStore().customers.length === 4);
     await p.page.click("li[data-ptab='3']");

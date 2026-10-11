@@ -54,6 +54,17 @@ export async function sahteyeYonlendir(context, bulutUrl) {
   });
 }
 
+/** Sunucuya sormadan geçerli sayılan (süresi uzak gelecekte) uydurma oturum kaydı. */
+export function sahteOturum(eposta = "deneme@ornek.test") {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const simdi = Math.floor(Date.now() / 1000), bitis = simdi + 10 * 365 * 86400;
+  const kullanici = { id: "00000000-0000-4000-8000-0000000000aa", aud: "authenticated", role: "authenticated", email: eposta, app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" };
+  return {
+    access_token: b64({ alg: "HS256", typ: "JWT" }) + "." + b64({ sub: kullanici.id, email: eposta, role: "authenticated", aud: "authenticated", iat: simdi, exp: bitis }) + ".sahte-imza",
+    token_type: "bearer", expires_in: bitis - simdi, expires_at: bitis, refresh_token: "sahte-yenileme", user: kullanici,
+  };
+}
+
 /**
  * Paneli telefon boyutunda açar. Dönen: { browser, context, page, kapat, diyaloglar }
  * @param {object} a
@@ -69,7 +80,10 @@ export async function panelAc(a) {
   const kendiSunucu = a.panelUrl ? null : await statikSunucu(a.panelDizin || PANEL_DIZIN);
   const panelUrl = a.panelUrl || kendiSunucu.url;
   const browser = a.browser || await chromium.launch({ headless: a.headless !== false });
-  const context = await browser.newContext({ viewport: { width: a.genislik || 390, height: a.yukseklik || 844 }, locale: "tr-TR", timezoneId: "Europe/Istanbul", storageState: a.storageState });
+  // Panel giriş istiyor: denemeler varsayılan olarak "cihazda oturum var" durumunda açılır.
+  // Giriş ekranının kendisini sınamak için { oturumsuz: true } ver; kendi storageState'ini verirsen o kullanılır.
+  const depolama = a.storageState || (a.oturumsuz ? undefined : { cookies: [], origins: [{ origin: panelUrl, localStorage: [{ name: "babuco:oturum", value: JSON.stringify(sahteOturum()) }] }] });
+  const context = await browser.newContext({ viewport: { width: a.genislik || 390, height: a.yukseklik || 844 }, locale: "tr-TR", timezoneId: "Europe/Istanbul", storageState: depolama });
   await sahteyeYonlendir(context, a.bulutUrl);
   const page = await context.newPage();
   const diyaloglar = [];
@@ -95,7 +109,7 @@ export function aracCalistir(bulutUrl, argumanlar, secenek = {}) {
   return new Promise((coz) => {
     const c = spawn(process.execPath, [secenek.arac || ARAC, ...argumanlar], {
       cwd: secenek.cwd || DEPO,
-      env: { ...process.env, BABUCO_SB_URL: bulutUrl, BABUCO_SB_KEY: "sahte", ...(secenek.env || {}) },
+      env: { ...process.env, BABUCO_SB_URL: bulutUrl, BABUCO_SB_KEY: "sahte", BABUCO_EPOSTA: "", BABUCO_SIFRE: "", BABUCO_OTURUM_DOSYA: path.join(DEPO, "testler/.oturum-yok.json"), ...(secenek.env || {}) },
     });
     let cikti = "";
     c.stdout.on("data", (d) => (cikti += d)); c.stderr.on("data", (d) => (cikti += d));

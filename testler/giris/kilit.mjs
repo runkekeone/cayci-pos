@@ -81,7 +81,7 @@ const baslangic = () => [
   const bulut = await kilitliBulut({ satirlar: baslangic(), kilit: true });
   const once = JSON.stringify(bulut.deger("babuco:store"));
   const taban = tabanPaneli();
-  const p = await panelAc({ bulutUrl: bulut.url, panelDizin: taban.dizin });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url, panelDizin: taban.dizin });
   try {
     await bekle(2500);
     const yazmaDenemesi = bulut.gunluk.filter((g) => g.yol === "/rest/v1/kv" && g.yontem === "POST");
@@ -96,7 +96,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
   const store = ornekStore();
   store.products.find((x) => x.id === "u6").gorunur = false;                // gizli ürün kataloğa girmemeli
   const bulut = await kilitliBulut({ satirlar: ornekSatirlar(store), kilit: kip === "kilitli" });
-  const p = await panelAc({ bulutUrl: bulut.url });
+  const p = await panelAc({ oturumsuz: true, bulutUrl: bulut.url });
   const { page } = p;
   try {
     await bekle(1500);
