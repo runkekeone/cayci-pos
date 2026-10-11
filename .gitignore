@@ -32,5 +32,9 @@ src-yedek-*/
 *.keystore
 tools/yedek/
 
+# babuco aracinin sakli oturumu (jeton) - asla commit etme
+tools/.babuco-oturum.json
+tools/.babuco-oturum.json.*.tmp
+
 # gunluk satis disa aktarimlari - musteri/borc verisi iceriyor, git disinda kalir
 Satislar-*.xlsx

@@ -42,29 +42,11 @@
 const fs = require("fs");
 const path = require("path");
 
-/* Bağlantı bilgisi panelin kendi kaynağından okunur — bu dosyada anahtarın ikinci bir
-   kopyası TUTULMAZ. Sıra: ortam değişkeni → panelin app.js'i (tek doğru kaynak).
-   Panel zaten publishable (tarayıcıya gömülen) anahtarı kullanıyor. */
-function panelAyar() {
-  if (process.env.BABUCO_SB_URL && process.env.BABUCO_SB_KEY) {
-    return { url: process.env.BABUCO_SB_URL, key: process.env.BABUCO_SB_KEY };
-  }
-  const adaylar = [
-    process.env.BABUCO_PANEL_JS,
-    path.join(process.cwd(), "public/toptanci/app.js"),
-    path.join(__dirname, "../public/toptanci/app.js"),          // depo içi kopya: tools/
-    path.join(__dirname, "../cayci-pos/public/toptanci/app.js"), // masaüstü kopya: ajanss/babuco-cli/
-    "C:/Users/PC/Desktop/ajanss/cayci-pos/public/toptanci/app.js",
-  ].filter(Boolean);
-  for (const p of adaylar) {
-    try {
-      const src = fs.readFileSync(p, "utf8");
-      const u = src.match(/SB_URL\s*=\s*"([^"]+)"/), k = src.match(/SB_KEY\s*=\s*"([^"]+)"/);
-      if (u && k) return { url: u[1], key: k[1] };
-    } catch (e) { /* sıradaki adaya bak */ }
-  }
-  throw new Error("Panel ayarı bulunamadi. Ya depo kokunden calistir, ya da BABUCO_SB_URL + BABUCO_SB_KEY ortam degiskenlerini ver.");
-}
+/* Bağlantı ve kimlik tools/babuco-kimlik.cjs'de: bağlantı bilgisi panelin kendi kaynağından (app.js) okunur,
+   oturum varsa (BABUCO_EPOSTA + BABUCO_SIFRE ya da bir kez `node tools/babuco-kimlik.cjs giris`) onunla,
+   yoksa bugünkü gibi herkese açık anahtarla bağlanır. Şifre hiçbir çıktıya yazılmaz. */
+const kimlik = require("./babuco-kimlik.cjs");
+function panelAyar() { return kimlik.panelAyar(); }
 const _ayar = panelAyar();
 const SB_URL = _ayar.url;
 const SB_KEY = _ayar.key;
@@ -95,14 +77,9 @@ function customerBorc(store, id) {
 const karOrani = (ciro, mal) => (Number(ciro) > 0 ? "%" + (((ciro - mal) / ciro) * 100).toFixed(1) : "—");
 
 /* ---------- bulut ---------- */
-async function sb(pathQ, opts) {
-  opts = opts || {};
-  const base = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" };
-  const r = await fetch(SB_URL + "/rest/v1/" + pathQ, Object.assign({}, opts, { headers: Object.assign(base, opts.headers || {}) }));
-  const txt = await r.text();
-  if (!r.ok) throw new Error("Supabase HTTP " + r.status + ": " + txt.slice(0, 300));
-  return txt ? JSON.parse(txt) : null;
-}
+/* Bütün bulut istekleri buradan geçer. Oturumla bağlanır (yoksa herkese açık anahtarla); store buluta
+   yazıldığında çay ocağı sipariş ekranının okuduğu herkese açık kataloğu (babuco:katalog) da günceller. */
+async function sb(pathQ, opts) { return kimlik.sb(pathQ, opts); }
 async function storeOku() {
   const rows = await sb("kv?key=eq." + encodeURIComponent(BULUT_KEY) + "&select=value,updated_at");
   if (!rows || !rows.length) throw new Error("Bulutta babuco:store kaydı yok.");
