@@ -829,14 +829,19 @@ function field(f) {
   if (f.type === "select") return `<div class="field"><label>${f.label}</label><select>${(f.options || ["Tümü"]).map((o) => `<option>${o}</option>`).join("")}</select></div>`;
   return `<div class="field"><label>${f.label}</label><input type="${f.type || "text"}"${f.value ? ` value="${f.value}"` : ""}${f.ph ? ` placeholder="${f.ph}"` : ""} /></div>`;
 }
+/* Ortak tablo kartı. Az kayıtta arama kutusu / sayfa düğmeleri çizilmez (gl-t-* sınıfları; enhanceTables DOM'a göre günceller). */
+const GL_TABLO_ARAMA_ESIK = 5;   // bu kadar ya da daha az satırda arama kutusu yok
+const GL_TABLO_SAYFA = 10;       // telefonda sayfa başına satır
 function tableCard(columns, rowsHTML, info) {
   const ths = columns.map((c) => `<th>${c}<span class="sort">⇅</span></th>`).join("");
   const body = rowsHTML || `<tr class="empty-row"><td colspan="${columns.length}">Kayıt bulunamadı.</td></tr>`;
-  return `<div class="card">
-    <div class="table-tools"><div class="len"><select><option>10</option><option>25</option><option>50</option><option>100</option></select> kayıt göster</div><div class="search">Ara: <input type="text" class="tbl-search" /></div></div>
+  const n = rowsHTML ? (rowsHTML.match(/<tr[\s>]/g) || []).length : 0;
+  const cls = (n <= GL_TABLO_ARAMA_ESIK ? " gl-t-aramasiz" : "") + (n <= GL_TABLO_SAYFA ? " gl-t-sayfasiz" : "") + (n === 0 ? " gl-t-bos" : "");
+  return `<div class="card gl-tablo${cls}">
+    <div class="table-tools"><div class="len"><select><option>10</option><option>25</option><option>50</option><option>100</option></select> kayıt göster</div><div class="search"><span class="gl-t-ara-ik">${ikon("ara", 20)}</span><input type="text" class="tbl-search" inputmode="search" placeholder="Bu listede ara" aria-label="Bu listede ara" autocomplete="off" /></div></div>
     <div class="table-wrap"><table class="grid"><thead><tr>${ths}</tr></thead><tbody>${body}</tbody></table></div>
-    <div class="tbl-info">${info || "0 kayıttan 0 ile 0 arasındakiler"}</div>
-    <div class="pager"><span class="mut">İlk</span><span class="mut">Önceki</span><span class="on">1</span><span class="mut">Sonraki</span><span class="mut">Son</span></div>
+    <div class="tbl-info">${info || ""}</div>
+    <div class="pager"></div>
   </div>`;
 }
 function stat(label, value, cls, trend) { return `<div class="stat ${cls || ""}">${trend ? `<span class="s-trend ${trend.dir}">${trend.text}</span>` : ""}<span class="s-label">${label}</span><span class="s-value">${value}</span></div>`; }
@@ -844,14 +849,81 @@ function grid(items) { return `<div class="summary-grid">${items.map((s) => stat
 function trendBadge(cur, prev) { if (!prev || prev <= 0) return null; const p = Math.round(((cur - prev) / prev) * 100); return { dir: p >= 0 ? "up" : "down", text: (p >= 0 ? "+" : "") + "%" + p }; }
 function infoLine(n) { return n ? `${n} kayıttan 1 ile ${n} arasındakiler` : undefined; }
 
-/* tablo arama (basit istemci filtre) */
+/* tablo arama (basit istemci filtre) — Türkçe harfe duyarsız (glNorm). Sayfalanan tablolarda enhanceTables devralır. */
 function wireTableSearch() {
   document.querySelectorAll(".tbl-search").forEach((inp) => {
     inp.addEventListener("input", () => {
-      const q = inp.value.toLowerCase();
+      const q = glNorm(inp.value);
       const tbody = inp.closest(".card").querySelector("tbody");
-      tbody.querySelectorAll("tr").forEach((tr) => { if (tr.classList.contains("empty-row")) return; tr.style.display = tr.textContent.toLowerCase().includes(q) ? "" : "none"; });
+      tbody.querySelectorAll("tr").forEach((tr) => { if (tr.classList.contains("empty-row")) return; tr.style.display = glEslesir(glNorm(tr.textContent), q) ? "" : "none"; });
     });
+  });
+}
+
+/* ============ gl — liste ajanının ortak parçaları ============
+   Satır liste kalıbı (.gl-liste / .gl-satir), büyük arama kutusu, "Diğer" menüsü, silme onayı.
+   Stil: stil-g-liste.css. Hesap yapmaz; yalnız gösterir. */
+// Türkçe harfe duyarsız arama anahtarı: "IŞIK" = "ışık" = "isik", "Çay" = "cay".
+function glNorm(s) {
+  return String(s == null ? "" : s).toLocaleLowerCase("tr")
+    .replace(/[ıî]/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/[üû]/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/â/g, "a")
+    .replace(/\s+/g, " ").trim();
+}
+// Aranan her kelime (boşlukla ayrılmış) metinde geçmeli: "kar mer" → "Kardeşler … Merkez".
+function glEslesir(normMetin, normSorgu) { if (!normSorgu) return true; return normSorgu.split(" ").every((k) => normMetin.indexOf(k) >= 0); }
+function glAramaHTML(id, ipucu) {
+  return `<div class="gl-ara"><span class="gl-ara-ik">${ikon("ara", 22)}</span><input type="text" inputmode="search" enterkeyhint="search" id="${id}" class="gl-ara-in" placeholder="${ipucu}" aria-label="${ipucu}" autocomplete="off" autocapitalize="off" spellcheck="false" /><button class="gl-ara-sil" type="button" aria-label="Aramayı temizle" hidden>${ikon("kapat", 20)}</button></div>`;
+}
+/* Arama kutusunu listeye bağlar: yazdıkça .gl-satir[data-ara] satırlarını süzer. Yazılan şey, ekran yeniden
+   çizilince (eşitleme, kayıt) kaybolmasın diye glAramaDurum'da tutulur. */
+const glAramaDurum = {};
+function glAramaWire(anahtar, inputId, kartSel) {
+  const inp = document.getElementById(inputId), kart = document.querySelector(kartSel); if (!inp || !kart) return;
+  const sil = inp.parentNode.querySelector(".gl-ara-sil"), yok = kart.querySelector(".gl-yok"), sayi = kart.querySelector(".gl-sayi");
+  const satirlar = [...kart.querySelectorAll(".gl-satir[data-ara]")];
+  const uygula = () => {
+    const ham = inp.value, q = glNorm(ham); glAramaDurum[anahtar] = ham;
+    let n = 0;
+    satirlar.forEach((r) => { const uyar = glEslesir(r.dataset.ara, q); r.hidden = !uyar; if (uyar) n++; });
+    if (sil) sil.hidden = !ham;
+    kart.classList.toggle("gl-suzuluyor", !!q);
+    if (sayi) { sayi.hidden = !q || !n; sayi.textContent = n + " sonuç"; }
+    if (yok) { yok.hidden = !(q && !n); const b = yok.querySelector("b"); if (b) b.textContent = "“" + ham.trim() + "”"; }
+  };
+  inp.value = glAramaDurum[anahtar] || "";
+  inp.addEventListener("input", uygula);
+  const temizle = () => { inp.value = ""; uygula(); inp.focus(); };
+  if (sil) sil.addEventListener("click", temizle);
+  kart.querySelectorAll("[data-gl-temizle]").forEach((b) => b.addEventListener("click", temizle));
+  uygula();
+}
+// Arama sonucu boş kalınca kartın içinde görünen kutu.
+function glYokHTML(ne) { return `<div class="gl-yok" hidden><p><b></b> ile eşleşen ${ne} yok.</p><button class="btn soft" type="button" data-gl-temizle>Aramayı temizle</button></div>`; }
+/* Uzun listeyi kısaltır: ilk `sinir` satır görünür, kalanı "Hepsini göster" düğmesinin arkasında. */
+function glSinirli(satirlar, sinir) {
+  if (satirlar.length <= sinir) return satirlar.join("");
+  return satirlar.slice(0, sinir).join("") + `<div class="gl-fazla" hidden>${satirlar.slice(sinir).join("")}</div><button class="gl-hepsi" type="button">Hepsini göster (${satirlar.length - sinir} kayıt daha)</button>`;
+}
+function glSinirliWire(kok) {
+  (kok || document).querySelectorAll(".gl-hepsi").forEach((b) => b.addEventListener("click", () => { const f = b.previousElementSibling; if (f && f.classList.contains("gl-fazla")) f.hidden = false; b.remove(); }));
+}
+function glRozet(metin, tur, ikonAd) { return `<span class="gl-rozet ${tur || ""}">${ikonAd ? ikon(ikonAd, 14, 2) : ""}${metin}</span>`; }
+/* "Diğer" menüsü: alttan açılan, büyük satırlı liste. ogeler: { ikon, ad, alt?, is(), tehlike? } — boş (false/null) olan atlanır. */
+function glDigerAc(baslik, ogeler) {
+  const liste = ogeler.filter(Boolean);
+  const body = `<div class="gl-menu">${liste.map((o, i) => `<button class="gl-menu-oge${o.tehlike ? " gl-tehlike" : ""}" type="button" data-glm="${i}"><span class="gl-menu-ik">${ikon(o.ikon, 22)}</span><span class="gl-menu-yazi"><b>${o.ad}</b>${o.alt ? `<small>${o.alt}</small>` : ""}</span></button>`).join("")}</div>`;
+  const m = openModal(baslik, body, { noFoot: true, onMount: (ov) => {
+    ov.classList.add("gl-menu-ov");
+    ov.querySelectorAll("[data-glm]").forEach((b) => b.addEventListener("click", () => { const o = liste[Number(b.dataset.glm)]; m.close(); o.is(); }));
+  } });
+  return m;
+}
+/* Silme onayı: ne silineceğini ve sonucunu söyler; kırmızı düğmeye basılmadan hiçbir şey silinmez. */
+function glSilOnay(baslik, govdeHTML, dugme, sil) {
+  return openModal(baslik, `<div class="gl-sil-onay"><span class="gl-sil-ik">${ikon("dikkat", 26)}</span><div class="gl-sil-yazi">${govdeHTML}</div></div>`, {
+    okLabel: dugme,
+    onMount: (ov) => { ov.classList.add("gl-sil-ov"); const ok = ov.querySelector(".modal-foot .ok"); if (ok) ok.classList.add("gl-sil-ok"); const v = ov.querySelector(".modal-foot .close"); if (v) v.textContent = "Vazgeç"; },
+    onOk: () => { sil(); },
   });
 }
 
@@ -941,30 +1013,57 @@ function mountCrud(cfg) {
 }
 
 /* ============ ÜRÜNLER ============ */
+/* Tek satır: ürün adı (+ grup, dükkan/araç stoğu küçük) · satış fiyatı. Satıra dokununca düzenleme açılır;
+   silme listede yok, düzenleme ekranının altında (glUrunSilEkle). Stok uyarıları para bölümündeki aynı ölçütle. */
+function glUrunSatirHTML(p) {
+  const low = stkKritikVar(p) && stkToplamStok(p) <= Number(p.kritik);
+  const dEksi = Number(p.stok) < 0, aEksi = Number(p.aracStok) < 0;
+  const rozet = (dEksi || aEksi) ? glRozet("eksi stok", "uyari", "dikkat") : (low ? glRozet("azaldı", "uyari") : "");
+  return `<button class="gl-satir" type="button" data-edit="${p.id}" data-ara="${esc(glNorm((p.ad || "") + " " + (p.grup || "") + " " + (p.barkod || "")))}">
+    <span class="gl-sol"><span class="gl-ad">${esc(p.ad)}</span>
+      <span class="gl-alt"><span class="gl-grup">${esc(p.grup || "Grupsuz")}</span><span class="gl-stok">Dükkan <b class="${low || dEksi ? "stok-low" : ""}">${num2.format(Number(p.stok) || 0)}</b></span><span class="gl-stok">Araç <b class="arac-stok ${aEksi ? "stok-low" : ""}">${num2.format(Number(p.aracStok) || 0)}</b></span>${rozet}</span>
+    </span>
+    <span class="gl-sag"><b class="gl-tutar">${money.format(Number(p.satis) || 0)}</b></span>
+    <span class="gl-ok">${ikon("sag", 18)}</span>
+  </button>`;
+}
 function renderUrunler() {
-  const rows = store.products.map((p, i) => {
-    const low = stkKritikVar(p) && stkToplamStok(p) <= Number(p.kritik);
-    return `<tr>
-      <td>${i + 1}</td><td>📦</td><td>${esc(p.barkod) || "-"}</td>
-      <td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "GRUPSUZ ÜRÜN")}</span></td>
-      <td class="${low || Number(p.stok) < 0 ? "stok-low" : ""}">${num2.format(Number(p.stok) || 0)}</td>
-      <td class="arac-stok ${Number(p.aracStok) < 0 ? "stok-low" : ""}">${num2.format(Number(p.aracStok) || 0)}</td>
-      <td>${Number(p.kdv) || 0}</td><td>${p.kritik === "" || p.kritik == null ? 0 : Number(p.kritik)}</td>
-      <td>${money.format(Number(p.alis) || 0)}</td><td>${money.format(Number(p.satis) || 0)}</td>
-      <td><div class="act-btns"><button class="edit" data-edit="${p.id}">Düzenle</button><button class="del" data-del="${p.id}">Sil</button></div></td>
-    </tr>`;
-  }).join("");
-  return pageHead("Ürünler", store.products.length + " ürün", [{ label: "🚚 Araç Stoğu", route: "arac-yukleme" }, { label: "＋ Ürün Ekle", route: "urun-ekle" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
-    tableCard(["Sıra", "Görsel", "Ürün Barkodu", "Ürün Adı", "Dükkan", "Araç", "KDV", "Kritik Stok", "Alış Fiyatı", "Fiyat 1", "İşlem"], rows, infoLine(store.products.length));
+  const liste = store.products.slice().sort((a, b) => String(a.ad || "").localeCompare(String(b.ad || ""), "tr"));
+  const rows = liste.map(glUrunSatirHTML).join("");
+  return pageHead("Ürünler", store.products.length + " ürün", [{ label: ikon("arti", 18) + " Ürün Ekle", act: "gl-urun-ekle" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
+    (liste.length ? glAramaHTML("glUrunAra", "Ürün ara") +
+      `<div class="card gl-kart" id="glUrunKart">
+        <div class="gl-baslik"><span>Ürün · stok</span><span>Satış fiyatı</span></div>
+        <div class="gl-sayi" hidden></div>
+        <div class="gl-liste">${rows}</div>
+        ${glYokHTML("ürün")}
+      </div>`
+      : `<div class="card gl-bos">Henüz ürün yok. <b>Ürün Ekle</b> ile ilk ürünü yaz.</div>`);
 }
 function mountUrunler() {
-  document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { editProductId = b.dataset.edit; navigate("urun-ekle"); }));
-  document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => { const p = findProduct(b.dataset.del); if (p && confirm(`"${p.ad}" silinsin mi?`)) { store.products = store.products.filter((x) => x.id !== p.id); saveStore(); render(); } }));
-  const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportProducts);
-  const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importProducts));
-  const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"]])));
-  const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(null));
-  wireTableSearch();
+  document.querySelectorAll("#content [data-edit]").forEach((b) => b.addEventListener("click", () => { editProductId = b.dataset.edit; navigate("urun-ekle"); }));
+  const ye = document.querySelector('[data-act="gl-urun-ekle"]'); if (ye) ye.addEventListener("click", () => { editProductId = null; navigate("urun-ekle"); });
+  const dg = document.querySelector('[data-act="gl-diger"]'); if (dg) dg.addEventListener("click", () => glDigerAc("Ürünler — diğer işlemler", [
+    { ikon: "kamyon", ad: "Araç stoğu", alt: "Araçtaki malı say / yaz", is: () => navigate("arac-yukleme") },
+    { ikon: "etiket", ad: "Fiyat listesi", alt: "Müşteriye gönderilecek liste", is: () => openFiyatListesi(null) },
+    { ikon: "indir", ad: "Excel'e aktar", alt: "Bütün ürünleri dosyaya indir", is: exportProducts },
+    { ikon: "yukle", ad: "İçe aktar", alt: "Excel/CSV dosyasından ürün yükle", is: () => openCsvImport(importProducts) },
+    { ikon: "fis", ad: "Şablon indir", alt: "İçe aktarma için boş dosya", is: () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"]])) },
+  ]));
+  glAramaWire("urunler", "glUrunAra", "#glUrunKart");
+}
+/* Ürün silme: listeden kalktı, düzenleme ekranının en altında ayrı bir adım (mountUrunEkle çağırır). */
+function glUrunSilEkle() {
+  const p = editProductId ? findProduct(editProductId) : null, form = document.getElementById("urunForm"); if (!p || !form) return;
+  const kutu = document.createElement("div"); kutu.className = "gl-sil-bolum";
+  kutu.innerHTML = `<button class="btn softred" type="button" id="glUrunSil">${ikon("cop", 18)} Bu ürünü sil</button>`;
+  form.parentNode.insertBefore(kutu, form.nextSibling);
+  kutu.querySelector("#glUrunSil").addEventListener("click", () => {
+    const stok = stkToplamStok(p);
+    glSilOnay("Ürün silinsin mi?", `<p><b>${esc(p.ad)}</b> ürün listesinden silinecek.</p>${stok ? `<p>Kayıtlı stoğu var: dükkan ${num2.format(Number(p.stok) || 0)}, araç ${num2.format(Number(p.aracStok) || 0)}.</p>` : ""}<p>Eski satış fişleri değişmez. Bu işlem geri alınamaz.</p>`, "Evet, sil", () => {
+      store.products = store.products.filter((x) => x.id !== p.id); saveStore(); editProductId = null; navigate("urunler");
+    });
+  });
 }
 let editProductId = null;
 function renderUrunEkle() {
@@ -1012,19 +1111,38 @@ function mountUrunEkle() {
     saveStore(); editProductId = null; navigate("urunler");
     stkMarjUyariGoster(alisDegisti ? stkMarjEtki(store, alisDegisti) : []);
   });
+  glUrunSilEkle(); // liste ajanı: "Bu ürünü sil" adımı (silme ürün listesinden buraya taşındı)
 }
 
 /* ============ MÜŞTERİLER ============ */
+/* Müşteri işaretleri (limit aşıldı / N gün gecikmiş) — değerler para bölümünün limitDurum + borcYas'ından. */
+function glMusteriRozetHTML(d, y) {
+  return (d && d.asim ? glRozet("limit aşıldı", "kirmizi", "dikkat") : "") + (y && y.gecikmis ? glRozet(y.gecikmeGun + " gün gecikmiş", "kirmizi", "saat") : "");
+}
+/* Tek satır: ad (+ varsa gecikme / limit işareti) · borç. Satıra dokununca müşteri detayı açılır;
+   Ödeme Al / Düzenle / Veresiye / Sil detayın içinde. */
 function renderMusteriler() {
-  const liste = store.customers.filter((c) => !c.bayi); // servisçiler (bayi) ayrı sayfada
-  const toplamBorc = liste.reduce((s, c) => s + customerBorc(c.id), 0);
-  const rows = liste.map((c, i) => {
-    const borc = customerBorc(c.id);
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button>${borc > 0.5 ? musteriRozetHTML(c.id) : ""}</td><td>${customerSalesCount(c.id)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="warn" data-borcekle="${c.id}">Veresiye Borç Ekle</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+  const liste = store.customers.filter((c) => !c.bayi).sort((a, b) => String(a.ad || "").localeCompare(String(b.ad || ""), "tr")); // servisçiler (bayi) ayrı sayfada
+  let toplamBorc = 0, gecSay = 0;
+  const rows = liste.map((c) => {
+    const borc = customerBorc(c.id), y = borcYas(c.id), d = limitDurum(c.id, 0);
+    toplamBorc += borc; if (y && y.gecikmis) gecSay++;
+    const rozet = borc > 0.5 ? glMusteriRozetHTML(d, y) : "";
+    const sag = borc > 0.5 ? `<b class="gl-tutar gl-borc">${money.format(borc)}</b>` : (borc < -0.5 ? `<b class="gl-tutar gl-alacak">${money.format(borc)}</b>` : `<span class="gl-tutar gl-sifir">Borcu yok</span>`);
+    return `<button class="gl-satir" type="button" data-detay="${c.id}" data-ara="${esc(glNorm((c.ad || "") + " " + (c.telefon || "")))}">
+      <span class="gl-sol"><span class="gl-ad">${esc(c.ad)}</span>${rozet ? `<span class="gl-alt">${rozet}</span>` : ""}</span>
+      <span class="gl-sag">${sag}</span>
+      <span class="gl-ok">${ikon("sag", 18)}</span>
+    </button>`;
   }).join("");
-  const gecSay = liste.filter((c) => { const y = borcYas(c.id); return y && y.gecikmis; }).length;
-  return pageHead("Müşteriler", `${liste.length} kişi · Toplam borç: ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " müşterinin vadesi geçmiş" : ""}`, [{ label: "＋ Yeni Müşteri Oluştur", act: "yeni-musteri" }, { label: "📇 Rehberden Ekle", cls: "soft", act: "rehber-musteri" }, { label: "⇩ Excel'e Aktar", cls: "softgreen", act: "csvOut" }, { label: "⇧ İçe Aktar", cls: "softgreen", act: "csvIn" }, { label: "Şablon", cls: "soft", act: "csvTpl" }]) +
-    tableCard(["Sıra", "Müşteri", "Alışveriş Sayısı", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
+  return pageHead("Müşteriler", `${liste.length} müşteri · Toplam borç: ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " müşterinin vadesi geçmiş" : ""}`, [{ label: ikon("arti", 18) + " Yeni müşteri", act: "yeni-musteri" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
+    (liste.length ? glAramaHTML("glMusAra", "Müşteri ara") +
+      `<div class="card gl-kart" id="glMusKart">
+        <div class="gl-sayi" hidden></div>
+        <div class="gl-liste">${rows}</div>
+        ${glYokHTML("müşteri")}
+      </div>`
+      : `<div class="card gl-bos">Henüz müşteri yok. <b>Yeni müşteri</b> ile ilk müşteriyi yaz.</div>`);
 }
 // Servisçiler (bayi) — normal müşterilerden ayrı; mekanik olarak müşteri (aynı borç/tahsilat/özel fiyat).
 function renderServisciler() {
@@ -1223,16 +1341,14 @@ async function rehberdenNumaraAta(custId) {
 }
 function mountMusteriler() {
   const y = document.querySelector('[data-act="yeni-musteri"]'); if (y) y.addEventListener("click", () => openYeniMusteri());
-  const rm = document.querySelector('[data-act="rehber-musteri"]'); if (rm) rm.addEventListener("click", rehberdenMusteriEkle);
-  document.querySelectorAll("[data-duzenlec]").forEach((b) => b.addEventListener("click", () => openYeniMusteri(null, findCustomer(b.dataset.duzenlec))));
-  document.querySelectorAll("[data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
-  document.querySelectorAll("[data-delc]").forEach((b) => b.addEventListener("click", () => { const c = findCustomer(b.dataset.delc); if (c && confirm(`"${c.ad}" silinsin mi?`)) { store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); render(); } }));
-  document.querySelectorAll("[data-odeme]").forEach((b) => b.addEventListener("click", () => openOdemeAl(b.dataset.odeme)));
-  document.querySelectorAll("[data-borcekle]").forEach((b) => b.addEventListener("click", () => openBorcEkle(b.dataset.borcekle)));
-  const o = document.querySelector('[data-act="csvOut"]'); if (o) o.addEventListener("click", exportCustomers);
-  const i = document.querySelector('[data-act="csvIn"]'); if (i) i.addEventListener("click", () => openCsvImport(importCustomers));
-  const t = document.querySelector('[data-act="csvTpl"]'); if (t) t.addEventListener("click", () => downloadFile("babuco-musteri-sablon.csv", csvBuild([["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"]])));
-  wireTableSearch();
+  document.querySelectorAll("#content [data-detay]").forEach((b) => b.addEventListener("click", () => { selectedCustomerId = b.dataset.detay; navigate("musteri-detay"); }));
+  const dg = document.querySelector('[data-act="gl-diger"]'); if (dg) dg.addEventListener("click", () => glDigerAc("Müşteriler — diğer işlemler", [
+    { ikon: "kisiler", ad: "Rehberden ekle", alt: "Telefon rehberinden müşteri seç", is: rehberdenMusteriEkle },
+    { ikon: "indir", ad: "Excel'e aktar", alt: "Bütün müşterileri dosyaya indir", is: exportCustomers },
+    { ikon: "yukle", ad: "İçe aktar", alt: "Excel/CSV dosyasından müşteri yükle", is: () => openCsvImport(importCustomers) },
+    { ikon: "fis", ad: "Şablon indir", alt: "İçe aktarma için boş dosya", is: () => downloadFile("babuco-musteri-sablon.csv", csvBuild([["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"]])) },
+  ]));
+  glAramaWire("musteriler", "glMusAra", "#glMusKart");
 }
 function openOdemeAl(custId) {
   const c = findCustomer(custId); if (!c) return;
@@ -1274,32 +1390,91 @@ function openBorcEkle(custId) {
   });
 }
 let selectedCustomerId = null;
+/* Müşteri detayı: tek özet kartı (kalan borç büyük; limit / vade / gecikme altında) + iki ana düğme + "Diğer".
+   Rakamlar customerBorc, limitDurum, borcYas'tan gelir; burada hesap yok. */
+function glMusteriOzetHTML(c, sales, pays) {
+  const borc = customerBorc(c.id), d = limitDurum(c.id, 0), y = borcYas(c.id);
+  const satir = (k, v, cls) => `<div class="gl-oz-satir"><span>${k}</span><b class="${cls || ""}">${v}</b></div>`;
+  const durum = y.gecikmis
+    ? `<div class="gl-oz-gecikme"><p>${ikon("saat", 18, 2)}<span><b>${money.format(y.gecikmisTutar)}</b> borcu <b>${y.gecikmeGun} gündür gecikmiş</b></span></p><button class="btn gl-hatirlat" data-hatirlat="${c.id}" type="button">${ikon("mesaj", 18)} Nazik Hatırlatma (WhatsApp)</button></div>`
+    : `<p class="gl-oz-durum">${borc > 0.5 ? "Vadesi geçen borç yok" : (borc < -0.5 ? "Fazla ödemesi var (alacaklı)" : "Borcu yok")}</p>`;
+  let h = satir("Borç limiti", d.limit ? money.format(d.limit) + (d.asim ? " — " + money.format(d.asim) + " aşıldı" : " — kalan " + money.format(d.kalan)) : "yok (sınırsız)", d.asim ? "gl-borc" : "");
+  h += satir("Vade", y.vade + " gün" + (y.vadeOzel ? "" : " (genel)"));
+  if (y.enEski) h += satir("En eski ödenmemiş borç", fmtDateShort(y.enEski.t) + " · " + y.enEski.gun + " gün önce" + (y.enEski.acilis ? " (açılış borcu)" : ""));
+  return `<div class="card gl-ozet">
+    <div class="gl-oz-ad">${esc(c.ad)}</div>
+    <div class="gl-oz-tel${c.telefon ? "" : " yok"}">${ikon("telefon", 16)}<span>${c.telefon ? esc(c.telefon) : "Telefon yok"}</span></div>
+    <div class="gl-oz-borc"><span class="gl-oz-et">Kalan borç</span><b class="gl-oz-tutar${borc > 0.5 ? " gl-borc" : ""}">${money.format(borc)}</b>${d.asim ? glRozet("limit aşıldı", "kirmizi", "dikkat") : ""}</div>
+    ${durum}
+    <div class="gl-oz-satirlar">${h}</div>
+    <details class="gl-oz-dokum"><summary>Satış ve tahsilat toplamı${ikon("asagi", 18)}</summary>
+      ${satir("Toplam satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)))}${satir("Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)))}${satir("Açılış borcu", money.format(Number(c.acilis) || 0))}
+    </details>
+  </div>`;
+}
 function renderMusteriDetay() {
   const c = selectedCustomerId ? findCustomer(selectedCustomerId) : null;
   if (!c) return pageHead("Müşteri Detay") + `<div class="card"><p class="sub">Müşteri seçilmedi. <button class="link-btn" data-goto="musteriler">Müşteriler listesine dön</button>.</p></div>`;
   const sales = store.sales.filter((s) => s.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
   const pays = store.payments.filter((p) => p.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
-  const salesRows = sales.map((s, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${s.items.reduce((a, it) => a + it.adet, 0)}</td><td>${money.format(s.toplam)}</td><td>${money.format(s.odeme.acik)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`).join("");
-  const payRows = pays.map((p, i) => `<tr><td>${i + 1}</td><td>${p.tutar < 0 ? "Borç Ekleme" : (tahsilatTuru(p) === "iade" ? "İade" : (tahsilatTuru(p) === "duzeltme" ? "Düzeltme" : "Tahsilat · " + TAHSILAT_TUR_AD[tahsilatTuru(p)]))}</td><td>${esc(p.not || "-")}</td><td>${money.format(Math.abs(p.tutar))}</td><td>${fmtDate(p.tarih)}</td></tr>`).join("");
   const tsipler = store.tsiparisler.filter((t) => t.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih));
-  const tsipRows = tsipler.map((t, i) => `<tr><td>${i + 1}</td><td><button class="link-btn" data-tsip="${t.id}">${esc(tsiparisKalemOzet(t))}</button></td><td>${money.format(t.toplamTutar)}</td><td>${money.format(tsiparisKalanTutar(t))}</td><td>${tsiparisAcikMi(t) ? '<span class="risk-orta">Açık</span>' : '<span class="risk-dusuk">Kapandı</span>'}</td><td>${fmtDate(t.tarih)}</td></tr>`).join("");
-  return pageHead("Müşteri Detay", esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon yok"), [{ label: "Ödeme Al", cls: "green", act: "odeme" }, { label: "Veresiye Borç Ekle", cls: "soft", act: "borcekle" }, { label: "🧾 Hesap Özeti", cls: "softgreen", act: "ekstre" }, { label: "📦 Toplu Sipariş", cls: "soft", act: "tsipYeni" }, { label: "📋 Fiyat Listesi", cls: "softgreen", act: "fiyatliste" }, { label: "📇 Rehberden Numara", cls: "soft", act: "rehber" }, { label: "✏ Düzenle", cls: "soft", act: "duzenle" }, { label: "Müşteriler", cls: "soft", route: "musteriler" }]) +
-    grid([["Toplam Satış", money.format(sales.reduce((s, x) => s + x.toplam, 0)), "blue"], ["Açılış Borcu", money.format(Number(c.acilis) || 0)], ["Tahsilat", money.format(pays.reduce((s, p) => s + p.tutar, 0)), "green"], ["Kalan Borç", money.format(customerBorc(c.id))]]) + musteriDurumKartHTML(c.id) +
-    `<h1 style="font-size:15px;margin:18px 0 8px">Alışverişler</h1>` + tableCard(["Sıra", "Belge No", "Toplam Ürün", "Toplam Tutar", "Açık Hesap", "Ödeme Tipi", "Tarih"], salesRows, infoLine(sales.length)) +
-    `<h1 style="font-size:15px;margin:18px 0 8px">Tahsilatlar</h1>` + tableCard(["Sıra", "Türü", "Not", "Tutar", "Tarih"], payRows, infoLine(pays.length)) +
-    `<h1 style="font-size:15px;margin:18px 0 8px">Toplu Siparişler</h1>` + tableCard(["Sıra", "Kalemler (kalan/sipariş)", "Toplam Tutar", "Kalan Tutar", "Durum", "Tarih"], tsipRows, infoLine(tsipler.length));
+  // Geçmiş: tek satır kalıbı. Alışveriş satırına dokununca satış detayı açılır.
+  const salesRows = sales.map((s) => `<button class="gl-satir" type="button" data-sale="${s.id}">
+      <span class="gl-sol"><span class="gl-ad">${fmtDate(s.tarih)}</span><span class="gl-alt"><span>Fiş ${esc(s.belgeNo)}</span><span>${num2.format(s.items.reduce((a, it) => a + it.adet, 0))} ürün</span><span>${saleOdeme(s)}</span></span></span>
+      <span class="gl-sag"><b class="gl-tutar">${money.format(s.toplam)}</b>${Number(s.odeme.acik) > 0 ? `<span class="gl-sag-alt gl-borc">açık ${money.format(s.odeme.acik)}</span>` : ""}</span>
+      <span class="gl-ok">${ikon("sag", 18)}</span>
+    </button>`);
+  const payRows = pays.map((p) => {
+    const tur = p.tutar < 0 ? "Borç Ekleme" : (tahsilatTuru(p) === "iade" ? "İade" : (tahsilatTuru(p) === "duzeltme" ? "Düzeltme" : "Tahsilat · " + TAHSILAT_TUR_AD[tahsilatTuru(p)]));
+    return `<div class="gl-satir gl-duz">
+      <span class="gl-sol"><span class="gl-ad">${tur}</span><span class="gl-alt"><span>${fmtDate(p.tarih)}</span>${p.not ? `<span>${esc(p.not)}</span>` : ""}</span></span>
+      <span class="gl-sag"><b class="gl-tutar${p.tutar < 0 ? " gl-borc" : ""}">${money.format(Math.abs(p.tutar))}</b></span>
+    </div>`;
+  });
+  const tsipRows = tsipler.map((t) => `<button class="gl-satir" type="button" data-tsip="${t.id}">
+      <span class="gl-sol"><span class="gl-ad">${esc(tsiparisKalemOzet(t))}</span><span class="gl-alt"><span>${fmtDate(t.tarih)}</span>${tsiparisAcikMi(t) ? glRozet("Açık", "uyari") : glRozet("Kapandı", "tamam")}</span></span>
+      <span class="gl-sag"><b class="gl-tutar">${money.format(t.toplamTutar)}</b><span class="gl-sag-alt">kalan ${money.format(tsiparisKalanTutar(t))}</span></span>
+      <span class="gl-ok">${ikon("sag", 18)}</span>
+    </button>`);
+  // Boş bölüm çizilmez; hiç hareket yoksa tek cümle.
+  const bolum = (ad, id, rows) => rows.length ? `<h2 class="gl-bolum">${ad} <span>(${rows.length})</span></h2><div class="card gl-kart" id="${id}"><div class="gl-liste">${glSinirli(rows, 10)}</div></div>` : "";
+  return pageHead("Müşteri Detay") + glMusteriOzetHTML(c, sales, pays) +
+    `<div class="gl-dugmeler">
+      <button class="btn gl-ana" type="button" data-act="odeme">${ikon("para", 20)} Ödeme Al</button>
+      <button class="btn soft" type="button" data-act="ekstre">${ikon("defter", 20)} Hesap Özeti</button>
+      <button class="btn soft gl-diger-btn" type="button" data-act="gl-diger">${ikon("ucnokta", 20)} Diğer</button>
+    </div>` +
+    bolum("Alışverişler", "glAlisverisler", salesRows) + bolum("Tahsilatlar", "glTahsilatlar", payRows) + bolum("Toplu Siparişler", "glTsiparisler", tsipRows) +
+    (!sales.length && !pays.length && !tsipler.length ? `<div class="card gl-bos">Bu müşterinin henüz alışverişi ya da tahsilatı yok.</div>` : "");
 }
 function mountMusteriDetay() {
-  const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(selectedCustomerId));
-  const be = document.querySelector('[data-act="borcekle"]'); if (be) be.addEventListener("click", () => openBorcEkle(selectedCustomerId));
-  const ty = document.querySelector('[data-act="tsipYeni"]'); if (ty) ty.addEventListener("click", () => openYeniTsiparis(selectedCustomerId));
-  document.querySelectorAll("[data-tsip]").forEach((b) => b.addEventListener("click", () => { selectedTsiparisId = b.dataset.tsip; navigate("tsiparis-detay"); }));
-  const rb = document.querySelector('[data-act="rehber"]'); if (rb) rb.addEventListener("click", () => rehberdenNumaraAta(selectedCustomerId));
-  const dz = document.querySelector('[data-act="duzenle"]'); if (dz) dz.addEventListener("click", () => openYeniMusteri(null, findCustomer(selectedCustomerId)));
-  const fl = document.querySelector('[data-act="fiyatliste"]'); if (fl) fl.addEventListener("click", () => openFiyatListesi(selectedCustomerId));
-  const ek = document.querySelector('[data-act="ekstre"]'); if (ek) ek.addEventListener("click", () => ekstreModal(selectedCustomerId));
-  document.querySelectorAll("[data-hatirlat]").forEach((b) => b.addEventListener("click", () => hatirlatmaAc(b.dataset.hatirlat)));
+  const id = selectedCustomerId, c = id ? findCustomer(id) : null; if (!c) return;
+  const o = document.querySelector('[data-act="odeme"]'); if (o) o.addEventListener("click", () => openOdemeAl(id));
+  const ek = document.querySelector('[data-act="ekstre"]'); if (ek) ek.addEventListener("click", () => ekstreModal(id));
+  const dg = document.querySelector('[data-act="gl-diger"]'); if (dg) dg.addEventListener("click", () => {
+    const borc = customerBorc(id), y = borcYas(id);
+    glDigerAc(esc(c.ad), [
+      { ikon: "arti", ad: "Veresiye borç ekle", alt: "Elle borç yaz (düzeltme için)", is: () => openBorcEkle(id) },
+      { ikon: "kutu", ad: "Toplu sipariş", alt: "Parça parça teslim edilecek sipariş aç", is: () => openYeniTsiparis(id) },
+      { ikon: "etiket", ad: "Fiyat listesi", alt: "Bu müşterinin fiyatlarıyla liste", is: () => openFiyatListesi(id) },
+      { ikon: "telefon", ad: "Rehberden numara al", alt: c.telefon ? "Şimdiki: " + esc(c.telefon) : "Telefonu rehberden seç", is: () => rehberdenNumaraAta(id) },
+      { ikon: "kalem", ad: "Düzenle", alt: "Ad, telefon, limit, vade…", is: () => openYeniMusteri(null, findCustomer(id)) },
+      borc > 0.5 && !(y && y.gecikmis) ? { ikon: "mesaj", ad: "Hatırlatma gönder (WhatsApp)", alt: "Hazır, kibar mesajla", is: () => hatirlatmaAc(id) } : null,
+      { ikon: "cop", ad: "Müşteriyi sil", alt: "Listeden kaldırır, geri alınamaz", tehlike: true, is: () => glMusteriSil(id) },
+    ]);
+  });
+  document.querySelectorAll("#content [data-tsip]").forEach((b) => b.addEventListener("click", () => { selectedTsiparisId = b.dataset.tsip; navigate("tsiparis-detay"); }));
+  document.querySelectorAll("#content [data-hatirlat]").forEach((b) => b.addEventListener("click", () => hatirlatmaAc(b.dataset.hatirlat)));
+  glSinirliWire(document.getElementById("content"));
   wireSaleLinks();
+}
+/* Müşteri silme: listeden kalktı; detay → Diğer → Müşteriyi sil → onay. Silme işleminin kendisi eskisiyle aynı. */
+function glMusteriSil(id) {
+  const c = findCustomer(id); if (!c) return;
+  const borc = customerBorc(id), n = customerSalesCount(id);
+  glSilOnay("Müşteri silinsin mi?", `<p><b>${esc(c.ad)}</b> müşteri listesinden silinecek.</p>${borc > 0.5 ? `<p class="gl-borc"><b>Dikkat: ${money.format(borc)} borcu var.</b> Silersen bu borç listede görünmez olur.</p>` : ""}${n ? `<p>${n} alışverişinin fişleri silinmez; raporlarda “Müşterisiz” görünür.</p>` : ""}<p>Bu işlem geri alınamaz.</p>`, "Evet, sil", () => {
+    store.customers = store.customers.filter((x) => x.id !== c.id); saveStore(); selectedCustomerId = null; navigate("musteriler");
+  });
 }
 
 /* ---- Toplu Sipariş ekranları ---- */
@@ -2281,24 +2456,41 @@ function mountDukkan() {
 // Rapor satış tablosu: satır satır (Excel gibi), ödeme tipine göre renkli, tıklanabilir, çoklu-seç + toplu sil
 function raporSatisTablo(sales) {
   if (!sales.length) return `<div class="card"><div class="sl-empty">Satış yok.</div></div>`;
+  const gunu = (iso) => fmtDate(iso).slice(0, 10);
+  const tekGun = sales.every((s) => gunu(s.tarih) === gunu(sales[0].tarih)); // tek günse yalnız saat yazılır
   const rows = sales.slice().sort((a, b) => b.tarih.localeCompare(a.tarih)).map((s) => {
     const c = s.musteriId && findCustomer(s.musteriId);
     const ad = c ? esc(c.ad) : "Müşterisiz";
     const cls = (Number(s.odeme.acik) > 0) ? "sat-borc" : (Number(s.odeme.pos) > 0 ? "sat-pos" : "sat-nakit");
-    return `<div class="satr ${cls}" data-saleview="${s.id}"><input type="checkbox" class="sat-sel" data-sel="${s.id}" /><span class="satr-ad">${ad}</span><span class="satr-ode">${saleOdeme(s)}</span><span class="satr-tut">${money.format(s.toplam)}</span></div>`;
-  }).join("");
-  return `<div class="card sat-card">
-    <div class="sat-tools"><label class="sat-all"><input type="checkbox" id="satAll" /> Tümü</label><span class="hint" id="satSecim">0 seçili</span><button class="btn softred sm" id="satSil" type="button" disabled>🗑 Sil</button></div>
-    <div class="sat-liste">${rows}</div>
+    return `<div class="satr gl-satir ${cls}" data-saleview="${s.id}">
+      <label class="sat-chk gl-sec"><input type="checkbox" class="sat-sel" data-sel="${s.id}" aria-label="${ad} satışını seç" /></label>
+      <span class="gl-sol"><span class="gl-ad satr-ad">${ad}</span><span class="gl-alt"><span class="satr-ode gl-rozet">${saleOdeme(s)}</span><span>${tekGun ? fmtDate(s.tarih).slice(11) : fmtDate(s.tarih)}</span></span></span>
+      <span class="gl-sag"><b class="gl-tutar satr-tut">${money.format(s.toplam)}</b></span>
+      <span class="gl-ok">${ikon("sag", 18)}</span>
+    </div>`;
+  });
+  // Silme düğmesi yalnız en az bir satış seçiliyken görünür (raporSatisWire).
+  return `<div class="card sat-card gl-kart">
+    <div class="sat-tools gl-sat-tools"><label class="sat-all gl-sec-tumu"><span class="gl-sec"><input type="checkbox" id="satAll" /></span><span>Tümünü seç</span></label><span class="gl-sat-secim" id="satSecim" hidden>0 seçili</span><button class="btn softred gl-sat-sil" id="satSil" type="button" hidden disabled>${ikon("cop", 18)} Sil</button></div>
+    <div class="sat-liste gl-liste">${glSinirli(rows, 100)}</div>
   </div>`;
 }
 function raporSatisWire() {
-  const guncelle = () => { const sel = document.querySelectorAll(".sat-sel:checked").length; const d = document.getElementById("satSecim"); if (d) d.textContent = sel + " seçili"; const btn = document.getElementById("satSil"); if (btn) btn.disabled = sel === 0; const all = document.getElementById("satAll"); if (all) all.checked = sel > 0 && sel === document.querySelectorAll(".sat-sel").length; };
+  // "Hepsini göster"in arkasındaki (henüz açılmamış) satırlar seçime ve "Tümünü seç"e girmez: görmediğini silemezsin.
+  const kutular = () => [...document.querySelectorAll(".sat-sel")].filter((ch) => !ch.closest("[hidden]"));
+  const guncelle = () => {
+    const hepsi = kutular(), sel = hepsi.filter((ch) => ch.checked).length;
+    const d = document.getElementById("satSecim"); if (d) { d.textContent = sel + " seçili"; d.hidden = sel === 0; }
+    const btn = document.getElementById("satSil"); if (btn) { btn.disabled = sel === 0; btn.hidden = sel === 0; }
+    const all = document.getElementById("satAll"); if (all) all.checked = sel > 0 && sel === hepsi.length;
+    document.querySelectorAll(".sat-sel").forEach((ch) => { const r = ch.closest(".satr"); if (r) r.classList.toggle("gl-secili", ch.checked); });
+  };
   document.querySelectorAll(".sat-sel").forEach((ch) => { ch.addEventListener("click", (e) => e.stopPropagation()); ch.addEventListener("change", guncelle); });
   document.querySelectorAll(".sat-chk").forEach((td) => td.addEventListener("click", (e) => e.stopPropagation()));
-  const all = document.getElementById("satAll"); if (all) all.addEventListener("change", () => { document.querySelectorAll(".sat-sel").forEach((ch) => ch.checked = all.checked); guncelle(); });
+  const all = document.getElementById("satAll"); if (all) all.addEventListener("change", () => { kutular().forEach((ch) => ch.checked = all.checked); guncelle(); });
+  document.querySelectorAll(".sat-liste .gl-hepsi").forEach((b) => b.addEventListener("click", () => { const f = b.previousElementSibling; if (f) f.hidden = false; b.remove(); guncelle(); }));
   const sil = document.getElementById("satSil"); if (sil) sil.addEventListener("click", () => {
-    const ids = [...document.querySelectorAll(".sat-sel:checked")].map((ch) => ch.dataset.sel);
+    const ids = kutular().filter((ch) => ch.checked).map((ch) => ch.dataset.sel);
     if (!ids.length) return;
     if (!confirm(ids.length + " satış silinsin mi? (stok geri yüklenir, geri alınamaz)")) return;
     const set = new Set(ids);
@@ -6874,7 +7066,7 @@ function render() {
 window.addEventListener("hashchange", render);
 
 /* ---- Mobil: tablo hücrelerine başlık etiketi ekle (dar ekranda kart görünümü için) ---- */
-const MOBIL_GIZLI_ETIKET = new Set(["Sıra", "Görsel", "Ürün Barkodu", "KDV", "Kritik Stok"]);
+const MOBIL_GIZLI_ETIKET = new Set(["Sıra", "#", "Görsel", "Ürün Barkodu", "KDV", "Kritik Stok"]);
 function mobilTabloEtiketle() {
   document.querySelectorAll("table.grid").forEach((tbl) => {
     const bas = [...tbl.querySelectorAll("thead th")].map((th) => (th.childNodes[0] ? th.childNodes[0].textContent : th.textContent).trim());
@@ -6925,30 +7117,41 @@ function mobilBarAktif(route) {
   nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.mroute === r));
 }
 
-/* Tablo sayfalama (DOM üstü) — .table-tools içeren tablolar */
+/* Tablo sayfalama + arama (DOM üstü) — .table-tools içeren tablolar.
+   Az kayıtta gereksiz parça çizilmez: GL_TABLO_ARAMA_ESIK satıra kadar arama kutusu, tek sayfaya sığan
+   listede sayfa düğmeleri ve "N kayıttan…" satırı görünmez; boş tabloda yalnız "Kayıt bulunamadı." kalır.
+   Arama Türkçe harfe duyarsızdır (glNorm). Çok satırlı tablolar sayfalanmaya devam eder (ekranda en çok bir sayfa satır). */
 function enhanceTables() {
   document.querySelectorAll(".card").forEach((card) => {
     const tools = card.querySelector(".table-tools"); const tbody = card.querySelector("table.grid tbody");
     if (!tools || !tbody) return;
     const allRows = [...tbody.querySelectorAll("tr")].filter((tr) => !tr.classList.contains("empty-row"));
-    if (allRows.length <= 1) return;
     const lenSel = tools.querySelector(".len select"); const searchInp = tools.querySelector(".tbl-search");
     const info = card.querySelector(".tbl-info"); const pager = card.querySelector(".pager");
+    const perSayfa = () => Number(lenSel ? lenSel.value : GL_TABLO_SAYFA) || GL_TABLO_SAYFA;
+    card.classList.toggle("gl-t-bos", allRows.length === 0);
+    card.classList.toggle("gl-t-aramasiz", allRows.length <= GL_TABLO_ARAMA_ESIK);
+    card.classList.toggle("gl-t-sayfasiz", allRows.length <= perSayfa());
+    if (allRows.length <= 1) { if (info) info.textContent = ""; if (pager) pager.innerHTML = ""; return; }
+    const anahtar = new Map(); // satır → aranabilir metin (bir kez hesaplanır)
+    allRows.forEach((tr) => anahtar.set(tr, glNorm(tr.textContent)));
     let page = 1;
     function apply() {
-      const q = searchInp ? searchInp.value.toLowerCase() : ""; const per = Number(lenSel ? lenSel.value : 10) || 10;
-      const filtered = allRows.filter((tr) => !q || tr.textContent.toLowerCase().includes(q));
+      const q = searchInp ? glNorm(searchInp.value) : ""; const per = perSayfa();
+      const filtered = q ? allRows.filter((tr) => glEslesir(anahtar.get(tr), q)) : allRows;
       const total = filtered.length; const pages = Math.max(1, Math.ceil(total / per)); if (page > pages) page = pages;
       const start = (page - 1) * per, end = start + per;
       allRows.forEach((tr) => tr.style.display = "none");
       filtered.slice(start, end).forEach((tr) => tr.style.display = "");
-      if (info) info.textContent = total ? `${total} kayıttan ${start + 1} ile ${Math.min(end, total)} arası` : "Kayıt bulunamadı.";
+      card.classList.toggle("gl-t-sayfasiz", pages <= 1 && !q);
+      if (info) info.textContent = !total ? "Aramaya uyan kayıt yok." : (pages > 1 ? `${total} kayıttan ${start + 1}–${Math.min(end, total)} arası` : (q ? `${total} kayıt bulundu` : ""));
       if (pager) {
         pager.innerHTML = "";
-        const mk = (t, p, mut, on) => { const s = document.createElement("span"); s.textContent = t; if (mut) s.className = "mut"; else if (on) s.className = "on"; else s.onclick = () => { page = p; apply(); }; return s; };
-        pager.appendChild(mk("İlk", 1, page === 1)); pager.appendChild(mk("Önceki", page - 1, page === 1));
-        for (let p = Math.max(1, page - 2); p <= Math.min(pages, page + 2); p++) pager.appendChild(mk(String(p), p, false, p === page));
-        pager.appendChild(mk("Sonraki", page + 1, page === pages)); pager.appendChild(mk("Son", pages, page === pages));
+        if (pages > 1) {
+          const mk = (ikonAd, yazi, p, kapali, solda) => { const b = document.createElement("button"); b.type = "button"; b.className = "gl-sayfa-btn"; b.innerHTML = solda ? ikon(ikonAd, 18) + yazi : yazi + ikon(ikonAd, 18); b.disabled = kapali; b.onclick = () => { page = p; apply(); const ust = card.getBoundingClientRect().top; if (ust < 70) window.scrollBy(0, ust - 70); }; return b; };
+          const orta = document.createElement("div"); orta.className = "gl-sayfa-no"; orta.textContent = `Sayfa ${page} / ${pages}`;
+          pager.appendChild(mk("sol", "Önceki", page - 1, page === 1, true)); pager.appendChild(orta); pager.appendChild(mk("sag", "Sonraki", page + 1, page === pages, false));
+        }
       }
     }
     if (lenSel) lenSel.onchange = () => { page = 1; apply(); };
