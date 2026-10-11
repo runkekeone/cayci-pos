@@ -71,6 +71,23 @@ try {
   await page.click('#glMusKart .gl-satir[data-detay="m5"]'); await bekle(400);
   d.dogru(await page.evaluate(() => location.hash === "#/musteri-detay" && selectedCustomerId === "m5" && document.querySelector(".gl-oz-ad").textContent === "Kardeşler Kıraathanesi Merkez Şube"), "satıra dokununca o müşterinin detayı açıldı");
 
+  console.log("— uzun liste: detaydan dönünce yer ve arama korunur");
+  await page.evaluate(() => history.back()); await bekle(500);
+  await page.evaluate(() => document.querySelector('#glMusKart .gl-satir[data-detay="m4"]').scrollIntoView({ block: "center" })); await bekle(100);
+  const y0 = await page.evaluate(() => window.scrollY);
+  await page.click('#glMusKart .gl-satir[data-detay="m4"]'); await bekle(400);
+  await page.evaluate(() => history.back()); await bekle(600);
+  const y1 = await page.evaluate(() => ({ y: window.scrollY, hash: location.hash }));
+  d.dogru(y0 > 500 && y1.hash === "#/musteriler" && Math.abs(y1.y - y0) <= 2, "listenin aşağısındaki müşteriden geri dönünce liste aynı yerde (kaydırma " + y0 + " → " + y1.y + ")");
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.fill("#glMusAra", "kahve"); await bekle(80);
+  const kahve = (await gorunenAdlar()).length;
+  await page.locator("#glMusKart .gl-satir:not([hidden])").first().click(); await bekle(400);
+  await page.evaluate(() => history.back()); await bekle(500);
+  d.dogru((await page.inputValue("#glMusAra")) === "kahve" && (await gorunenAdlar()).length === kahve, "aranan müşterinin detayından dönünce arama duruyor (" + kahve + " sonuç)");
+  await git("anasayfa"); await git("musteriler");
+  d.dogru((await page.inputValue("#glMusAra")) === "" && (await gorunenAdlar()).length === 40, "başka ekrandan gelince arama temiz, bütün liste görünüyor (eski süzgeç kalmıyor)");
+  await page.click('#glMusKart .gl-satir[data-detay="m5"]'); await bekle(400);
+
   console.log("— 21/23: müşteri detayı (tek özet, iki ana düğme + Diğer)");
   d.esit(await page.evaluate(() => [...document.querySelectorAll("#content .btn")].filter((b) => b.getBoundingClientRect().height > 0).map((b) => b.textContent.trim())), ["Ödeme Al", "Hesap Özeti", "Diğer"], "ekranda yalnız üç düğme: Ödeme Al, Hesap Özeti, Diğer (\"Müşteriler\" düğmesi yok)");
   d.dogru(await page.evaluate(() => [...document.querySelectorAll(".gl-dugmeler .btn")].every((b) => b.getBoundingClientRect().height >= 48)), "düğmeler en az 48 px");

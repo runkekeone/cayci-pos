@@ -874,11 +874,16 @@ function glEslesir(normMetin, normSorgu) { if (!normSorgu) return true; return n
 function glAramaHTML(id, ipucu) {
   return `<div class="gl-ara"><span class="gl-ara-ik">${ikon("ara", 22)}</span><input type="text" inputmode="search" enterkeyhint="search" id="${id}" class="gl-ara-in" placeholder="${ipucu}" aria-label="${ipucu}" autocomplete="off" autocapitalize="off" spellcheck="false" /><button class="gl-ara-sil" type="button" aria-label="Aramayı temizle" hidden>${ikon("kapat", 20)}</button></div>`;
 }
-/* Arama kutusunu listeye bağlar: yazdıkça .gl-satir[data-ara] satırlarını süzer. Yazılan şey, ekran yeniden
-   çizilince (eşitleme, kayıt) kaybolmasın diye glAramaDurum'da tutulur. */
-const glAramaDurum = {};
-function glAramaWire(anahtar, inputId, kartSel) {
+/* Arama kutusunu listeye bağlar: yazdıkça .gl-satir[data-ara] satırlarını süzer.
+   Liste uzun ve sayfasız olduğu için yer kaybolmasın: yazılan arama ve kaydırma yeri, ekran yeniden çizilince
+   (eşitleme, kayıt) ve bir satırın detayından geri dönünce (altRotalar) korunur; başka ekrandan gelince sıfırlanır. */
+const glAramaDurum = {}, glKaydirma = {}, glOdak = {};
+let glSonRota = null; // bir önce çizilen ekran (enhanceTables her çizimde günceller)
+function glAramaWire(anahtar, inputId, kartSel, altRotalar) {
   const inp = document.getElementById(inputId), kart = document.querySelector(kartSel); if (!inp || !kart) return;
+  const rota = currentRoute(), ayni = glSonRota === rota, alttan = (altRotalar || []).indexOf(glSonRota) >= 0;
+  if (!ayni && !alttan) { glAramaDurum[anahtar] = ""; glKaydirma[anahtar] = 0; glOdak[anahtar] = false; }
+  const donusY = ayni ? window.scrollY : (glKaydirma[anahtar] || 0);
   const sil = inp.parentNode.querySelector(".gl-ara-sil"), yok = kart.querySelector(".gl-yok"), sayi = kart.querySelector(".gl-sayi");
   const satirlar = [...kart.querySelectorAll(".gl-satir[data-ara]")];
   const uygula = () => {
@@ -895,7 +900,11 @@ function glAramaWire(anahtar, inputId, kartSel) {
   const temizle = () => { inp.value = ""; uygula(); inp.focus(); };
   if (sil) sil.addEventListener("click", temizle);
   kart.querySelectorAll("[data-gl-temizle]").forEach((b) => b.addEventListener("click", temizle));
+  inp.addEventListener("focus", () => { glOdak[anahtar] = true; }); inp.addEventListener("blur", () => { glOdak[anahtar] = false; });
+  kart.addEventListener("click", (e) => { if (e.target.closest(".gl-satir")) glKaydirma[anahtar] = window.scrollY; }, true); // satıra dokunulurken yer aklında kalsın
   uygula();
+  if (ayni && glOdak[anahtar]) { try { inp.focus({ preventScroll: true }); } catch (e) {} } // yazarken yeniden çizildiyse klavye kapanmasın
+  if (donusY > 0) setTimeout(() => window.scrollTo(0, donusY), 0); // render() en üste atar; bıraktığı yere dön
 }
 // Arama sonucu boş kalınca kartın içinde görünen kutu.
 function glYokHTML(ne) { return `<div class="gl-yok" hidden><p><b></b> ile eşleşen ${ne} yok.</p><button class="btn soft" type="button" data-gl-temizle>Aramayı temizle</button></div>`; }
@@ -1030,7 +1039,7 @@ function glUrunSatirHTML(p) {
 function renderUrunler() {
   const liste = store.products.slice().sort((a, b) => String(a.ad || "").localeCompare(String(b.ad || ""), "tr"));
   const rows = liste.map(glUrunSatirHTML).join("");
-  return pageHead("Ürünler", store.products.length + " ürün", [{ label: ikon("arti", 18) + " Ürün Ekle", act: "gl-urun-ekle" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
+  return pageHead("Ürünler", store.products.length + " ürün", [{ label: ikon("arti", 18) + " Ürün Ekle", act: "gl-urun-ekle" }, { label: ikon("ucnokta", 20, 3) + " Diğer", cls: "soft", act: "gl-diger" }]) +
     (liste.length ? glAramaHTML("glUrunAra", "Ürün ara") +
       `<div class="card gl-kart" id="glUrunKart">
         <div class="gl-baslik"><span>Ürün · stok</span><span>Satış fiyatı</span></div>
@@ -1050,7 +1059,7 @@ function mountUrunler() {
     { ikon: "yukle", ad: "İçe aktar", alt: "Excel/CSV dosyasından ürün yükle", is: () => openCsvImport(importProducts) },
     { ikon: "fis", ad: "Şablon indir", alt: "İçe aktarma için boş dosya", is: () => downloadFile("babuco-urun-sablon.csv", csvBuild([["Barkod", "Ürün Adı", "Grup", "Alış Fiyatı", "Fiyat 1", "Kalan Stok", "Araç Stok", "Kritik Stok", "KDV", "Birim"]])) },
   ]));
-  glAramaWire("urunler", "glUrunAra", "#glUrunKart");
+  glAramaWire("urunler", "glUrunAra", "#glUrunKart", ["urun-ekle"]);
 }
 /* Ürün silme: listeden kalktı, düzenleme ekranının en altında ayrı bir adım (mountUrunEkle çağırır). */
 function glUrunSilEkle() {
@@ -1135,7 +1144,7 @@ function renderMusteriler() {
       <span class="gl-ok">${ikon("sag", 18)}</span>
     </button>`;
   }).join("");
-  return pageHead("Müşteriler", `${liste.length} müşteri · Toplam borç ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " vadesi geçmiş" : ""}`, [{ label: ikon("arti", 18) + " Yeni müşteri", act: "yeni-musteri" }, { label: ikon("ucnokta", 18) + " Diğer", cls: "soft", act: "gl-diger" }]) +
+  return pageHead("Müşteriler", `${liste.length} müşteri · Toplam borç ${money.format(toplamBorc)}${gecSay ? " · " + gecSay + " vadesi geçmiş" : ""}`, [{ label: ikon("arti", 18) + " Yeni müşteri", act: "yeni-musteri" }, { label: ikon("ucnokta", 20, 3) + " Diğer", cls: "soft", act: "gl-diger" }]) +
     (liste.length ? glAramaHTML("glMusAra", "Müşteri ara") +
       `<div class="card gl-kart" id="glMusKart">
         <div class="gl-sayi" hidden></div>
@@ -1348,7 +1357,7 @@ function mountMusteriler() {
     { ikon: "yukle", ad: "İçe aktar", alt: "Excel/CSV dosyasından müşteri yükle", is: () => openCsvImport(importCustomers) },
     { ikon: "fis", ad: "Şablon indir", alt: "İçe aktarma için boş dosya", is: () => downloadFile("babuco-musteri-sablon.csv", csvBuild([["Müşteri Adı", "Telefon", "Açılış Borcu", "Adres", "Vergi No"]])) },
   ]));
-  glAramaWire("musteriler", "glMusAra", "#glMusKart");
+  glAramaWire("musteriler", "glMusAra", "#glMusKart", ["musteri-detay"]);
 }
 function openOdemeAl(custId) {
   const c = findCustomer(custId); if (!c) return;
@@ -1442,7 +1451,7 @@ function renderMusteriDetay() {
     `<div class="gl-dugmeler">
       <button class="btn gl-ana" type="button" data-act="odeme">${ikon("para", 20)} Ödeme Al</button>
       <button class="btn soft" type="button" data-act="ekstre">${ikon("defter", 20)} Hesap Özeti</button>
-      <button class="btn soft gl-diger-btn" type="button" data-act="gl-diger">${ikon("ucnokta", 20)} Diğer</button>
+      <button class="btn soft gl-diger-btn" type="button" data-act="gl-diger">${ikon("ucnokta", 20, 3)} Diğer</button>
     </div>` +
     bolum("Alışverişler", "glAlisverisler", salesRows) + bolum("Tahsilatlar", "glTahsilatlar", payRows) + bolum("Toplu Siparişler", "glTsiparisler", tsipRows) +
     (!sales.length && !pays.length && !tsipler.length ? `<div class="card gl-bos">Bu müşterinin henüz alışverişi ya da tahsilatı yok.</div>` : "");
@@ -7122,6 +7131,7 @@ function mobilBarAktif(route) {
    listede sayfa düğmeleri ve "N kayıttan…" satırı görünmez; boş tabloda yalnız "Kayıt bulunamadı." kalır.
    Arama Türkçe harfe duyarsızdır (glNorm). Çok satırlı tablolar sayfalanmaya devam eder (ekranda en çok bir sayfa satır). */
 function enhanceTables() {
+  glSonRota = currentRoute(); // (ekranın mount'u bundan önce çalışır: orada glSonRota hâlâ bir önceki ekrandır)
   document.querySelectorAll(".card").forEach((card) => {
     const tools = card.querySelector(".table-tools"); const tbody = card.querySelector("table.grid tbody");
     if (!tools || !tbody) return;
