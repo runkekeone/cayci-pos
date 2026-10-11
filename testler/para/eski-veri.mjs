@@ -3,7 +3,7 @@
 // ekstre, haftalık) harfi harfine aynı kalır.
 // Çalıştır: node testler/para/eski-veri.mjs
 import { denetci } from "../ortak/panel.mjs";
-import { ortam, git, statlar, ornekStore, gun, tabanVar, bekle } from "./ortak.mjs";
+import { ortam, git, statlar, paraSayi, ornekStore, gun, tabanVar, bekle } from "./ortak.mjs";
 
 const d = denetci("para/eski-veri");
 /** Olabildiğince "eski": müşterilerde limit/vade alanı bile yok, ayarlarda varsayılan vade yok, eski gün sonu raporu var. */
@@ -55,7 +55,8 @@ if (tabanVar) {
       yeni.page.evaluate((x) => { reportFilters["rapor-gunluk"] = { from: x, to: x }; }, g); tab.page.evaluate((x) => { reportFilters["rapor-gunluk"] = { from: x, to: x }; }, g);
       await git(yeni.page, "rapor-gunluk"); await git(tab.page, "rapor-gunluk");
       const a = await statlar(yeni.page), b = await statlar(tab.page);
-      d.esit(["Nakit", "Pos", "Açık Hesap", "Toplam", "Giderler", "Gelirler", "Nakit Kasa Raporu", "Kâr", "Ciro", "Ürün Maliyeti"].map((x) => a[x]), ["Nakit", "Pos", "Açık Hesap", "Toplam", "Giderler", "Gelirler", "Nakit Kasa Raporu", "Kâr", "Ciro", "Ürün Maliyeti"].map((x) => b[x]), "eski veride Günlük Rapor rakamları tabanla aynı (" + g + ")");
+      // yeni ekranda "Toplam" ile "Ciro" tek rakam (Ciro), "Nakit Kasa Raporu" = "Kasadaki nakit"; para yazımı da değişti → sayı olarak karşılaştır
+      d.esit(["Nakit", "Pos", "Açık Hesap", "Ciro", "Giderler", "Gelirler", "Kasadaki nakit", "Kâr", "Ciro", "Ürün Maliyeti"].map((x) => paraSayi(a[x])), ["Nakit", "Pos", "Açık Hesap", "Toplam", "Giderler", "Gelirler", "Nakit Kasa Raporu", "Kâr", "Ciro", "Ürün Maliyeti"].map((x) => paraSayi(b[x])), "eski veride Günlük Rapor rakamları tabanla aynı (" + g + ")");
     }
     // araç şablonları: harfi harfine aynı
     const es = async (args, ne) => { const a = await yeni.arac(args), b = await yeni.tabanArac(args); d.dogru(a.kod === 0 && a.cikti === b.cikti, ne + " çıktısı tabanla harfi harfine aynı"); };

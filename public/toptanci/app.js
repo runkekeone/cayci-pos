@@ -1073,7 +1073,7 @@ function renderAracYukleme() {
       <td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "-")} · ${esc(p.birim || "Adet")}</span></td>
       <td><input class="ay-in" data-arac="${p.id}" type="number" inputmode="numeric" value="${Number(p.aracStok) || 0}" placeholder="0" /></td>
     </tr>`).join("");
-  return pageHead("Araç Stoğu (Sayım / Başlangıç)", `Araçta toplam ${num2.format(toplamArac)} birim`, [{ label: `${ikon("geri")} Ürünler`, route: "urunler" }]) +
+  return pageHead("Araç Stoğu (Sayım / Başlangıç)", `Araçta toplam ${num2.format(toplamArac)} birim`, [{ label: `${ikon("kutu")} Ürünler`, cls: "soft", route: "urunler" }]) +
     `<div class="ay-tools"><button class="btn ok" data-act="aracKaydet" type="button">${ikon("tik")} Araç Stoğunu Kaydet</button><button class="btn soft" data-act="aracYukle" type="button">${ikon("dukkan")} Dükkandan Araca Yükle</button></div>
      <p class="hint" style="margin:0 2px 8px"><b>Devreden model:</b> Araç stoğu ertesi güne devreder — her sabah doldur/boşalt YOK. Sadece <b>ilk kez</b> ya da sayım gerektiğinde araçtaki gerçek miktarı yaz. Satınca otomatik düşer; yolda alınca "${ikon("sepet")} Araca Al" ile eklenir.</p>` +
     tableCard(["Ürün", "Araç Stok (mevcut)"], rows, "");
@@ -1330,7 +1330,7 @@ function openYeniTsiparis(custId) {
       <div class="field"><label>&nbsp;</label><button class="btn soft" id="tsEkle" type="button">+ Ekle</button></div>
     </div>
     <div id="tsList" class="sd-list" style="margin-top:10px"></div>
-    <div class="totbox sd-genel" style="margin-top:12px"><strong>Sipariş Toplamı</strong><span id="tsTot">₺0,00</span></div>
+    <div class="totbox sd-genel" style="margin-top:12px"><strong>Sipariş Toplamı</strong><span id="tsTot">0 ₺</span></div>
     <div class="field" style="margin-top:10px"><label>Not</label><input id="tsNot" placeholder="opsiyonel" /></div>`;
   openModal(`Yeni Toplu Sipariş — ${esc(c.ad)}`, body, {
     wide: true,
@@ -1639,7 +1639,7 @@ function renderSatisDetay() {
     </div></div>
     <div class="card"><h1 style="font-size:15px;margin:0 0 12px">Ürünler</h1>
       <div class="sd-list" id="sdBody"></div>
-      <div class="totbox sd-genel" style="margin-top:12px"><strong>Genel Toplam</strong><span id="sdTot">₺0,00</span></div>
+      <div class="totbox sd-genel" style="margin-top:12px"><strong>Genel Toplam</strong><span id="sdTot">0 ₺</span></div>
       <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="sdSave" type="button">${ikon("tik")} Güncelle</button></div>
     </div>`;
 }
@@ -2937,7 +2937,7 @@ function renderAlisOlustur() {
       <button class="btn soft" id="aAddRow" type="button" style="width:100%;justify-content:center">${ikon("arti")} Ürün ekle</button>
       <p class="hint">Listeden ürün seçersen o ürünün stoğu artar ve alış fiyatı güncellenir. "Listede yok" seçersen faturaya yazılır ama stok tutulmaz.</p>
       <div class="field"><label>Faturada yazan toplam (boş bırakırsan satırların toplamı)</label><input id="aFisToplam" type="number" inputmode="decimal" step="0.01" placeholder="örn. 20567,50" /></div>
-      <div class="stk-toplam"><span>Genel Toplam</span><b id="aTotal">₺0,00</b></div>
+      <div class="stk-toplam"><span>Genel Toplam</span><b id="aTotal">0 ₺</b></div>
       <p class="hint" id="aFark" style="display:none"></p>
       <button class="btn green lg" id="aSave" type="button" style="width:100%;justify-content:center;margin-top:10px">${ikon("tik")} Alış Faturasını Kaydet</button>
     </div>`;
@@ -5299,7 +5299,7 @@ function renderEFaturaOlustur() {
     <div class="card">
       <table class="line-table"><thead><tr><th style="width:40%">Ürün/Hizmet</th><th>Miktar</th><th>Birim Fiyat</th><th>KDV %</th><th>Tutar</th><th></th></tr></thead><tbody id="efBody"></tbody></table>
       <div style="margin-top:10px"><button class="btn soft" id="efAdd" type="button">${ikon("arti")} Satır ekle</button></div>
-      <div class="totbox" style="margin-top:10px">Ara Toplam: <span id="efAra">₺0,00</span> · KDV: <span id="efKdv">₺0,00</span> · <strong>Genel Toplam: <span id="efTot">₺0,00</span></strong></div>
+      <div class="totbox" style="margin-top:10px">Ara Toplam: <span id="efAra">0 ₺</span> · KDV: <span id="efKdv">0 ₺</span> · <strong>Genel Toplam: <span id="efTot">0 ₺</span></strong></div>
       <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="efSave" type="button">${ikon("tik")} E-Faturayı Kaydet</button></div>
       <p class="hint">Not: Gerçek GİB gönderimi yok; fatura kayıt + yazdırma yapılır.</p>
     </div>`;
@@ -6193,7 +6193,7 @@ function servisSihirbaz(id) {
     <div class="sihir-tot">Toplam <b>${money.format(t.toplam)}</b></div>
     <p class="sihir-soru">Nasıl ödendi?</p>
     <div class="sihir-odeme">
-      <button class="btn green lg" data-sode="nakit" type="button">₺ Nakit</button>
+      <button class="btn green lg" data-sode="nakit" type="button">${ikon("para")} Nakit</button>
       <button class="btn lg" data-sode="pos" type="button">${ikon("liste")} POS</button>
       <button class="btn soft lg" data-sode="acik" type="button">${ikon("defter")} Açık Hesap</button>
       <button class="btn soft lg" data-sode="parcali" type="button">${ikon("yenile")} Parçalı</button>

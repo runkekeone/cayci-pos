@@ -147,3 +147,10 @@ body { font-variant-numeric: tabular-nums; }
 .pt-btn, .stk-sec-b { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .rt .rt-ic, .ajan-ic { display: inline-flex; color: var(--brand-dark); }
 .act-btns button .ikon, .edit .ikon, .rm .ikon { vertical-align: middle; }
+.ay-tools { flex-wrap: wrap; }
+.ay-tools .btn { flex: 1 1 150px; white-space: normal; text-align: center; }
+/* yazı içinde geçen ikon (açıklama, rozet): yazı boyunda */
+.hint .ikon, .sub .ikon, .pl-rozet .ikon, .hr-rozet .ikon, .cay-sub .ikon, small .ikon, label .ikon, .pd-satir .ikon { width: 1.2em; height: 1.2em; }
+/* Alış satırı: uzun ürün adı seçim kutusunu genişletip satırı ekrandan taşırıyordu */
+.stk-alis-satir { grid-template-columns: minmax(0, 1fr); }
+.stk-uc { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }

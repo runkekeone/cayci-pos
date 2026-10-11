@@ -39,7 +39,7 @@ const fiyatlar = (page) => page.evaluate(() => ({ u7: Number(store.products.find
   await t.page.fill("#zDeger", "10"); await t.page.selectOption("#zYuv", "5"); await t.page.selectOption("#zYon", "yukari");
   await t.page.click("#zOnizle"); await bekle(300);
   const onizleme = await t.page.evaluate(() => [...document.querySelectorAll("#zListe .stk-satir")].map((r) => r.querySelector(".stk-s-sol").textContent.replace(/\s+/g, " ")));
-  d.dogru(onizleme.length === 2 && /Kuşburnus*₺75,00 → ₺85,00/.test(onizleme[0]) && /Nane Limons*₺75,00 → ₺85,00 · aynı çeşit, birlikte değişir/.test(onizleme[1]), "önizleme eski → yeni; seçilmeyen aile kardeşi de listede (75 → 82,5 → 85)");
+  d.dogru(onizleme.length === 2 && /Kuşburnus*75 ₺ → 85 ₺/.test(onizleme[0]) && /Nane Limons*75 ₺ → 85 ₺ · aynı çeşit, birlikte değişir/.test(onizleme[1]), "önizleme eski → yeni; seçilmeyen aile kardeşi de listede (75 → 82,5 → 85)");
   d.dogru(/4 özel fiyat var; onlar aynı kalacak/.test(await t.page.textContent("#zOnizleme")), "özel fiyatların aynı kalacağı söyleniyor");
   d.esit(await fiyatlar(t.page), { u7: 75, u8: 75, m1u7: 80, m1u8: 80, m2u7: 80 }, "önizleme hiçbir fiyatı değiştirmedi");
   await t.page.click("#zUygula"); await bekle(300);
@@ -102,7 +102,7 @@ const fiyatlar = (page) => page.evaluate(() => ({ u7: Number(store.products.find
   await t.page.click("#stkUyTamam"); await bekle(250);
   await t.git("fiyat-gecmisi");
   const g = await t.page.evaluate(() => [...document.querySelectorAll("#fgListe .stk-satir")].map((r) => r.textContent.replace(/\s+/g, " ")));
-  d.dogru(g.length === 3 && /Örnek Kola 250 ml.*alış fiyatı · Ürün kartı.*₺600,00.*₺500,00 idi/.test(g[0]), "fiyat geçmişi: ne zaman, neyden neye, hangi kaynaktan");
+  d.dogru(g.length === 3 && /Örnek Kola 250 ml.*alış fiyatı · Ürün kartı.*600 ₺.*500 ₺ idi/.test(g[0]), "fiyat geçmişi: ne zaman, neyden neye, hangi kaynaktan");
   d.esit(t.p.hatalar, [], "sayfada betik hatası yok (fiyat bakımı)");
   await t.kapat();
 }

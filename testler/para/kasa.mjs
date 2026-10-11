@@ -2,7 +2,7 @@
 // eski alansız kayıtlar birlikte) Anasayfa = Dükkan = Günlük Rapor = gün sonu = aracın rapor/kasa rakamı.
 // Çalıştır: node testler/para/kasa.mjs
 import { denetci } from "../ortak/panel.mjs";
-import { ortam, git, statlar, mdDeger, karisikGun, bugunStr, tl, tlArac, tabanVar, bekle } from "./ortak.mjs";
+import { ortam, git, statlar, mdDeger, karisikGun, bugunStr, tl, tlEski, tlArac, tabanVar, bekle } from "./ortak.mjs";
 
 const d = denetci("para/kasa");
 const { st, beklenen: B } = karisikGun();
@@ -14,8 +14,8 @@ if (tabanVar) {
   try {
     await git(t.page, "anasayfa"); const ana = (await statlar(t.page))["Nakit Kasa"];
     await git(t.page, "rapor-gunluk"); const gunluk = (await statlar(t.page))["Nakit Kasa Raporu"];
-    d.esit(ana, tl(B.tabanAnasayfa), "TABAN Anasayfa nakit kasa yanlıştı: bütün tahsilat (kart/havale/iade/düzeltme) nakit sayılıyordu");
-    d.esit(gunluk, tl(B.tabanGunluk), "TABAN Günlük Rapor başka bir rakam veriyordu (aynı gün, iki ekran tutmuyordu)");
+    d.esit(ana, tlEski(B.tabanAnasayfa), "TABAN Anasayfa nakit kasa yanlıştı: bütün tahsilat (kart/havale/iade/düzeltme) nakit sayılıyordu");
+    d.esit(gunluk, tlEski(B.tabanGunluk), "TABAN Günlük Rapor başka bir rakam veriyordu (aynı gün, iki ekran tutmuyordu)");
     const r = await t.tabanArac(["rapor", bugun]);
     d.dogru(mdDeger(r.cikti, "Nakit kasa") !== tlArac(B.nakitKasa), "TABAN aracın raporu da doğru kasayı vermiyordu (" + mdDeger(r.cikti, "Nakit kasa") + ")");
   } finally { await t.kapat(); }
@@ -37,21 +37,21 @@ try {
 
   // üç ekran aynı rakamı gösteriyor
   await git(o.page, "anasayfa"); const ana = await statlar(o.page);
-  d.esit(ana["Nakit Kasa"], tl(B.nakitKasa), "Anasayfa nakit kasa " + tl(B.nakitKasa));
+  d.esit(ana["Kasadaki nakit"], tl(B.nakitKasa), "Anasayfa nakit kasa " + tl(B.nakitKasa));
   d.esit(ana["Kart / Havale ile Gelen"], tl(B.kartHavale), "Anasayfa kart/havale ayrı satırda " + tl(B.kartHavale));
   d.esit(ana["Kâr (bugün)"], tl(B.urunKar), "Anasayfa kâr = ciro − maliyet");
   d.esit(ana["Kart (POS) Komisyonu"], tl(B.komisyon), "Anasayfa POS komisyonu ayrı satır");
-  d.esit(ana["Net Kâr (gider sonrası)"], tl(B.netKar), "Anasayfa net kâr komisyon ve gider düşülmüş");
+  d.esit(ana["Net kâr"], tl(B.netKar), "Anasayfa net kâr komisyon ve gider düşülmüş");
   await git(o.page, "dukkan");
   const dk = await o.page.evaluate(() => [...document.querySelectorAll(".dk-kbox")].map((x) => x.textContent.replace(/ /g, " ")));
   d.dogru(dk.some((x) => x.includes("Nakit Kasa") && x.includes(tl(B.nakitKasa))), "Dükkan nakit kasa aynı: " + tl(B.nakitKasa));
   await git(o.page, "rapor-gunluk"); const gr = await statlar(o.page);
-  d.esit(gr["Nakit Kasa Raporu"], tl(B.nakitKasa), "Günlük Rapor nakit kasa aynı");
+  d.esit(gr["Kasadaki nakit"], tl(B.nakitKasa), "Günlük Rapor nakit kasa aynı");
   d.esit(gr["Alınan Ödemeler"], tl(B.tahNakit + B.tahKart + B.tahHavale), "Günlük Rapor alınan ödemeler = gerçek para (iade/düzeltme hariç)");
   d.esit(gr["İade / Düzeltme (kasaya girmez)"], tl(B.iade + B.duzeltme), "Günlük Rapor iade/düzeltme ayrı gösteriliyor");
   d.esit(gr["Peşin Mal Alımı"], tl(B.alimNakit + B.alimDiger), "Günlük Rapor peşin mal alımı satırı");
   d.esit(gr["Kâr"], tl(B.urunKar), "Günlük Rapor kâr");
-  d.esit(gr["Net Kâr (gider sonrası)"], tl(B.netKar), "Günlük Rapor net kâr");
+  d.esit(gr["Net kâr"], tl(B.netKar), "Günlük Rapor net kâr");
 
   // araç: aynı gün, aynı rakam
   const j = await o.arac(["kasa", bugun, "--json"]);
