@@ -1250,11 +1250,12 @@ function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[
      Kapatmak için: BABUCO_SIPARIS_UYARI=0 */
   function sipUyariKur() {
     if (process.env.BABUCO_SIPARIS_UYARI === "0" || /^siparis/.test(komut)) return;
-    const istek = sipTabloOku(true, 4000).catch(() => null);
     let basildi = false;
+    /* Tablo, komut işini bitirdikten SONRA okunur: komut sürerken araya ikinci bir ağ isteği girmez, hatayla
+       çıkan komutta hiç istek atılmaz. */
     process.on("beforeExit", async () => {
       if (basildi) return; basildi = true;
-      const rows = await istek;
+      const rows = await sipTabloOku(true, 4000).catch(() => null);
       const bekleyen = stkSiparisBekleyen(store).map((o) => ({ ad: o.dealer, tarih: o.tarih }));
       (rows || []).forEach((r) => { if (!(store.gelenSiparisler || []).some((o) => o.orderId === r.id) && !sipSilinmis(r.id)) bekleyen.push({ ad: r.cay_ocagi || "Bilinmeyen bayi", tarih: (r.payload && r.payload.date) || r.created_at }); });
       if (!bekleyen.length) return;
@@ -1264,6 +1265,15 @@ function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[
     });
   }
 
+  /* Sipariş komutları ayrı bir işlevde: hata olursa process.exit ÇAĞIRMADAN çıkılır. (Windows'ta art arda iki
+     ağ isteğinden hemen sonra process.exit, Node'u "Assertion failed … UV_HANDLE_CLOSING" ile çökertiyor;
+     bu komutlar hem store'u hem sipariş tablosunu okuduğu için her hatada buna takılırdı.) */
+  if (/^siparis-/.test(komut)) {
+    let sonuc;
+    try { sonuc = await sipKomutlari(); } catch (e) { console.error("\nHATA: " + e.message); process.exitCode = 1; return; }
+    if (sonuc !== "yok") return;
+  }
+  async function sipKomutlari() {
   /* ---------- siparis-onayla / siparis-dagitim: panelin "Onayla" ve "Dağıtıma Al" aşamaları ---------- */
   if (komut === "siparis-onayla" || komut === "siparis-dagitim") {
     const t = await sipOku();
@@ -1371,6 +1381,9 @@ function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[
     if (!kaydet) { provaUyari("siparis-esitle"); return; }
     sipDurumSonuc(await sipDurumYaz(farkli.map((x) => x.o)), farkli.length);
     return;
+  }
+
+  return "yok";
   }
 
   /* ---------- sayim: sayılan miktarı MUTLAK değer olarak yaz ----------
