@@ -35,7 +35,7 @@ export function sirali(v) {
 export const ayni = (a, b) => sirali(a) === sirali(b);
 
 export async function senkronBulut(a = {}) {
-  const ayar = { okumaHatasi: 0, yanitKaybi: 0, yazmadanOnce: null, jsonb: a.jsonb !== false, yazmalar: [], okumalar: 0 };
+  const ayar = { okumaHatasi: 0, yanitKaybi: 0, yazmadanOnce: null, yedekYazmaHatasi: false, jsonb: a.jsonb !== false, yazmalar: [], okumalar: 0 };
   const once = async (req, res, ctx) => {
     const { url, tablolar } = ctx;
     if (url.pathname !== "/rest/v1/kv") return false;
@@ -71,6 +71,7 @@ export async function senkronBulut(a = {}) {
     ayar.yazmalar.push(kayit);
     const sonOrj = res.end.bind(res), basOrj = res.writeHead.bind(res);
     res.writeHead = (st, ...x) => { kayit.durum = st; return basOrj(st, ...x); };
+    if (ayar.yedekYazmaHatasi && req.method === "POST" && /^babuco:yedek:/.test(anahtar)) { kayit.durum = 500; ctx.yanit(500, { message: "sahte bulut: yedek yazilamadi" }); return true; }
     // Panel okudu, yazmak üzere: tam bu arada "başka biri" yazsın (tek seferlik kanca) → koşullu yazma tutmamalı.
     if (ayar.yazmadanOnce && anahtar === STORE && req.method === "PATCH") { const f = ayar.yazmadanOnce; ayar.yazmadanOnce = null; await f(ctx); }
     const kayip = ayar.yanitKaybi > 0 && req.method === "PATCH" && anahtar === STORE;
@@ -167,3 +168,14 @@ export async function baglantiKes(p) {
 export function baglantiAc(p) { if (p._kesik) p._kesik.acik = false; }
 /** Panelin internet yoklamasını (normalde 8 sn'de bir) hemen çalıştır. */
 export const yokla = (page) => page.evaluate(() => internetKontrol(true));
+
+/** İstanbul saatine göre n gün önceki tarih: "YYYY-AA-GG" (panel ve araç yedek anahtarında bunu kullanır). */
+export function istGun(n = 0) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() - n * 86400000));
+}
+/** Sahte buluta konacak hazır yedek satırı. */
+export function yedekSatiri(anahtarEki, store, ek = {}) {
+  const say = (k) => (Array.isArray(store[k]) ? store[k].length : 0);
+  return { key: "babuco:yedek:" + anahtarEki, updated_at: new Date().toISOString(),
+    value: { ozet: { satis: say("sales"), musteri: say("customers"), tahsilat: say("payments"), urun: say("products"), alindi: new Date().toISOString(), kim: "deneme", tur: "gunluk", ...ek }, store } };
+}

@@ -3109,10 +3109,14 @@ async function yedekSekmeKur() {
   if (!document.body.contains(kutu)) return;
   if (!liste) { kutu.innerHTML = `<p class="hint">Yedek listesi alınamadı. İnternet gelince bu sayfayı yeniden aç.</p>`; return; }
   if (!liste.length) { kutu.innerHTML = `<p class="hint">Henüz yedek yok. İlk yedek, bir sonraki kayıtla birlikte kendiliğinden alınır.</p>`; return; }
-  kutu.innerHTML = liste.map((y, i) => `<div class="yedek-satir">
+  const ILK = 8;                                           // uzun liste ekranı doldurmasın: son 8'i göster, gerisi istenince
+  kutu.classList.remove("hepsi");
+  kutu.innerHTML = liste.map((y, i) => `<div class="yedek-satir${i >= ILK ? " ys-eski" : ""}">
       <div class="ys-bilgi"><b>${esc(y.baslik)}</b><small>${esc(y.alt)} · ${Number(y.ozet.satis) || 0} satış · ${Number(y.ozet.musteri) || 0} müşteri</small></div>
       <button class="btn soft" type="button" data-yedek="${i}">Bu hâle dön</button>
-    </div>`).join("");
+    </div>`).join("") + (liste.length > ILK ? `<button class="btn soft ys-hepsi" id="yedekHepsiBtn" type="button">Daha eski ${liste.length - ILK} yedeği göster</button>` : "");
+  const hepsi = document.getElementById("yedekHepsiBtn");
+  if (hepsi) hepsi.addEventListener("click", () => kutu.classList.add("hepsi"));
   kutu.querySelectorAll("[data-yedek]").forEach((b) => b.addEventListener("click", async () => {
     const y = liste[Number(b.dataset.yedek)];
     b.disabled = true; b.textContent = "Getiriliyor…";

@@ -49,3 +49,7 @@ body.es-seritli .layout { padding-top: var(--es-serit-h, 48px); }
 .yedek-satir .ys-bilgi b { display: block; font-size: 14px; font-weight: 600; }
 .yedek-satir .ys-bilgi small { display: block; font-size: 12.5px; color: #5b6470; line-height: 1.35; margin-top: 2px; }
 .yedek-satir .btn, #yedekSimdiBtn { min-height: 44px; flex: 0 0 auto; white-space: nowrap; }
+.yedek-liste .ys-eski { display: none; }
+.yedek-liste.hepsi .ys-eski { display: flex; }
+.yedek-liste .ys-hepsi { width: 100%; min-height: 44px; margin-top: 8px; justify-content: center; }
+.yedek-liste.hepsi .ys-hepsi { display: none; }
