@@ -1,3 +1,4 @@
+// NOT: Bu senaryo giriş bölümünü TAKLİT eder; yalnız duzeltme/senkron dalında tek başına geçer. Birleşik kodda yerini testler/ortak/butun.mjs aldı.
 // Senaryo 11: giriş bölümüyle bağlantı noktaları (o bölümün kodu bu dalda yok; burada taklit edilir).
 //   · girisKapisi() çözülmeden buluta HİÇ dokunulmaz; o sırada yapılan kayıt telefonda bekler, kapı açılınca gider.
 //   · bulutYetkiliMi() false iken buluttan gelen boş yanıt "bulut boş" sayılmaz: yazma / yedek yok.

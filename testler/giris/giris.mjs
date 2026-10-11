@@ -113,7 +113,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
     await page.waitForFunction(() => window.app && typeof window.app.getStore === "function");
     d.esit(soru, 1, kip + ": her şey buluttayken çıkış tek soruyla bitti");
     d.dogru(await girisEkraniVar(page) && !(await panelGorunuyor(page)), kip + ": çıkıştan sonra giriş ekranı");
-    d.esit(await page.evaluate(() => Object.keys(localStorage).filter((k) => k === "benimpos-app-v1" || k === "servis-v1" || k.startsWith("babuco:"))), [], kip + ": çıkışta bu cihazdaki veri kopyası ve oturum silindi");
+    d.esit(await page.evaluate(() => Object.keys(localStorage).filter((k) => k === "benimpos-app-v1" || k === "servis-v1" || (k.startsWith("babuco:") && k !== "babuco:cihaz"))), [], kip + ": çıkışta bu cihazdaki veri kopyası ve oturum silindi");
     d.esit(await musteriSayisi(page), 0, kip + ": çıkıştan sonra bellekte müşteri yok");
     d.esit(bulut.deger("babuco:store").customers.length, 4, kip + ": çıkış buluttaki veriye dokunmadı");
     const istekOnce = veriIstekleri(bulut);
@@ -167,7 +167,7 @@ for (const kip of ["kilitsiz", "kilitli"]) {
     await p.page.waitForFunction(() => window.app && typeof window.app.getStore === "function");
     const sorular = p.diyaloglar.slice(once).map((x) => x.mesaj);
     d.dogru(sorular.length === 2 && /buluta gitmemiş olabilir \(internet yok\)/.test(sorular[1]), "internet yokken çıkış: ikinci kez, nedenini söyleyerek sordu");
-    d.esit(await p.page.evaluate(() => Object.keys(localStorage).filter((k) => k === "benimpos-app-v1" || k.startsWith("babuco:"))), [], "internet yokken çıkış onaylandı: cihazdaki kopya ve oturum yine de silindi");
+    d.esit(await p.page.evaluate(() => Object.keys(localStorage).filter((k) => k === "benimpos-app-v1" || (k.startsWith("babuco:") && k !== "babuco:cihaz"))), [], "internet yokken çıkış onaylandı: cihazdaki kopya ve oturum yine de silindi");
     bulut.ac();
     d.esit(bulut.deger("babuco:store").customers.length, 4, "internet yokken çıkış: buluttaki veri yerinde");
   } finally { await p.kapat(); await bulut.dur(); }

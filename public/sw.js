@@ -35,7 +35,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((adlar) => Promise.all(adlar.filter((a) => a !== CACHE).map((a) => caches.delete(a))))
+      .then((adlar) => Promise.all(adlar.filter((a) => a !== CACHE && !a.startsWith('toptanci-')).map((a) => caches.delete(a))))
       .then(() => self.clients.claim()),
   )
 })

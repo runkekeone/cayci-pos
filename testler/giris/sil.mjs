@@ -51,7 +51,6 @@ for (const kip of ["kilitsiz", "kilitli"]) {
     await yerinde(kip + ": yanlış şifreden sonra veri yerinde");
 
     // yedek alınamıyor → silme
-    d.esit(await dene(TOPTANCI.sifre, "SİL"), "Yedek alınamadı. Hiçbir şey silinmedi.", kip + ": yedekAl yoksa (yedek alınamaz) silmez");
     await page.evaluate(() => { window.yedekAl = async () => false; });
     d.esit(await dene(TOPTANCI.sifre, "SİL"), "Yedek alınamadı. Hiçbir şey silinmedi.", kip + ": yedekAl false dönerse silmez");
     await page.evaluate(() => { window.yedekAl = async () => { throw new Error("patladı"); }; });

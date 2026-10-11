@@ -4484,7 +4484,9 @@ function esBenimse(m, ts, notlar) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { tamam = false; }
   tamam = esGunlukYaz() && tamam;
   _esDurum.depoDolu = !tamam;
-  if (degisti) esEkranYenile();
+  // Ekranı yalnız GÖRÜNEN bir şey değiştiyse yeniden çiz. Her yazmada değişen eşitleme sayacı (store.esitleme)
+  // tek başına yeniden çizim sebebi değil — yoksa her kayıttan 1 sn sonra yarım doldurulmuş form silinir.
+  if (degisti && !esEsit(Object.assign({}, simdi, { esitleme: null }), Object.assign({}, hedef, { esitleme: null }))) esEkranYenile();
   (notlar || []).forEach((n) => { if (n.tur === "belgeNo") esBildir("Fiş numarası değişti: " + n.eski + " → " + n.yeni + ". Aynı numara başka bir cihazda da kullanılmıştı."); });
   if (g.acik) bulutaYaz();
 }

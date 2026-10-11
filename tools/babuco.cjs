@@ -32,7 +32,22 @@
  *   node babuco.js gider <tutar> <aciklama> [kategori]              (--kaydet)
  *   node babuco.js gelir <tutar> <aciklama> [tur]                   (--kaydet)
  *   node babuco.js sil-satis <belgeNo>         Satışı geri al       (--kaydet)
- *   node babuco.js siparisler                  Çay ocağından gelen siparişler
+ *   node babuco.js siparisler                  Çay ocağından gelen siparişler (kalem, yaş, durum)
+ *   node babuco.js siparis-onayla <kod> · siparis-dagitim <kod> [gün] [saat] · siparis-teslim <kod> [--odeme=..] [--dukkan]   (--kaydet)
+ *   node babuco.js siparis-kapat <kod..>|--eski=GUN [--not=]   satış açmadan kapat · siparis-esitle   durumu tabloya yeniden gönder
+ *   node babuco.js alim <json>  (+firma, faturaNo, tarih, odeme, odemeTuru, toplam, odenen)   mal girişi: stok + alış kaydı
+ *   node babuco.js alislar · sil-alim <no>     alış kayıtları / alışı geri al (stok girdiği havuzdan düşer)
+ *   node babuco.js sayim <json>                sayılan miktarı stok olarak yaz ({"arac":{..},"dukkan":{..}})   (--kaydet)
+ *   node babuco.js eksi-stok [--sifirla] [--arac|--dukkan]   eksi stokları listele / 0 yap
+ *   node babuco.js aktar <urun> <adet> [--dukkana]   dükkan <-> araç aktarma
+ *   node babuco.js alinacaklar [--hafta=6] [--hedef=2] [--metin] · kritik-oner [--hafta] [--gun] [--hepsi]
+ *   node babuco.js toplu-zam (--grup=|--urun=..|--hepsi) (--yuzde=|--tutar=|--yeni=) [--yuvarla=5] [--yukari|--asagi] [--ozel]
+ *   node babuco.js fiyat-kontrol [--esik=10] · fiyat-gecmisi [urun]
+ *   node babuco.js limit [<musteri> <tutar|sil> [--vade=gun|sil]] [--genel-vade=gun]   borç limiti/vade; boşsa liste
+ *   node babuco.js sabit-gider [ekle <ad> <tutar> | sil <ad>]   her ay net kârdan düşülen sabit gider
+ *   node babuco.js tahsilat ... [--tur=nakit|kart|havale] · gider ... [--odeme=nakit|kart|havale]
+ *   node babuco.js yedekler · yedek-al [dosya] · geri-yukle <tarih|yedek|dosya>   bulut yedekleri
+ *   Giriş (veritabanı kilitliyse): node tools/babuco-kimlik.cjs giris | durum | cikis
  *
  * GÜVENLİK: --kaydet verilmezse HİÇBİR ŞEY yazılmaz, sadece özet basılır.
  * Her yazmadan önce buluttaki mevcut hâl `yedek/<zaman>.json` olarak saklanır.
@@ -2372,5 +2387,5 @@ function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[
     return;
   }
 
-  console.log("Bilinmeyen komut: " + komut + "\nKomutlar: durum | rapor | musteri | musteritablo | kasa | aylik | ekstre | tahsilat-listesi |\n          urun | ozel-fiyat | satis | kalem-ekle | alim | tahsilat | gider | gelir | sil-satis | siparisler");
-})().catch((e) => { console.error("\nHATA: " + e.message); process.exit(1); });
+  console.log("Bilinmeyen komut: " + komut + "\nKomutlar: durum | rapor | kasa | aylik | haftalik | musteritablo | musteri | musteri-ekle | ekstre | tahsilat-listesi | limit |\n          urun | urun-ekle | urun-fiyat | ozel-fiyat | toplu-zam | fiyat-kontrol | fiyat-gecmisi |\n          satis | kalem-ekle | sil-satis | iade | tahsilat | gider | gelir | sabit-gider |\n          alim | alislar | sil-alim | sayim | eksi-stok | aktar | alinacaklar | kritik-oner |\n          siparisler | siparis-onayla | siparis-dagitim | siparis-teslim | siparis-kapat | siparis-esitle |\n          yedekler | yedek-al | geri-yukle");
+})().catch((e) => { console.error("\nHATA: " + e.message); process.exitCode = 1; });   // exit() değil: Windows + Node 24, ağ isteğinden hemen sonra exit çağrılınca çöküyor

@@ -40,7 +40,28 @@ gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]
 sil-satis <belgeNo>          satışı geri al (stok + borç geri döner)
 iade <musteri> <urun> <adet> [fiyat]   müşteriden mal geri alındı: borçtan düşer, ciro/maliyet eksiye, stok geri (tahsilat DEĞİL)
+tahsilat ... --tur=nakit|kart|havale   paranın türü (verilmezse nakit) · gider ... --odeme=nakit|kart|havale
+limit [<musteri> <tutar|sil> [--vade=gun|sil]] [--genel-vade=gun]   borç limiti / vade; boşsa liste
+sabit-gider [ekle <ad> <tutar> | sil <ad>]   her ay net kârdan düşülen sabit gider
+alim <json>                  mal girişi: stok + alış kaydı (+firma, faturaNo, tarih, odeme, odemeTuru, toplam, odenen)
+alislar · sil-alim <no>      alış kayıtları / alışı geri al
+sayim <json>                 sayılan miktarı stok olarak yaz ({"arac":{..},"dukkan":{..}})
+eksi-stok [--sifirla]        eksi stokları listele / 0 yap · aktar <urun> <adet> [--dukkana]
+alinacaklar · kritik-oner    alınacaklar listesi / satış hızından kritik seviye önerisi
+toplu-zam (--grup=|--urun=|--hepsi) (--yuzde=|--tutar=|--yeni=) [--yuvarla=5] [--ozel]
+fiyat-kontrol [--esik=10] · fiyat-gecmisi [urun]
+siparis-onayla <kod> · siparis-dagitim <kod> · siparis-teslim <kod> [--odeme=..] · siparis-kapat <kod..>|--eski=GUN
+yedekler · yedek-al [dosya] · geri-yukle <tarih|yedek|dosya>   buluttaki günlük yedekler
 ```
+
+**Bekleyen sipariş uyarısı:** her komuttan sonra stderr'e `[!] BEKLEYEN SIPARIS …` satırı düşebilir — bunu
+kullanıcıya **mutlaka ilet** (fişin kendisine karışmaz, ayrı kanaldan gelir).
+
+**Mal alımında ödeme:** `alim`'de `odeme`/`odemeTuru` yazılmazsa peşin·nakit sayılır ve kasadan düşer. Mal
+veresiye ya da başkasının parasıyla alındıysa kullanıcıya sor, öyle yaz.
+
+**Veritabanı kilitliyse** araç oturum ister: PC'de bir kez `node tools/babuco-kimlik.cjs giris`; bulut
+oturumunda ortam değişkeni `BABUCO_EPOSTA` + `BABUCO_SIFRE`. Kurulum: `tools/supabase/KURULUM.md`.
 
 Bağlantı bilgisi `public/toptanci/app.js` içindeki `SB_URL`/`SB_KEY`'den okunur —
 araçta ikinci bir kopya tutulmaz. Gerekirse `BABUCO_SB_URL` + `BABUCO_SB_KEY`
@@ -96,11 +117,17 @@ Artifact ile `url` = yukarıdaki link olarak yayınla (link değişmez). Telefon
 olmayan müşteri giremez; çıktıdaki "atlanan" listesine bak.
 
 ### Çakışma
-Panel tüm veriyi tek bulut anahtarına yazar, **son yazan kazanır**. Araç bunu
-compare-and-swap ile korur: okuduğundan beri bulut değiştiyse yazmayı reddeder ve
+Araç compare-and-swap ile yazar: okuduğundan beri bulut değiştiyse yazmayı reddeder ve
 `CAKISMA` der. Onu görürsen körlemesine tekrarlama — yeniden oku, kaydın zaten
-girip girmediğine bak, sonra dene. Her yazmadan önce buluttaki önceki hâl
-`tools/yedek/` altına kaydedilir (bu klasör git'e girmez).
+girip girmediğine bak, sonra dene. Panel de artık körlemesine üstüne yazmaz: buluttaki
+hâlle birleştirip koşullu yazar (iki telefon ve araç birbirinin kaydını silmez).
+Her yazmadan önce buluttaki önceki hâl `tools/yedek/` altına kaydedilir (git'e girmez);
+ayrıca günün ilk yazmasından önce bulutta `babuco:yedek:<gün>` yedeği alınır (30 gün tutulur).
+
+### Denemeler
+`testler/` altındaki denemeler sahte bulutla çalışır, canlı veriye dokunmaz:
+`node testler/ortak/duman.mjs`, `node testler/stok/hepsi.mjs`, `node testler/senkron/hepsi.mjs`,
+`node testler/para/<ad>.mjs`, `node testler/giris/<ad>.mjs`.
 
 ### Bulut oturumunda ağ izni
 Anthropic bulut oturumları varsayılan olarak dışarıya çıkamaz. Araç

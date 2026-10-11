@@ -82,7 +82,16 @@ export async function panelAc(a) {
   const browser = a.browser || await chromium.launch({ headless: a.headless !== false });
   // Panel giriş istiyor: denemeler varsayılan olarak "cihazda oturum var" durumunda açılır.
   // Giriş ekranının kendisini sınamak için { oturumsuz: true } ver; kendi storageState'ini verirsen o kullanılır.
-  const depolama = a.storageState || (a.oturumsuz ? undefined : { cookies: [], origins: [{ origin: panelUrl, localStorage: [{ name: "babuco:oturum", value: JSON.stringify(sahteOturum()) }] }] });
+  let depolama = a.storageState;
+  if (!a.oturumsuz) {
+    // Kendi storageState'ini veren deneme de girişli açılır (içinde zaten oturum varsa ona dokunulmaz).
+    depolama = JSON.parse(JSON.stringify(depolama || { cookies: [], origins: [] }));
+    depolama.cookies = depolama.cookies || []; depolama.origins = depolama.origins || [];
+    let kok = depolama.origins.find((o) => o.origin === panelUrl);
+    if (!kok) { kok = { origin: panelUrl, localStorage: [] }; depolama.origins.push(kok); }
+    kok.localStorage = kok.localStorage || [];
+    if (!kok.localStorage.some((x) => x.name === "babuco:oturum")) kok.localStorage.push({ name: "babuco:oturum", value: JSON.stringify(sahteOturum()) });
+  }
   const context = await browser.newContext({ viewport: { width: a.genislik || 390, height: a.yukseklik || 844 }, locale: "tr-TR", timezoneId: "Europe/Istanbul", storageState: depolama });
   await sahteyeYonlendir(context, a.bulutUrl);
   const page = await context.newPage();

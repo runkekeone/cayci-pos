@@ -5,7 +5,7 @@ import path from "node:path";
 
 const DIZIN = import.meta.dirname;
 const DOSYALAR = ["birim.mjs", "1-arac-ve-panel.mjs", "2-iki-telefon.mjs", "3-ayni-belge-no.mjs", "4-okuma-hatasi.mjs", "5-cevrimdisi.mjs",
-  "6-erken-kapanma.mjs", "7-yedek.mjs", "8-arac-yedek.mjs", "9-uc-durumlar.mjs", "10-kabuk.mjs", "11-giris-baglantilari.mjs", "../ortak/duman.mjs"];
+  "6-erken-kapanma.mjs", "7-yedek.mjs", "8-arac-yedek.mjs", "9-uc-durumlar.mjs", "10-kabuk.mjs", "../ortak/duman.mjs"];
 const calistir = (dosya) => new Promise((coz) => {
   const c = spawn(process.execPath, [path.join(DIZIN, dosya)], { env: process.env });
   let cikti = "";
