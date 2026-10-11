@@ -35,7 +35,7 @@ export function sirali(v) {
 export const ayni = (a, b) => sirali(a) === sirali(b);
 
 export async function senkronBulut(a = {}) {
-  const ayar = { okumaHatasi: 0, yanitKaybi: 0, jsonb: a.jsonb !== false, yazmalar: [], okumalar: 0 };
+  const ayar = { okumaHatasi: 0, yanitKaybi: 0, yazmadanOnce: null, jsonb: a.jsonb !== false, yazmalar: [], okumalar: 0 };
   const once = async (req, res, ctx) => {
     const { url, tablolar } = ctx;
     if (url.pathname !== "/rest/v1/kv") return false;
@@ -71,9 +71,12 @@ export async function senkronBulut(a = {}) {
     ayar.yazmalar.push(kayit);
     const sonOrj = res.end.bind(res), basOrj = res.writeHead.bind(res);
     res.writeHead = (st, ...x) => { kayit.durum = st; return basOrj(st, ...x); };
+    // Panel okudu, yazmak üzere: tam bu arada "başka biri" yazsın (tek seferlik kanca) → koşullu yazma tutmamalı.
+    if (ayar.yazmadanOnce && anahtar === STORE && req.method === "PATCH") { const f = ayar.yazmadanOnce; ayar.yazmadanOnce = null; await f(ctx); }
     const kayip = ayar.yanitKaybi > 0 && req.method === "PATCH" && anahtar === STORE;
     if (kayip) { ayar.yanitKaybi--; res.writeHead = () => res; }
     res.end = (...x) => {
+      kayit.bos = x[0] === "[]";                              // koşul tutmadı: hiçbir satır yazılmadı
       if (ayar.jsonb) for (const s of tablolar.kv.values()) s.value = jsonbSira(s.value);
       if (kayip) { req.socket.destroy(); return res; }       // yazma İŞLENDİ ama yanıt hiç gelmedi
       return sonOrj(...x);
@@ -85,6 +88,8 @@ export async function senkronBulut(a = {}) {
   b.ayar = ayar;
   /** babuco:store'a ulaşan yazmalar (yöntem + koşullu mu) */
   b.storeYazmalari = () => ayar.yazmalar.filter((y) => y.anahtar === STORE);
+  /** koşulu tutmadığı için reddedilen (hiçbir şey yazmayan) yazma sayısı */
+  b.cakismalar = () => b.storeYazmalari().filter((y) => y.kosullu && y.bos).length;
   b.yedekAnahtarlari = () => [...b.kv.keys()].filter((k) => k.startsWith("babuco:yedek:")).sort();
   b.store = () => b.deger(STORE);
   return b;
@@ -149,3 +154,16 @@ export async function kosul(fn, ms = 15000, ne = "koşul") {
   throw new Error("zaman aşımı: " + ne);
 }
 export const bul = (liste, id) => (liste || []).find((x) => x.id === id);
+
+/** Yalnız BU telefonun internetini kes / geri ver (araç ve diğer telefon çalışmaya devam eder).
+ *  navigator.onLine "çevrimiçi" demeye devam eder: sahadaki gerçek durum budur (çubuk dolu, veri akmıyor). */
+export async function baglantiKes(p) {
+  if (!p._kesik) {
+    p._kesik = { acik: false };
+    await p.context.route(/^https:\/\/[a-z0-9-]+\.supabase\.co\//, (route) => (p._kesik.acik ? route.abort("internetdisconnected") : route.fallback()));
+  }
+  p._kesik.acik = true;
+}
+export function baglantiAc(p) { if (p._kesik) p._kesik.acik = false; }
+/** Panelin internet yoklamasını (normalde 8 sn'de bir) hemen çalıştır. */
+export const yokla = (page) => page.evaluate(() => internetKontrol(true));

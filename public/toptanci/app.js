@@ -57,7 +57,7 @@ function seedStore(st) {
   return st;
 }
 function saveStore() { yerelKaydet(); bulutaYaz(); }
-function genId() { store.counters.seq = (store.counters.seq || 0) + 1; return "id" + store.counters.seq + Date.now().toString(36); }
+function genId() { store.counters.seq = (store.counters.seq || 0) + 1; return "id" + store.counters.seq + Date.now().toString(36) + esCihazEki(); }
 // ISO hafta numarası: "2026-H31"
 function haftaNo(d) {
   d = new Date(d); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day + 3);
@@ -2606,7 +2606,6 @@ function esKarsilastir(simdi, hedef) {
 
 const BULUT_KEY = "babuco:store";
 const ES_GUNLUK_KEY = BULUT_KEY + ":gunluk";   // localStorage: bu cihazın buluta henüz gitmemiş yamaları
-const ES_CIHAZ_KEY = "babuco:cihaz";           // localStorage: bu cihazın kimliği (store.esitleme anahtarı)
 const YEDEK_ONEK = "babuco:yedek:";            // bulut: günlük yedek = babuco:yedek:<YYYY-AA-GG>
 const YEDEK_GUN = 30;                          // bu kadar gün tutulur
 let _bulutHazir = false;      // buluttan ilk çekme başarıyla bitti mi
@@ -2621,13 +2620,21 @@ let _esCihaz = esCihazKimligi();
 let _esGunluk = esGunlukOku();
 let _esTaban = esKlon(store); // açık yamanın ölçüldüğü hâl (son eşitlenen hâl ya da açılıştaki hâl)
 
+/** Bu cihazın kimliği (localStorage "babuco:cihaz"); buluttaki store.esitleme bu anahtarla tutulur. */
 function esCihazKimligi(yenile) {
-  const uret = () => "c" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const uret = () => "c" + (Math.random().toString(36).slice(2, 10) + "00000000").slice(0, 8) + Date.now().toString(36).slice(-4);
   try {
-    let c = yenile ? "" : localStorage.getItem(ES_CIHAZ_KEY);
-    if (!c) { c = uret(); localStorage.setItem(ES_CIHAZ_KEY, c); }
+    let c = yenile ? "" : localStorage.getItem("babuco:cihaz");
+    if (!c) { c = uret(); localStorage.setItem("babuco:cihaz", c); }
+    if (yenile) esCihazEki.e = "";
     return c;
   } catch (e) { return uret(); }
+}
+/** genId()'nin sonuna eklenen, cihaza özgü 3 harf. İki telefon aynı sıra numarasıyla aynı milisaniyede kayıt
+    açarsa id'leri aynı çıkıyor, birleştirme ikisini tek kayıt sanıyordu (biri kayboluyordu). */
+function esCihazEki() {
+  if (!esCihazEki.e) esCihazEki.e = esCihazKimligi().slice(1, 4);
+  return esCihazEki.e;
 }
 /** Günlük: { n: son yama no, y: [{k, f}] gönderilmeyi bekleyen dondurulmuş yamalar, acik: son eşitlemeden
     beri bu oturumda biriken yama, tabanTs: son eşitlenen bulut zamanı, ilkBekleyen, sonBasari, gecis } */
