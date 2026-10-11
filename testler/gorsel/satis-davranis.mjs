@@ -163,6 +163,9 @@ try {
   d.dogru(/bulunamadı/.test(await yazi("#prodGrid")) && await page.evaluate(() => document.querySelectorAll("#prodGrid [data-add]").length) === 0, "sonuç yoksa açık bir mesaj var");
   await page.click("#prodSearchX"); await bekle(200);
   d.esit(await page.evaluate(() => [pos.q, document.getElementById("prodSearch").value, document.querySelectorAll("#prodGrid [data-add]").length]), ["", "", 6], "× aramayı temizliyor, kategoriye geri dönüyor");
+  await page.evaluate(() => { findProduct("u5").barkod = "8690000000055"; });
+  await page.click("#prodSearch"); await page.keyboard.type("8690000000055"); await page.keyboard.press("Enter"); await bekle(200);
+  d.esit(await page.evaluate(() => [activeCart().items.map((i) => [i.urunId, i.adet]), document.getElementById("prodSearch").value]), [[["u5", 1]], ""], "arama kutusuna barkod yazıp Enter: ürün sepete eklendi, kutu temizlendi");
 
   console.log("— satır penceresi (fiyat düzeltme)");
   await sepet("m4", ["u1", "u2"]); await sepetAc();

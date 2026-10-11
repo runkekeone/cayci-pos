@@ -1685,8 +1685,8 @@ function mountSatisDetay() {
 function newCart() { return { items: [], musteriId: null, iskonto: 0, odenen: 0 }; }
 const pos = { carts: [newCart(), newCart(), newCart(), newCart(), newCart()], active: 0, cat: "ANA", personelId: null, q: "" };
 function activeCart() { return pos.carts[pos.active]; }
-/* Satış ekranı (telefon): ÜSTTE ürün seçimi, ALTTA sabit "Ödemeye geç" çubuğu; sepet + ödeme o çubuktan açılan pencerede.
-   Akış: müşteri seç → ürüne dokun (sepete eklenir) → Ödemeye geç → adet düzelt → nasıl ödendi.
+/* Satış ekranı (telefon): ÜSTTE ürün seçimi, ALTTA sabit "Sepet ve ödeme" çubuğu; sepet + ödeme o çubuktan açılan pencerede.
+   Akış: müşteri seç → ürüne dokun (sepete eklenir) → Sepet ve ödeme → adet düzelt → nasıl ödendi.
    Yeni adların hepsi gs… ile başlar (görsel yenileme / satış). Hesap yapan işlevler (finalizeSale, musteriFiyat…) aynen duruyor. */
 /* Kategori ikonları — ortak ikon tablosuna EK (tablo düzenlenmez) */
 IKON_YOLLAR.damla = 'M12 3.5c3.2 3.6 5.5 6.7 5.5 9.7a5.5 5.5 0 0 1-11 0c0-3 2.3-6.1 5.5-9.7z';
@@ -1960,7 +1960,7 @@ function syncTotals() {
   const cok = gsAcikSepetler().length > 1, isk = Number(c.iskonto) || 0;
   // alt çubuk
   set("posTutar", dolu ? money.format(t.toplam) : "");
-  set("gsBarBas", dolu ? "Ödemeye geç" : (cok ? "Sepet " + (pos.active + 1) + " boş" : "Sepet boş"));
+  set("gsBarBas", dolu ? "Sepet ve ödeme" : (cok ? "Sepet " + (pos.active + 1) + " boş" : "Sepet boş"));
   set("gsBarAlt", dolu ? (cok ? "Sepet " + (pos.active + 1) + " · " : "") + ozet : "Eklemek için ürüne dokun");
   const bar = document.getElementById("gsBar"); if (bar) bar.classList.toggle("dolu", dolu);
   const ac = document.getElementById("gsSepetAc"); if (ac) ac.disabled = !dolu;
@@ -2224,7 +2224,7 @@ function openCustPicker() {
 }
 /* Muhtelif tutar penceresi — "Diğer" menüsünden açılır (#muhInput/#muhEkle mantığı aynı) */
 function openMuhModal() {
-  openModal("Muhtelif tutar ekle", `<p class="gs-pencere-aciklama">Listede olmayan ürün için serbest tutar. Sepete “Muhtelif Ürün” diye eklenir.</p><div class="field"><label>Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn ok gs-tam" id="muhEkle" type="button">Sepete ekle</button>`, {
+  openModal("Muhtelif tutar ekle", `<p class="gs-pencere-aciklama">Listede olmayan ürün için serbest tutar. Sepete “Muhtelif Ürün” diye eklenir.</p><div class="field"><label>Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn gs-tam" id="muhEkle" type="button">Sepete ekle</button>`, {
     noFoot: true,
     onMount: (ov) => {
       ov.classList.add("gs-pencere");
@@ -2307,7 +2307,7 @@ function gsSepetAc() {
     ov.id = "gsSepetOv"; ov.classList.add("gs-sepet-ov", "gs-pencere"); ov._acildi = Date.now();
     const alt = document.createElement("div"); alt.className = "gs-sepet-alt"; alt.id = "gsSepetAlt";
     ov.querySelector(".modal").appendChild(alt);
-    // Açıldıktan hemen sonraki dokunuş sayılmaz: "Ödemeye geç"e çift dokunan, ikinci dokunuşla yanlışlıkla satış kaydetmesin / satır silmesin
+    // Açıldıktan hemen sonraki dokunuş sayılmaz: alt çubuğa çift dokunan, ikinci dokunuşla yanlışlıkla satış kaydetmesin / satır silmesin
     ov.addEventListener("click", (e) => { if (Date.now() - ov._acildi < 450) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
     ov.addEventListener("click", gsSepetTik);
     ov.addEventListener("input", (e) => { if (e.target.id === "gsSatisNot") { activeCart().not = e.target.value; const pn = document.getElementById("posNot"); if (pn) pn.value = e.target.value; } });
@@ -2355,13 +2355,18 @@ function gsSepetTik(e) {
 }
 /* Ödeme düğmesi: eski düğmelerle AYNI çağrı (finalizeSale(tür) / finalizeCustom(id)). Satış kaydedildiyse pencere kapanır;
    vazgeçildiyse (limit onayı "İptal", müşteri seçilmemiş…) sepet ve pencere olduğu gibi kalır.
-   Pencere açıldıktan hemen sonraki dokunuş sayılmaz: "Ödemeye geç"e çift dokunan yanlışlıkla satış kaydetmesin. */
+   Pencere açıldıktan hemen sonraki dokunuş sayılmaz: alt çubuğa çift dokunan yanlışlıkla satış kaydetmesin. */
 function gsOde(tur, ozelId) {
   const ov = gsSepetAcik();
   if (ov && Date.now() - (ov._acildi || 0) < 450) return;
   const once = store.sales.length;
   if (ozelId) finalizeCustom(ozelId); else finalizeSale(tur);
-  if (store.sales.length > once) gsSepetKapat();
+  if (store.sales.length > once) {
+    gsSepetKapat();
+    // sıradaki satış baştan başlasın: kategoriler, boş arama, ekranın en üstü (müşteri seçimi)
+    pos.cat = "ANA"; pos.q = "";
+    if (currentRoute() === "satis") render();
+  }
 }
 /* Alt çubuğun yeri: alt menü çubuğunun (başka bölümün) gerçek yüksekliği ölçülür — sabit sayı varsayılmaz. */
 function gsOlc() {
@@ -2388,15 +2393,16 @@ function mountSatis() {
   tik("gsDiger", gsDigerMenu);
   tik("gsSepetAc", gsSepetAc);
   tik("taraFab", taraBaslat);
-  const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
-  const doBar = () => { const code = bar.value.trim(); if (!code) return; const p = store.products.find((x) => x.barkod === code); if (p) { addToCart(p.id); bar.value = ""; } else alert("Bu barkodla ürün yok."); };
-  if (bar) bar.addEventListener("keydown", (e) => { if (e.key === "Enter") doBar(); });
-  if (ara) ara.addEventListener("click", doBar);
-  document.querySelectorAll("[data-soon]").forEach((el) => el.addEventListener("click", () => alert("Bu özellik yakında.")));
   const psearch = document.getElementById("prodSearch");
   const psx = document.getElementById("prodSearchX");
   if (psearch) {
     psearch.addEventListener("input", () => { pos.q = psearch.value; posGridYenile(); });
+    // Barkod yazıp (ya da el okuyucusuyla okutup) Enter: tam eşleşen ürün sepete eklenir, kutu temizlenir
+    psearch.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      const code = psearch.value.trim(), p = code && store.products.find((x) => x.gorunur !== false && String(x.barkod || "") === code);
+      if (p) { addToCart(p.id); pos.q = ""; psearch.value = ""; posGridYenile(); } else psearch.blur();
+    });
     // Klavye açılınca görünen alan yarıya iner: arama satırını ekranın üstüne al ki sonuçlar klavyenin üstünde kalsın
     psearch.addEventListener("focus", () => setTimeout(() => {
       const k = psearch.closest(".gs-ara"); if (!k || document.activeElement !== psearch) return;

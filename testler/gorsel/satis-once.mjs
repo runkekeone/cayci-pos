@@ -1,8 +1,14 @@
 // "ÖNCE" görüntüleri: satış ekranının yeniden düzenlenmeden önceki hâli (yalnız durum kurup görüntü alır).
+// ESKİ paneli açar: taban kopyası (_wt/g-taban, yalnız okunur) varsa oradan; yoksa çalışmaz (bu kopyada ekran artık yeni).
 // Çalıştır: node testler/gorsel/satis-once.mjs   → _wt/ekran/g-satis/once/*.png
+import fs from "node:fs";
+import path from "node:path";
+import { DEPO } from "../ortak/panel.mjs";
 import { gsAc, bekle } from "./satis-ortak.mjs";
 
-const o = await gsAc({ diyalog: (d) => d.dismiss().catch(() => {}) });
+const TABAN_PANEL = process.env.TABAN_PANEL || path.resolve(DEPO, "../g-taban/public/toptanci");
+if (!fs.existsSync(path.join(TABAN_PANEL, "app.js"))) { console.log("taban kopyası yok (" + TABAN_PANEL + ") — önce görüntüleri alınamaz"); process.exit(0); }
+const o = await gsAc({ panelDizin: TABAN_PANEL, diyalog: (d) => d.dismiss().catch(() => {}) });
 const { page, git, cek } = o;
 const K = "once";
 const sepet = (musteriId, urunler) => page.evaluate(([m, u]) => { pos.carts[pos.active] = newCart(); activeCart().musteriId = m; u.forEach((x) => addToCart(x)); }, [musteriId, urunler]);

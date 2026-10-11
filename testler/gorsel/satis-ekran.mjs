@@ -57,6 +57,10 @@ async function tur(etiket) {
   await sepet("m1", ["u1"]);
   await page.evaluate(() => { store.gelenSiparisler.push({ id: "gsip1", orderId: "ord-1", dealer: "Yıldız Çay Evi", dealerTel: "05550000006", not: "", tarih: new Date().toISOString(), alindi: new Date().toISOString(), durum: "yeni", items: [{ urunId: "u1", ad: "Örnek Bardak Su 200 ml", birim: "Koli", adet: 5, fiyat: 100 }], brut: 500, iskonto: 0, toplam: 500, odemeTuru: "bakiye", pesinNakit: 0, pesinKart: 0, bakiyeTutar: 500, minPesinOran: 0, minPesinTutar: 0, teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "" }); render(); });
   await bekle(250); await cek("16-siparis-seridi");
+  // üstte "İnternet yok" şeridi de varken (sabit şerit sayfayı aşağı iter)
+  await page.evaluate(() => { _esDurum.cevrimdisi = true; esSeritCiz(); }); await bekle(200); await cek("16b-internet-yok-seridi");
+  await sepetAc(); await cek("16c-internet-yok-sepet"); await kapat();
+  await page.evaluate(() => { _esDurum.cevrimdisi = false; esSeritCiz(); });
   await page.evaluate(() => { store.gelenSiparisler = store.gelenSiparisler.filter((x) => x.id !== "gsip1"); render(); }); await bekle(150);
   // ek işlevler: sık satılanlar, çeşit seçimi (gelişmiş), personel, özel ödeme tipleri
   await page.evaluate(() => {

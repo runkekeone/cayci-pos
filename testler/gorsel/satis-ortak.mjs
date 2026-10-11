@@ -50,7 +50,7 @@ export function gsStore() {
 export async function gsAc(a = {}) {
   const store = a.store || gsStore();
   const bulut = await sahteBulut({ satirlar: ornekSatirlar(store) });
-  const p = await panelAc({ bulutUrl: bulut.url, genislik: a.genislik || 390, yukseklik: a.yukseklik || 844, diyalog: a.diyalog, storageState: a.storageState });
+  const p = await panelAc({ bulutUrl: bulut.url, genislik: a.genislik || 390, yukseklik: a.yukseklik || 844, diyalog: a.diyalog, storageState: a.storageState, panelDizin: a.panelDizin });
   const page = p.page;
   await page.waitForFunction((n) => window.app.getStore().customers.length === n, store.customers.length, { timeout: 15000 });
   await bekle(150);

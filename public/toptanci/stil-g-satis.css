@@ -1,6 +1,6 @@
 /* Görsel yenileme — satış ekranı.
    Önce telefon (390 px). Yeni sınıfların hepsi "gs-" ile başlar; renkler styles.css'teki değişkenlerden gelir.
-   Düzen: üst çubuk · müşteri · arama + ürünler (sayfa kayar) · ALTTA sabit "Ödemeye geç" çubuğu (alt menünün üstünde).
+   Düzen: üst çubuk · müşteri · arama + ürünler (sayfa kayar) · ALTTA sabit "Sepet ve ödeme" çubuğu (alt menünün üstünde).
    Sepet ve ödeme o çubuktan açılan pencerededir. */
 
 /* ---- sayfa kabı ---- */
@@ -190,7 +190,7 @@ button.gs-mus:active { background: var(--brand-soft); }
 .sihir-sepet .ss-tot { font-family: inherit; font-size: 17px; padding-top: 10px; }
 .sihir-sepet .ss-tot .ss-toplam { font-size: 20px; }
 
-/* ---- alt çubuk: toplam + "Ödemeye geç" (alt menünün hemen üstünde sabit) ---- */
+/* ---- alt çubuk: toplam + "Sepet ve ödeme" (alt menünün hemen üstünde sabit) ---- */
 .gs-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 71;
   padding: 8px calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
@@ -212,7 +212,7 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-bar-sol small { font-size: 13.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gs-bar-sag { flex: 0 0 auto; display: none; align-items: center; gap: 2px; }
 .gs-bar-sag b { font-size: 21px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
-.gs-bar.dolu .gs-bar-btn { background: var(--brand); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(8, 122, 105, 0.3); }
+.gs-bar.dolu .gs-bar-btn { background: var(--brand); color: #fff; cursor: pointer; box-shadow: 0 4px 12px var(--brand-ring); }
 .gs-bar.dolu .gs-bar-btn:active { background: var(--brand-dark); }
 .gs-bar.dolu .gs-bar-sag { display: inline-flex; }
 
@@ -273,7 +273,7 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-ode b { font-size: 15.5px; font-weight: 700; line-height: 1.25; }
 .gs-ode small { font-size: 13px; line-height: 1.25; color: var(--muted); }
 .gs-ode:active { background: var(--brand-soft); border-color: var(--brand); }
-.gs-ode.ana { flex-direction: row; gap: 10px; width: 100%; min-height: 60px; border-color: var(--brand); background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(8, 122, 105, 0.3); }
+.gs-ode.ana { flex-direction: row; gap: 10px; width: 100%; min-height: 60px; border-color: var(--brand); background: var(--brand); color: #fff; box-shadow: 0 4px 12px var(--brand-ring); }
 .gs-ode.ana b { font-size: 19px; font-weight: 700; }
 .gs-ode.ana:active { background: var(--brand-dark); border-color: var(--brand-dark); }
 .gs-ode-diger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -350,3 +350,8 @@ button.gs-mus:active { background: var(--brand-soft); }
 /* ---- satış ekranının açtığı bütün pencereler ---- */
 .gs-pencere .modal-head h3 { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
 .gs-pencere .modal-head .x { flex: 0 0 auto; min-width: 44px; min-height: 44px; font-size: 26px; color: var(--muted); }
+
+/* Eşitleme bölümünün kısa bilgi notu bu ekranda ödeme çubuğunun üstüne binmesin (burada alt kısım daha yüksek) */
+@media (max-width: 768px) {
+  body.pos-active .es-bildirim { bottom: calc(var(--gs-mobilbar-h, 74px) + var(--gs-bar-h, 78px) + 10px + env(safe-area-inset-bottom)); }
+}

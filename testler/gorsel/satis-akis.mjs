@@ -57,6 +57,20 @@ try {
   d.esit(await yazi("#posTutar"), await tl(900), "çubukta toplam (90 + 170 + 640), kaydırmadan görünüyor");
   const bar2 = await kutu("#gsBar");
   d.dogru(bar2.ust >= 0 && bar2.alt <= 844, "çubuk ekranda (kaydırmadan)");
+  d.esit(await yazi("#gsBarBas"), "Sepet ve ödeme", "çubuk ne açacağını söylüyor");
+  // okunaklılık: yazı en az 13 px, dokunma hedefi en az 44 px (ürün seçme ekranının tamamı)
+  const olcu = await page.evaluate(() => {
+    const gor = (e) => { const r = e.getBoundingClientRect(), c = getComputedStyle(e); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+    const kok = document.getElementById("content");
+    const kucukYazi = [...kok.querySelectorAll("*")].filter((e) => gor(e) && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13).map((e) => e.className + " " + getComputedStyle(e).fontSize);
+    const kucukHedef = [...kok.querySelectorAll("button, input:not([type=hidden]), [data-add], [data-catopen]")].filter(gor).filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).map((e) => (e.id || e.className) + " " + Math.round(e.getBoundingClientRect().width) + "x" + Math.round(e.getBoundingClientRect().height));
+    return { kucukYazi, kucukHedef };
+  });
+  d.esit(olcu, { kucukYazi: [], kucukHedef: [] }, "ekranda 13 px'ten küçük yazı ve 44 px'ten küçük dokunma hedefi yok");
+  // sayfanın sonu sabit çubukların arkasında kalmıyor
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await bekle(150);
+  d.dogru(await page.evaluate(() => { const son = [...document.querySelectorAll("#prodGrid > *")].pop().getBoundingClientRect(), b = document.getElementById("gsBar").getBoundingClientRect(); return son.bottom <= b.top; }), "en alta kaydırınca son ürün kartı çubuğun üstünde kalıyor (arkasında değil)");
+  await page.evaluate(() => window.scrollTo(0, 0));
 
   console.log("— 3) sepet penceresi: birinin adedini artır");
   await page.click("#gsSepetAc"); await bekle(600);
@@ -82,6 +96,7 @@ try {
   d.esit(await page.evaluate(() => !!document.getElementById("gsSepetOv")), false, "satıştan sonra sepet penceresi kapandı");
   d.esit(await yazi("#gsBarBas"), "Sepet boş", "sepet boşaldı");
   d.dogru(await page.evaluate(() => document.querySelectorAll(".modal-overlay").length) === 1, "fiş gönderme penceresi açıldı (müşterinin telefonu var)");
+  d.esit(await page.evaluate(() => [pos.cat, pos.q, !!document.querySelector('#prodGrid [data-catopen="Su"]'), document.getElementById("custName").textContent, window.scrollY]), ["ANA", "", true, "Müşteri seç", 0], "ekran sıradaki satışa hazır: kategoriler, müşteri seçilmemiş, en üstte");
   d.esit(o.p.hatalar, [], "sayfada betik hatası yok");
 } finally { await o.kapat(); }
 d.bitir();
