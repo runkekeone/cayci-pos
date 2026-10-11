@@ -8,11 +8,23 @@ import { ornekStore } from "../ortak/ornek-store.mjs";
 
 export const TABAN = "5180190c28ca523b9990428001d4ed208ff5fce9";   // düzeltmelerden önceki sürüm
 
+/** Aracın geçici klasördeki kopyası. Araç her --kaydet'te yanındaki `yedek/` klasörüne dosya yazar; denemeler
+ *  depodaki tools/yedek'i (gerçek yedeklerin durduğu yer) uydurma veriyle doldurmasın diye kopya çalıştırılır. */
+let _aracKopya = null;
+export function aracKopya() {
+  if (!_aracKopya) {
+    const dizin = fs.mkdtempSync(path.join(os.tmpdir(), "babuco-deneme-"));
+    fs.mkdirSync(path.join(dizin, "tools"));
+    _aracKopya = path.join(dizin, "tools/babuco.cjs");
+    fs.copyFileSync(ARAC, _aracKopya);
+  }
+  return _aracKopya;
+}
 /** Aracı sahte buluta karşı çalıştırır; stdout ve stderr AYRI döner (fişin bozulmadığını sınamak için). */
 export function arac(bulutUrl, argumanlar, secenek = {}) {
   if (!bulutUrl || !/^http:\/\/127\.0\.0\.1:/.test(bulutUrl)) throw new Error("arac: yalniz sahte bulut adresiyle calisir.");
   return new Promise((coz) => {
-    const c = spawn(process.execPath, [secenek.arac || ARAC, ...argumanlar], {
+    const c = spawn(process.execPath, [secenek.arac || aracKopya(), ...argumanlar], {
       cwd: secenek.cwd || DEPO,
       env: { ...process.env, BABUCO_SB_URL: bulutUrl, BABUCO_SB_KEY: "sahte", ...(secenek.env || {}) },
     });
