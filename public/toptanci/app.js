@@ -2420,8 +2420,11 @@ function esFark(t, y, ad, ust, derin) {
     const tb = esDuz(t) ? t : (esYok(t) ? {} : null);
     if (!tb) return { t: "=", v: esKlon(y) };
     const a = {}, s = [];
-    Object.keys(y).forEach((k) => { if (y[k] === undefined) return; const f = esFark(tb[k], y[k], k, ad, derin + 1); if (f) a[k] = f; });
-    Object.keys(tb).forEach((k) => { if (y[k] === undefined && tb[k] !== undefined) s.push(k); });
+    // esitleme (cihazların yama sayaçları) yerel değişiklik sayılmaz: onu yalnız eşitleme yazar. Yoksa "tüm
+    // verileri sil" gibi store'u baştan kuran bir işlem diğer cihazların sayaçlarını da silerdi.
+    const atla = (k) => derin === 0 && k === "esitleme";
+    Object.keys(y).forEach((k) => { if (y[k] === undefined || atla(k)) return; const f = esFark(tb[k], y[k], k, ad, derin + 1); if (f) a[k] = f; });
+    Object.keys(tb).forEach((k) => { if (y[k] === undefined && tb[k] !== undefined && !atla(k)) s.push(k); });
     return (Object.keys(a).length || s.length) ? { t: "n", a, s } : null;
   }
   if (derin === 2 && ES_ENBUYUK[ust] && typeof y === "number") return { t: "m", v: y };
@@ -2827,7 +2830,7 @@ async function esitleIc() {
       const ri = await kvEkle(BULUT_KEY, ilk, tsIlk);
       if (ri.durum === "cakisma") continue;
       if (ri.durum === "hata") return esHata(ri.hata);
-      g.y = []; g.gecis = false;
+      g.y = []; g.gecis = false; g.onay = g.n;
       esBenimse(ilk, ri.updatedAt || tsIlk);
       esTamam(); esIlkHazir(); esYazildi();
       return true;
@@ -2837,7 +2840,10 @@ async function esitleIc() {
     // Bulut bu cihaz için bizim bildiğimizden ileri bir yama numarası söylüyorsa günlük kaybolmuş ya da
     // kimlik başka cihazla paylaşılıyor demektir: bekleyenleri "işlenmiş" sanmamak için yeni kimlik al.
     let islenen = Number((b.value.esitleme || {})[_esCihaz]) || 0;
-    if (islenen > g.n) { _esCihaz = esCihazKimligi(true); g.y.forEach((x, i) => { x.k = i + 1; }); g.n = g.y.length; islenen = 0; }
+    if (islenen > g.n) { _esCihaz = esCihazKimligi(true); g.y.forEach((x, i) => { x.k = i + 1; }); g.n = g.y.length; g.onay = 0; islenen = 0; }
+    // Tersi: bulut, bu cihazın ONAYLANMIŞ bir yamasını artık tanımıyorsa kayıt eski bir hâlle ezilmiş demektir
+    // (önbellekte kalmış eski panel sürümü körlemesine yazar). Engellenemez; en azından haber ver.
+    if (islenen < (Number(g.onay) || 0)) { g.onay = islenen; g.ezilme = Date.now(); esBildir("Dikkat: buluttaki kayıtlar eski bir uygulama sürümüyle ezilmiş görünüyor. Profil → Yedekleme'den kontrol et."); }
     g.y = g.y.filter((x) => x.k > islenen);              // yazması ulaşmış ama yanıtı kaybolmuş yamalar: tekrar uygulanmaz
 
     if (g.gecis) {
@@ -2873,6 +2879,7 @@ async function esitleIc() {
       continue;
     }
     g.y = g.y.filter((x) => x.k > sonK);
+    g.onay = sonK;
     esBenimse(m, r.updatedAt || ts, br.notlar);
     esTamam(); esIlkHazir(); esYazildi();
     return true;
@@ -3087,7 +3094,8 @@ function yedekDurumHTML() {
   const son = g.sonBasari ? fmtDate(new Date(g.sonBasari).toISOString()) : "henüz yok";
   const bek = esBekleyenVar() ? `<b class="yd-uyari">${esc(esBekleyenMetni())} gönderilmeyi bekliyor</b>` : "Bekleyen kayıt yok ✔";
   return `<div><span>İnternete son gönderim</span><b>${esc(son)}</b></div><div><span>Telefonda bekleyen</span>${bek}</div>` +
-    (_esDurum.yedekHata ? `<div><span>Günlük yedek</span><b class="yd-uyari">Bugünkü yedek alınamadı; sonraki kayıtta yine denenecek.</b></div>` : "");
+    (_esDurum.yedekHata ? `<div><span>Günlük yedek</span><b class="yd-uyari">Bugünkü yedek alınamadı; sonraki kayıtta yine denenecek.</b></div>` : "") +
+    (g.ezilme ? `<div><span>Dikkat</span><b class="yd-uyari">${esc(fmtDate(new Date(g.ezilme).toISOString()))} sıralarında buluttaki kayıtlar eski bir uygulama sürümüyle ezildi. Eksik kayıt varsa aşağıdan önceki bir yedeğe dönebilirsin.</b></div>` : "");
 }
 async function yedekSekmeKur() {
   const kutu = document.getElementById("yedekListe"), durum = document.getElementById("yedekDurum");
@@ -3144,6 +3152,24 @@ function internetOverlay(goster) {
     el.innerHTML = '<div style="font-size:48px">📡</div><div style="font-weight:700;font-size:20px">İnternet bağlantısı gerekli</div><div style="opacity:.75;max-width:320px">Bu telefona veriler henüz inmedi. İlk açılış için internet gerekir; bağlantı gelince kendiliğinden açılır.</div>';
     document.body.appendChild(el);
   } else if (!goster && el) { el.remove(); }
+}
+/** Çevrimdışı kabuk (sw.js): panel bir kez açıldıysa internet yokken de AÇILABİLSİN diye sayfanın kendi
+    dosyalarını saklar. Önce-ağ çalışır: internet varken hep yeni sürüm gelir. Geliştirme/deneme adresinde
+    (localhost) kurulmaz — orada ağ isteklerini denemeler yönetir. */
+function esKabukKur() {
+  try {
+    if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+    let dene = false; try { dene = localStorage.getItem("babuco:sw-dene") === "1"; } catch (e) {}
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !dene) return;
+    navigator.serviceWorker.register("sw.js").then(() => navigator.serviceWorker.ready).then((kayit) => {
+      const gonder = () => {
+        const adresler = [location.href.split("#")[0]];
+        try { performance.getEntriesByType("resource").forEach((r) => { if (r.name.indexOf(location.origin + "/") === 0) adresler.push(r.name.split("#")[0]); }); } catch (e) {}
+        if (kayit.active) kayit.active.postMessage({ tur: "kabuk", adresler });
+      };
+      if (document.readyState === "complete") gonder(); else window.addEventListener("load", gonder);
+    }).catch(() => {});
+  } catch (e) {}
 }
 /** Bu telefonda daha önce buluttan çekilmiş (ya da burada girilmiş) veri var mı? */
 function esCihazdaVeriVar() {
@@ -5326,6 +5352,7 @@ initTopbar();
 mobilBarKur();
 render();
 if (servis.aktif) navigate("rota");
+esKabukKur();
 // Giriş kapısı (varsa) geçilmeden buluta dokunulmaz. Kapı, cihazda geçerli oturum varsa internetsiz de açılır.
 (typeof girisKapisi === "function" ? girisKapisi() : Promise.resolve()).then(() => {
   _esKapi = true;
