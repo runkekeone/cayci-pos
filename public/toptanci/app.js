@@ -2041,7 +2041,7 @@ function openLineModal(idx) {
       <button class="btn ok lm-ok" data-ok type="button">${ikon("tik", 20, 2.6)} Tamam</button>
       <button class="gs-lm-cikar" data-rem type="button">${ikon("cop", 18)}<span>Bu ürünü sepetten çıkar</span></button>
     </div>`;
-  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => wireLineModal(ov, idx, tmp, satirTop, () => m.close()) });
+  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => { ov.classList.add("gs-pencere"); wireLineModal(ov, idx, tmp, satirTop, () => m.close()); } });
 }
 function wireLineModal(ov, idx, tmp, satirTop, close) {
   const qtyEl = ov.querySelector("[data-qty]");
@@ -2214,6 +2214,7 @@ function openCustPicker() {
   openModal("Müşteri seç", `<div class="gs-pick"><div class="gs-ara-kutu">${ikon("ara", 20)}<input class="gs-ara-in" id="pickSearch" type="text" inputmode="search" autocomplete="off" placeholder="Müşteri ara" /></div><button class="gs-pick-yeni" id="pickYeni" type="button">${ikon("arti", 18, 2.6)}<span>Yeni müşteri</span></button>${listHTML}</div>`, {
     noFoot: true,
     onMount: (ov) => {
+      ov.classList.add("gs-pencere");
       ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; repriceCart(); ov.remove(); render(); }));
       const s = ov.querySelector("#pickSearch"), yok = ov.querySelector("#pickYok");
       s.addEventListener("input", () => { const q = ocrNorm(s.value); let n = 0; ov.querySelectorAll("[data-pick]").forEach((li) => { const uyar = !q || ocrNorm(li.querySelector("b").textContent).includes(q); li.style.display = uyar ? "" : "none"; if (uyar) n++; }); if (yok) yok.hidden = n > 0; });
@@ -2226,6 +2227,7 @@ function openMuhModal() {
   openModal("Muhtelif tutar ekle", `<p class="gs-pencere-aciklama">Listede olmayan ürün için serbest tutar. Sepete “Muhtelif Ürün” diye eklenir.</p><div class="field"><label>Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn ok gs-tam" id="muhEkle" type="button">Sepete ekle</button>`, {
     noFoot: true,
     onMount: (ov) => {
+      ov.classList.add("gs-pencere");
       const muhIn = ov.querySelector("#muhInput"), muhBtn = ov.querySelector("#muhEkle");
       const addMuh = () => { const v = Number(muhIn.value); if (!v) { alert("Tutar girin."); return; } activeCart().items.push({ urunId: null, ad: "Muhtelif Ürün", barkod: "", kdv: 0, fiyat: v, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); ov.remove(); };
       muhBtn.addEventListener("click", addMuh);
@@ -2239,7 +2241,7 @@ function openIskModal() {
   openModal("İskonto", `<p class="gs-pencere-aciklama">Sepetin toplamından düşülecek tutar. Kaldırmak için boş bırak.</p><div class="field"><label>İskonto tutarı (₺)</label><input id="iskGenel" type="number" step="0.01" inputmode="decimal" value="${activeCart().iskonto || ""}" placeholder="0" /></div>`, {
     okLabel: "Uygula",
     onOk: (ov) => { const isk = ov.querySelector("#iskGenel"); activeCart().iskonto = Number(isk.value) || 0; syncTotals(); },
-    onMount: (ov) => { const i = ov.querySelector("#iskGenel"); if (i) { i.focus(); try { i.select(); } catch (e) {} } },
+    onMount: (ov) => { ov.classList.add("gs-pencere"); const i = ov.querySelector("#iskGenel"); if (i) { i.focus(); try { i.select(); } catch (e) {} } },
   });
 }
 
@@ -2258,6 +2260,7 @@ function gsDigerMenu() {
     ((activeCart().items.length || activeCart().musteriId) ? satir("bosalt", "cop", "Sepeti boşalt", "Ürünleri ve seçili müşteriyi kaldır") : "") +
     satir("ana", "ev", "Ana ekrana dön", "") + `</div>`;
   const m = openModal("Diğer işlemler", body, { noFoot: true, onMount: (ov) => {
+    ov.classList.add("gs-pencere");
     ov.querySelectorAll("[data-gs-is]").forEach((b) => { b.onclick = () => { m.close(); gsDigerIs(b.dataset.gsIs); }; });
   } });
 }
@@ -2282,6 +2285,7 @@ function gsSepetBosalt() {
 function gsStokSec() {
   const sec = (k, ik, ad, alt) => `<button class="gs-sec${stokModu === k ? " on" : ""}" data-gs-stoksec="${k}" type="button" aria-pressed="${stokModu === k}"><span class="gs-menu-ik">${ikon(ik, 22)}</span><span class="gs-menu-orta"><b>${ad}</b><small>${alt}</small></span>${stokModu === k ? `<span class="gs-sec-tik">${ikon("tik", 20, 2.8)}</span>` : ""}</button>`;
   const m = openModal("Mal nereden çıkıyor?", `<div class="gs-menu">${sec("arac", "araba", "Araçtan", "Satılan mal araç stoğundan düşer")}${sec("dukkan", "dukkan", "Dükkandan", "Satılan mal dükkan stoğundan düşer")}</div>`, { noFoot: true, onMount: (ov) => {
+    ov.classList.add("gs-pencere");
     ov.querySelectorAll("[data-gs-stoksec]").forEach((b) => { b.onclick = () => { stokModuAyarla(b.dataset.gsStoksec); m.close(); render(); }; });
   } });
 }
@@ -2300,9 +2304,11 @@ function gsSepetKapat() { const ov = gsSepetAcik(); if (ov) ov.remove(); }
 function gsSepetAc() {
   if (!activeCart().items.length || gsSepetAcik()) return;
   openModal("Sepet ve ödeme", `<div class="gs-sepet" id="gsSepetGovde"></div>`, { noFoot: true, onMount: (ov) => {
-    ov.id = "gsSepetOv"; ov.classList.add("gs-sepet-ov"); ov._acildi = Date.now();
+    ov.id = "gsSepetOv"; ov.classList.add("gs-sepet-ov", "gs-pencere"); ov._acildi = Date.now();
     const alt = document.createElement("div"); alt.className = "gs-sepet-alt"; alt.id = "gsSepetAlt";
     ov.querySelector(".modal").appendChild(alt);
+    // Açıldıktan hemen sonraki dokunuş sayılmaz: "Ödemeye geç"e çift dokunan, ikinci dokunuşla yanlışlıkla satış kaydetmesin / satır silmesin
+    ov.addEventListener("click", (e) => { if (Date.now() - ov._acildi < 450) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
     ov.addEventListener("click", gsSepetTik);
     ov.addEventListener("input", (e) => { if (e.target.id === "gsSatisNot") { activeCart().not = e.target.value; const pn = document.getElementById("posNot"); if (pn) pn.value = e.target.value; } });
     ov.addEventListener("change", (e) => { if (e.target.id === "posPersonel") pos.personelId = e.target.value || null; });
@@ -2319,6 +2325,7 @@ function gsSepetCiz() {
   govde.innerHTML = `
     <div class="gs-kalemler" id="cartBody">${cartRowsHTML()}</div>
     <div class="gs-ek">
+      <button class="gs-ek-satir devam" id="gsDevam" type="button">${ikon("arti", 20, 2.4)}<span class="gs-ek-orta"><b>Başka ürün ekle</b></span></button>
       <button class="gs-ek-satir" id="gsIskBtn" type="button">${ikon("etiket", 20)}<span class="gs-ek-orta"><b>İskonto</b><small id="gsIskAlt"></small></span>${ikon("sag", 18, 2.2)}</button>
       <label class="gs-ek-satir">${ikon("kalem", 20)}<input id="gsSatisNot" class="gs-ek-in" type="text" autocomplete="off" placeholder="Satış notu (isteğe bağlı)" value="${esc(c.not || "")}" /></label>
       ${persSel}
@@ -2342,6 +2349,7 @@ function gsSepetTik(e) {
   const t = e.target.closest("button"); if (!t) return;
   if (t.hasAttribute("data-gs-muspick")) openCustPicker();
   else if (t.id === "gsIskBtn") openIskModal();
+  else if (t.id === "gsDevam") gsSepetKapat();
   else if (t.dataset.pay) gsOde(t.dataset.pay, null);
   else if (t.dataset.paycustom) gsOde(null, t.dataset.paycustom);
 }
@@ -2374,7 +2382,7 @@ function mountSatis() {
   const tik = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
   // müşteri bloğu / geçen sipariş / açık sepetler syncTotals'da yeniden yazılır → dinleyici kabın üstünde
   tik("gsMusteri", (e) => { if (e.target.closest("[data-gs-muspick]")) openCustPicker(); });
-  tik("gsBundle", (e) => { if (e.target.closest("#bundleAdd")) bundleUygula(); });
+  tik("gsBundle", (e) => { if (e.target.closest("#bundleAdd")) { bundleUygula(); gsSepetAc(); } });
   tik("gsSepetler", (e) => { const b = e.target.closest("[data-tab]"); if (b) { pos.active = Number(b.dataset.tab); render(); } });
   tik("stokModBtn", gsStokSec);
   tik("gsDiger", gsDigerMenu);

@@ -15,7 +15,7 @@ const sepet = async (musteriId, urunler, ek) => {
   }, [musteriId, urunler, ek || null]);
   await git("satis");
 };
-const sepetAc = async () => { await page.click("#gsSepetAc"); await bekle(350); };
+const sepetAc = async () => { await page.click("#gsSepetAc"); await bekle(600); };   // pencere açıldıktan sonraki ilk 450 ms dokunuş sayılmaz
 const kapat = () => page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()));
 const ONIKI = ["u1", "u1", "u2", "u3", "u4", "u5", "u11", "u12", "u13", "u15", "u16", "u18", "u22", "u24"];
 
@@ -58,6 +58,21 @@ async function tur(etiket) {
   await page.evaluate(() => { store.gelenSiparisler.push({ id: "gsip1", orderId: "ord-1", dealer: "Yıldız Çay Evi", dealerTel: "05550000006", not: "", tarih: new Date().toISOString(), alindi: new Date().toISOString(), durum: "yeni", items: [{ urunId: "u1", ad: "Örnek Bardak Su 200 ml", birim: "Koli", adet: 5, fiyat: 100 }], brut: 500, iskonto: 0, toplam: 500, odemeTuru: "bakiye", pesinNakit: 0, pesinKart: 0, bakiyeTutar: 500, minPesinOran: 0, minPesinTutar: 0, teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "" }); render(); });
   await bekle(250); await cek("16-siparis-seridi");
   await page.evaluate(() => { store.gelenSiparisler = store.gelenSiparisler.filter((x) => x.id !== "gsip1"); render(); }); await bekle(150);
+  // ek işlevler: sık satılanlar, çeşit seçimi (gelişmiş), personel, özel ödeme tipleri
+  await page.evaluate(() => {
+    ["u1", "u3", "u4"].forEach((id) => { findProduct(id).anaUrun = true; });
+    ["u22", "u23", "u6"].forEach((id) => { findProduct(id).altKategori = "Meyveli Soda"; });
+    store.personeller = [{ id: "p1", ad: "Deneme Personel" }]; store.odemeTipleri = [{ id: "o1", ad: "Havale", kasa: "Banka" }, { id: "o2", ad: "Yemek Kartı", kasa: "Banka" }];
+    gelismisModAyarla(true);
+  });
+  await sepet("m1", ["u1", "u22"]); await cek("17-sik-satilanlar"); await cek("17b-sik-satilanlar-tam", true);
+  await page.evaluate(() => { pos.cat = "Sodalar"; posGridYenile(); }); await cek("17c-cesit-dugmesi");
+  await page.click('[data-cesit="u22"]'); await bekle(300); await cek("17d-cesit-penceresi"); await kapat();
+  await sepetAc(); await page.evaluate(() => { const b = document.querySelector("#gsSepetOv .modal-body"); b.scrollTop = b.scrollHeight; }); await cek("17e-personel-ozel-odeme"); await kapat();
+  await page.evaluate(() => {
+    ["u1", "u3", "u4"].forEach((id) => { findProduct(id).anaUrun = false; }); ["u22", "u23", "u6"].forEach((id) => { delete findProduct(id).altKategori; });
+    store.personeller = []; store.odemeTipleri = []; gelismisModAyarla(false);
+  });
 }
 
 try {
@@ -75,6 +90,8 @@ try {
   await page.evaluate(() => { servisBitir(); }); await bekle(300); await page.evaluate(() => { document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()); stokModuAyarla("dukkan"); });
   await page.setViewportSize({ width: 360, height: 780 });
   await tur("sonra-360");
+  // masaüstü (kullanılmıyor; bozuk olmadığına bakmak için)
+  K = "sonra"; await page.setViewportSize({ width: 1280, height: 800 }); await sepet("m5", ["u1", "u3"]); await cek("30-masaustu"); await sepetAc(); await cek("30b-masaustu-sepet"); await kapat();
   console.log("yatay taşma:", tasmalar.length ? tasmalar.join(" | ") : "yok");
   console.log("betik hatası:", JSON.stringify(o.p.hatalar));
 } finally { await o.kapat(); }

@@ -337,3 +337,16 @@ button.gs-mus:active { background: var(--brand-soft); }
   .gs-sepet-alt { box-shadow: none; }
 }
 @media (prefers-reduced-motion: reduce) { .gs-urun-adet.zipla { animation: none; } }
+
+/* "Başka ürün ekle" (pencereyi kapatır) — ek satırların ilki, panelin renginde */
+.gs-ek-satir.devam { color: var(--brand-dark); }
+.gs-ek-satir.devam .gs-ek-orta b { color: var(--brand-dark); font-weight: 700; }
+
+/* ---- çeşit / marka seçme penceresi (eski sınıflar) ---- */
+.aile-pop .aile-opt { min-height: 58px; padding: 10px 14px; border-width: 1.5px; }
+.aile-pop .aile-opt .ao-ad { font-size: 15.5px; overflow-wrap: anywhere; }
+.aile-pop .aile-opt .ao-fiyat { font-family: inherit; font-size: 16px; font-weight: 700; color: var(--brand-dark); white-space: nowrap; }
+
+/* ---- satış ekranının açtığı bütün pencereler ---- */
+.gs-pencere .modal-head h3 { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.gs-pencere .modal-head .x { flex: 0 0 auto; min-width: 44px; min-height: 44px; font-size: 26px; color: var(--muted); }
