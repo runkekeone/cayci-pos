@@ -2618,6 +2618,7 @@ let _esCalisiyor = null;      // süren eşitleme (aynı anda yalnız bir tane)
 let _esTekrar = false;        // eşitleme sürerken yeni yazma istendi
 let _esIlk = true;            // bu oturumda bulut kaydı henüz tam okunmadı
 let _esCizBekliyor = false;   // ekranı yenileme ertelendi (kullanıcı yazıyor / pencere açık)
+let _esCikis = false;         // çıkış yapıldı: yeniden giriş olana kadar telefona da buluta da hiçbir şey yazılmaz
 const _esDurum = { cevrimdisi: false, hata: "", hataSayisi: 0, sonraki: 0, depoDolu: false, yedekHata: "" };
 let _esCihaz = esCihazKimligi();
 let _esGunluk = esGunlukOku();
@@ -2654,9 +2655,22 @@ function esGunlukYaz() {
   try { localStorage.setItem(ES_GUNLUK_KEY, JSON.stringify(_esGunluk)); return true; } catch (e) { return false; }
 }
 function esBekleyenVar() { return !!(_esGunluk.acik || _esGunluk.y.length); }
+/** Bağlantı noktası (giriş bölümü çıkıştan önce sorar): bu telefonda buluta henüz gitmemiş değişiklik var mı? */
+function bekleyenDegisiklikVar() {
+  if (_esCikis) return false;
+  try { return !!(_esGunluk.y.length || esFark(_esTaban, esKlon(store), null, null, 0)); }
+  catch (e) { return esBekleyenVar(); }
+}
+/** Giriş bölümü bulutYetkiliMi() tanımladıysa ona sorar. Yetki yokken buluttan gelen boş yanıt "bulut boş"
+    demek DEĞİLDİR: yazma, birleştirme, yedek alma/silme yapılmaz. Fonksiyon yoksa (bu dal tek başına) yetkili sayılır. */
+async function esYetkili() {
+  if (typeof bulutYetkiliMi !== "function") return true;
+  try { return (await bulutYetkiliMi()) !== false; } catch (e) { return false; }
+}
 /** Çalışan store'u telefona yazar. Sıra önemli: önce küçük günlük (bekleyen değişiklik kaybolmasın),
     sonra store. Telefonun hafızası dolarsa store bellekte çalışmaya ve buluta gitmeye devam eder. */
 function yerelKaydet() {
+  if (_esCikis) return;            // çıkış yapıldı: cihazda kopya bırakma, "her şey silindi" diye yama da üretme
   let metin = null;
   try { metin = JSON.stringify(store); } catch (e) { console.error("store metne çevrilemedi", e); return; }
   try {
@@ -2812,6 +2826,8 @@ async function esitleIc() {
     }
     const b = await kvOku(BULUT_KEY);
     if (b.durum === "hata") return esHata(b.hata);       // OKUNAMADI ≠ BOŞ: buluta hiçbir şey itilmez
+    if (!(await esYetkili())) return esHata("yetki-yok"); // YETKİSİZ boş yanıt da "boş" değildir
+    if (!_esKapi) return false;                          // bu arada çıkış yapıldı
 
     /* --- buradan bir sonraki await'e kadar tek solukta: yerel hâl tutarlı bir anda dondurulur --- */
     const yerel = esKlon(store);
@@ -2828,6 +2844,7 @@ async function esitleIc() {
       ilk.esitleme = Object.assign({}, ilk.esitleme, { [_esCihaz]: g.n });
       const tsIlk = esSonrakiZaman("");
       const ri = await kvEkle(BULUT_KEY, ilk, tsIlk);
+      if (!_esKapi) return false;
       if (ri.durum === "cakisma") continue;
       if (ri.durum === "hata") return esHata(ri.hata);
       g.y = []; g.gecis = false; g.onay = g.n;
@@ -2871,8 +2888,10 @@ async function esitleIc() {
     /* --- tek soluk bitti --- */
 
     await gunlukYedekSagla(b);                           // günün ilk yazmasından ÖNCE buluttaki hâlin kopyası
+    if (!_esKapi) return false;
     const ts = esSonrakiZaman(b.updatedAt);
     const r = await kvKosulluYaz(BULUT_KEY, m, ts, b.updatedAt);
+    if (!_esKapi) return false;                          // yazma sürerken çıkış yapıldı: telefona bir şey alma
     if (r.durum === "hata") return esHata(r.hata);       // ulaştı mı bilinmez: yamalar günlükte, numaralı; sonra bakılır
     if (r.durum === "cakisma") {                         // araya başkası yazdı: hiçbir şey yazılmadı → baştan
       await new Promise((c) => setTimeout(c, 120 + Math.random() * 380));
@@ -2889,6 +2908,7 @@ async function esitleIc() {
 /** Eşitlenen hâli (m) telefona al. Eşitleme sürerken yapılan yeni yerel değişiklikler m'nin üstüne
     yeniden uygulanır (kaybolmaz, bir sonraki turda gider). */
 function esBenimse(m, ts, notlar) {
+  if (_esCikis) return;
   const g = _esGunluk;
   const simdi = esKlon(store);
   const acik = esFark(_esTaban, simdi, null, null, 0);
@@ -2963,9 +2983,17 @@ async function yedekYaz(key, deger, ek) {
   const r = await kvSor((t) => t.upsert({ key, value: { ozet, store: deger }, updated_at: new Date().toISOString() }, { onConflict: "key", ignoreDuplicates: true }), 60000);
   return !r.hata;
 }
+/** Yedeği yazar ve GERÇEKTEN yazıldığını okuyarak doğrular (silme / geri yükleme bu "true"ya güvenir). → kesin true | false */
+async function yedekYazDogrula(key, deger, ek) {
+  if (!(await esYetkili())) return false;
+  if (!(await yedekYaz(key, deger, ek))) return false;
+  const v = await kvOku(key, "key", 15000);
+  return v.durum === "var";
+}
 /** Bugünün yedeği bulutta yoksa, verilen (yazmadan önceki) bulut hâlini yedek olarak koyar.
     Yedek alınamazsa yazma ENGELLENMEZ (satışlar bekletilmez) ama Yedekleme ekranında görünür ve sonraki yazmada yine denenir. */
 async function gunlukYedekSagla(b) {
+  if (!(await esYetkili())) return false;
   const gun = esGunSaat().gun;
   try { if (localStorage.getItem(YEDEK_ONEK + "son") === gun) return true; } catch (e) {}
   const key = YEDEK_ONEK + gun;
@@ -2981,6 +3009,7 @@ async function gunlukYedekSagla(b) {
 }
 /** Tarihi YEDEK_GUN günden eski yedekleri siler. */
 async function yedekBudama() {
+  if (!(await esYetkili())) return 0;
   const r = await kvSor((t) => t.select("key").like("key", YEDEK_ONEK + "%").limit(1000), 20000);
   if (r.hata || !r.data) return 0;
   const sinir = esGunSaat(new Date(Date.now() - YEDEK_GUN * 86400000)).gun;
@@ -2995,9 +3024,11 @@ async function yedekAl(etiket) {
   try {
     while (_esCalisiyor) await _esCalisiyor;
     if (_esKapi && esBekleyenVar()) await esitle();
+    if (!(await esYetkili())) return false;
     const b = await kvOku(BULUT_KEY);
     if (b.durum === "hata") return false;
-    return await yedekYaz(esYedekAnahtari(etiket), b.durum === "var" ? b.value : esKlon(store), { tur: String(etiket || "elle"), kaynakTs: b.updatedAt || "" });
+    const ok = await yedekYazDogrula(esYedekAnahtari(etiket), b.durum === "var" ? b.value : esKlon(store), { tur: String(etiket || "elle"), kaynakTs: b.updatedAt || "" });
+    return ok === true;
   } catch (e) { console.error(e); return false; }
 }
 /** Telefonda bekleyen her şeyi gönder ve buluttaki son hâli al. true = telefon ile bulut şu an aynı. */
@@ -3019,10 +3050,11 @@ async function esTamDegistir(yeni, etiket, beklenenTs) {
   let birak; const kilit = new Promise((c) => { birak = c; });
   _esCalisiyor = kilit;
   try {
+    if (!(await esYetkili())) return { tamam: false, mesaj: "Oturum açık değil. Hiçbir şey değiştirilmedi." };
     const b = await kvOku(BULUT_KEY);
     if (b.durum === "hata") return { tamam: false, mesaj: "İnternete ulaşılamadı. Hiçbir şey değiştirilmedi." };
     if (b.durum === "var" && beklenenTs && b.updatedAt !== beklenenTs) return { tamam: false, mesaj: "Bu sırada başka bir cihazdan kayıt girildi. Hiçbir şey değiştirilmedi; lütfen tekrar dene." };
-    if (b.durum === "var" && !(await yedekYaz(esYedekAnahtari(etiket), b.value, { tur: String(etiket || "elle"), kaynakTs: b.updatedAt }))) {
+    if (b.durum === "var" && !(await yedekYazDogrula(esYedekAnahtari(etiket), b.value, { tur: String(etiket || "elle"), kaynakTs: b.updatedAt }))) {
       return { tamam: false, mesaj: "Şimdiki hâlin yedeği alınamadı. Hiçbir şey değiştirilmedi." };
     }
     const m = bulutStoreBirlestir(esKlon(yeni));
@@ -3170,6 +3202,30 @@ function esKabukKur() {
       if (document.readyState === "complete") gonder(); else window.addEventListener("load", gonder);
     }).catch(() => {});
   } catch (e) {}
+}
+/** Çıkış (giriş bölümü "babuco:cikis" yayınlar): eşitlemeyi durdur, bellekteki günlüğü boşalt. Bu andan sonra
+    store boşaltılsa bile "her şey silindi" yaması ÜRETİLMEZ ve telefona hiçbir kopya yazılmaz.
+    Yerel anahtarların hepsi "babuco:" ile başlar; giriş bölümü çıkışta onları topluca siler. */
+function esCikisYapildi() {
+  _esCikis = true; _esKapi = false; _bulutHazir = false; _esIlk = true;
+  clearTimeout(_yazZamanlayici); _yazZamanlayici = null;
+  _esGunluk = { v: 1, n: 0, y: [], acik: null, tabanTs: "", ilkBekleyen: 0, sonBasari: 0, gecis: true };
+  try { localStorage.removeItem(ES_GUNLUK_KEY); localStorage.removeItem(YEDEK_ONEK + "son"); } catch (e) {}
+  esSeritCiz();
+}
+/** Yeniden giriş ("babuco:giris"): çıkıştan sonra geldiyse sıfırdan başla — o anki store taban olur, bulut alınır.
+    Çıkış olmadan gelen giriş olayı (açılıştaki oturum) bekleyen kayıtlara DOKUNMAZ; yalnız eşitlemeyi dürter. */
+function esGirisYapildi() {
+  if (_esCikis) {
+    _esCikis = false;
+    try { localStorage.removeItem(ES_GUNLUK_KEY); } catch (e) {}
+    _esCihaz = esCihazKimligi(); esCihazEki.e = "";
+    _esGunluk = esGunlukOku();
+    _esTaban = esKlon(store);
+    _esIlk = true;
+  }
+  _esKapi = true; _esDurum.sonraki = 0;
+  internetKontrol(true);
 }
 /** Bu telefonda daha önce buluttan çekilmiş (ya da burada girilmiş) veri var mı? */
 function esCihazdaVeriVar() {
@@ -5353,6 +5409,7 @@ mobilBarKur();
 render();
 if (servis.aktif) navigate("rota");
 esKabukKur();
+window.addEventListener("babuco:cikis", esCikisYapildi);
 // Giriş kapısı (varsa) geçilmeden buluta dokunulmaz. Kapı, cihazda geçerli oturum varsa internetsiz de açılır.
 (typeof girisKapisi === "function" ? girisKapisi() : Promise.resolve()).then(() => {
   _esKapi = true;
@@ -5369,6 +5426,7 @@ esKabukKur();
     else esHemenGonder();
   });
   window.addEventListener("pagehide", esHemenGonder);
+  window.addEventListener("babuco:giris", esGirisYapildi);
   // Çay ocağı siparişlerini internetten otomatik çek (açılışta + 15sn'de bir).
   if (SB) { cayPullSupabase(); setInterval(cayPullSupabase, 15000); }
 });
