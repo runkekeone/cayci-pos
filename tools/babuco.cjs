@@ -144,7 +144,7 @@ const musteriBul = (store, ara) => tekEslesme(store.customers, ara, "ad", "Muste
 
 /* ---------- ortak para hesapları (panelin app.js'indeki "PARA" bloğunun BİREBİR kopyası) ----------
    tahsilatTuru, kalemAlis, kasaHesap, borcYas: kural değişirse panelde de değiştir.
-   testler/para/panel-arac-esit.mjs iki tarafın aynı gün için aynı rakamı verdiğini denetler. */
+   testler/para/kasa.mjs iki tarafın aynı gün için aynı rakamı verdiğini denetler. */
 const TAHSILAT_TUR_AD = { nakit: "Nakit", kart: "Kart", havale: "Havale", iade: "İade", duzeltme: "Düzeltme" };
 const KART_NOT_RE = /(^|[^a-zçğöşü])(pos|kart)(['’]?(la|tan|dan|ina|indan|iyla|i|a))?(?![a-zçğöşü])/;
 const HAVALE_NOT_RE = /(^|[^a-zçğöşü])(havale[a-zçğöşü]*|eft(['’][a-zçğöşü]+)?|iban(['’]?[a-zçğöşü]{1,4})?)(?![a-zçğöşü])/;

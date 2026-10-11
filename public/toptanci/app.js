@@ -2042,7 +2042,7 @@ function renderRaporPersonel() {
 }
 /* ============ PARA: tahsilat türü · kasa · limit/vade · gider (ortak hesaplar) ============
    tahsilatTuru, kalemAlis, kasaHesap ve borcYas'ın birer kopyası tools/babuco.cjs içinde de var:
-   kural değişirse İKİSİNİ birlikte değiştir. testler/para/panel-arac-esit.mjs iki tarafın aynı
+   kural değişirse İKİSİNİ birlikte değiştir. testler/para/kasa.mjs iki tarafın aynı
    gün için aynı rakamı verdiğini denetler. */
 const TAHSILAT_TUR_AD = { nakit: "Nakit", kart: "Kart", havale: "Havale", iade: "İade", duzeltme: "Düzeltme" };
 const KART_NOT_RE = /(^|[^a-zçğöşü])(pos|kart)(['’]?(la|tan|dan|ina|indan|iyla|i|a))?(?![a-zçğöşü])/;
@@ -2337,7 +2337,7 @@ function ayOzet(ym) {
 function renderGiderler() {
   const ym = todayStr().slice(0, 7), a = ayOzet(ym), bugun = kasaHesap(todayStr(), todayStr());
   const liste = store.expenses.slice().sort((x, y) => String(y.tarih).localeCompare(String(x.tarih)));
-  const rows = liste.slice(0, 200).map((e) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(giderKategori(e))}</b><span class="pg-alt">${fmtDateShort(e.tarih)}${e.not ? " · " + esc(e.not) : ""}${kayitNakitMi(e) ? "" : " · " + esc(e.odeme || e.odemeTuru)}</span></div><b class="pg-tut">${money.format(Number(e.tutar) || 0)}</b><button class="pg-sil" data-gsil="${e.id}" type="button" aria-label="Sil">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Henüz gider yazılmamış.</p>`;
+  const rows = liste.slice(0, 200).map((e) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(giderKategori(e))}</b><span class="pg-alt">${e.tarih && !isNaN(new Date(e.tarih)) ? fmtDateShort(e.tarih) : "tarihsiz"}${e.not ? " · " + esc(e.not) : ""}${kayitNakitMi(e) ? "" : " · " + esc(e.odeme || e.odemeTuru)}</span></div><b class="pg-tut">${money.format(Number(e.tutar) || 0)}</b><button class="pg-sil" data-gsil="${e.id}" type="button" aria-label="Sil">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Henüz gider yazılmamış.</p>`;
   const sabit = sabitGiderler().map((g) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(g.ad)}</b><span class="pg-alt">her ay${g.baslangic ? " · " + esc(g.baslangic) + "'den beri" : ""}</span></div><b class="pg-tut">${money.format(Number(g.tutar) || 0)}</b><button class="pg-sil" data-sgsil="${g.id}" type="button" aria-label="Sil">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Her ay aynı gelen gider (telefon, sigorta, kira…) varsa buraya bir kez yaz; her ayın net kârından kendiliğinden düşülür.</p>`;
   const oz = (k, v, cls) => `<div class="pd-satir"><span>${k}</span><b class="${cls || ""}">${v}</b></div>`;
   return pageHead("Giderler", "Bugün " + money.format(bugun.giderIsletme) + " · bu ay " + money.format(a.giderIsletme)) +
@@ -2379,7 +2379,14 @@ function giderHatirlatModal(devam) {
     <button class="btn ${bugun.length ? "green" : "soft"} lg pl-tam" id="ghBitir" type="button">${bugun.length ? "Tamam, günü bitir" : "Gider yok, günü bitir"}</button>`, {
     noFoot: true,
     onMount: (ov) => {
-      ov.querySelectorAll("[data-gkat]").forEach((b) => { b.onclick = () => { m.close(); giderEkleModal(b.dataset.gkat, () => giderHatirlatModal(devam)); }; });
+      ov.querySelectorAll("[data-gkat]").forEach((b) => { b.onclick = () => {
+        m.close();
+        const g = giderEkleModal(b.dataset.gkat, () => giderHatirlatModal(devam));
+        // Gider penceresinden vazgeçilirse (İptal / ✕ / dışına dokunma) soru kaybolmasın, geri gelsin.
+        const geri = () => setTimeout(() => { if (!document.querySelector(".modal-overlay")) giderHatirlatModal(devam); }, 0);
+        g.ov.querySelectorAll(".x, .close").forEach((x) => x.addEventListener("click", geri));
+        g.ov.addEventListener("click", (e) => { if (e.target === g.ov) geri(); });
+      }; });
       ov.querySelector("#ghBitir").onclick = () => { m.close(); devam(); };
     },
   });

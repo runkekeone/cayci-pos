@@ -72,6 +72,9 @@ try {
   await page.evaluate(() => servisBitir()); await bekle(150);
   d.dogru(await page.evaluate(() => /Bugün gider var mı\?/.test(document.body.innerText) && /hiç gider yazılmadı/.test(document.body.innerText) && store.servisRaporlari.length === 0), "gün sonu: satış var, gider yok → önce soruyor, günü kapatmıyor");
   d.dogru((await page.evaluate(() => [...document.querySelectorAll(".modal-overlay .pg-chip, .modal-overlay #ghBitir")].map((b) => Math.round(b.getBoundingClientRect().height)))).every((h) => h >= 44), "hatırlatma penceresindeki düğmeler en az 44 px");
+  // gider penceresinden vazgeçilirse soru kaybolmaz
+  await page.click('.modal-overlay [data-gkat="Yakıt"]'); await bekle(100); await page.click(".modal-overlay .x"); await bekle(150);
+  d.dogru(await page.evaluate(() => document.querySelectorAll(".modal-overlay").length === 1 && /Bugün gider var mı\?/.test(document.body.innerText) && store.servisRaporlari.length === 0), "gider penceresi kapatılırsa hatırlatma geri geliyor (gün yarım kalmıyor)");
   // oradan hızlıca yaz: Yemek 120
   await page.click('.modal-overlay [data-gkat="Yemek"]'); await page.fill("#gdTutar", "120"); await page.click(".modal-overlay .modal-foot .btn.ok"); await bekle(200);
   d.dogru(await page.evaluate(() => /Bugün yazılan giderler/.test(document.body.innerText) && /Tamam, günü bitir/.test(document.body.innerText)), "gider yazılınca hatırlatma geri geliyor, yazılanı gösteriyor");
