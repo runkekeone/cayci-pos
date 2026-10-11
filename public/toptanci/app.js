@@ -2,7 +2,17 @@
 
 /* ============ Veri katmanı ============ */
 const STORE_KEY = "benimpos-app-v1";
-const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
+/* Para yazımı (ekran): "12.890 ₺"; kuruş yalnız varsa, o zaman hep iki hane ("12.890,50 ₺"). Eksi: "-1.250 ₺".
+   Çağrı biçimi aynı kaldı: money.format(x). Müşteriye giden belgeler (fiş, irsaliye, hesap özeti, fiyat listesi,
+   hatırlatma) paraBelge ile eski biçimi korur ("₺12.890,00"): alt alta rakamlarda kuruşlar hizalı kalsın diye. */
+const _paraTam = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+const _paraKurus = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = { format(x) {
+  const n = Number(x); if (!isFinite(n)) return "0 ₺";
+  const y = Math.round(n * 100) / 100 || 0;   // || 0: "-0" yazmasın
+  return (Number.isInteger(y) ? _paraTam.format(y) : _paraKurus.format(y)) + " ₺";
+} };
+const paraBelge = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
 const num2 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 // CSV dışa aktarmada para sütunları: hep 2 haneli (1.234,50), Türkçe Excel sayı olarak okusun diye simgesiz.
 const csvTutar = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -223,8 +233,8 @@ function csvModalGoster(name, text) {
   openModal(name, `<p class="hint">Dosya paylaşımı bu cihazda açılmadı. Aşağıdaki metni <b>Tümünü Kopyala</b> ile alıp Not Defteri'ne yapıştır → <b>${esc(name)}</b> olarak kaydet (Excel açar). Ya da WhatsApp'tan kendine gönder.</p>
     <textarea id="csvOut" style="width:100%;height:38vh;font-family:monospace;font-size:12px;white-space:pre" readonly>${esc(text)}</textarea>
     <div class="row" style="margin-top:10px;gap:8px">
-      <button class="btn ok" id="csvKopyala" type="button">📋 Tümünü Kopyala</button>
-      <button class="btn soft" id="csvWa" type="button">📲 WhatsApp'a Gönder</button>
+      <button class="btn ok" id="csvKopyala" type="button">${ikon("liste")} Tümünü Kopyala</button>
+      <button class="btn soft" id="csvWa" type="button">${ikon("paylas")} WhatsApp'a Gönder</button>
     </div>`, {
     noFoot: true,
     onMount: (ov) => {
@@ -707,49 +717,50 @@ function verileriSilAkisi() {
 if (typeof document !== "undefined" && !oturumKayitli()) kapiyiKapat("");
 
 /* ============ Sidebar menü ============ */
+/* Yan menü: 8 satır. Kullanılan ekranlar üç grupta; hiç kullanılmayanlar (kodları ve adresleri duruyor)
+   en altta kapalı duran "Diğer"de. ico = ikon() adı. Bir sayfayı menüden kaldırmak onu silmez: #/adres yine açılır. */
 const MENU = [
-  { ico: "🏪", label: "Dükkan", route: "dukkan" },
-  { ico: "🖊", label: "Satış Yap", route: "satis" },
-  { ico: "🚗", label: "Rota / Saha Satış", route: "rota" },
-  { ico: "🗺", label: "Harita / Rota Planı", route: "harita" },
-  { ico: "🍵", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
-  { ico: "📢", label: "Duyurular", route: "duyurular" },
-  { ico: "📈", label: "Raporlar", children: [
-      { label: "Günlük Rapor", route: "rapor-gunluk" }, { label: "Tarihsel Rapor", route: "rapor-tarihsel" },
-      { label: "Ürünsel Rapor", route: "rapor-urunsel" }, { label: "Grupsal Rapor", route: "rapor-grupsal" },
+  { ico: "ev", label: "Bugünün Özeti", route: "anasayfa" },
+  { ico: "sepet", label: "Satış Yap", route: "satis" },
+  { ico: "araba", label: "Rota", children: [
+      { label: "Rota / Saha Satış", route: "rota" }, { label: "Harita / Rota Planı", route: "harita" },
+      { label: "Servis Raporları (Gün Sonu)", route: "servis-raporlari" },
+  ] },
+  { ico: "kisiler", label: "Müşteriler", route: "musteriler" },
+  { ico: "bardak", label: "Çay Ocağı Siparişleri", route: "cay-ocagi" },
+  { ico: "kutu", label: "Ürünler ve Stok", children: [
+      { label: "Dükkan", route: "dukkan" }, { label: "Ürünler", route: "urunler" },
+      { label: "Araç Stoğu (Sayım)", route: "arac-yukleme" }, { label: "Stok Sayımı", route: "stok-sayimi" },
+      { label: "Alış Faturaları", route: "alis-faturalari" }, { label: "Alınacaklar", route: "alinacaklar" },
+      { label: "Fiyat Bakımı (Zam · Kontrol)", route: "fiyat-bakim" },
+  ] },
+  { ico: "grafik", label: "Raporlar ve Giderler", children: [
+      { label: "Günlük Rapor", route: "rapor-gunluk" }, { label: "Giderler", route: "giderler" },
+      { label: "Ürünsel Rapor", route: "rapor-urunsel" }, { label: "Müşteri Analizi", route: "musteri-analiz" },
+  ] },
+  { ico: "ucnokta", label: "Diğer", children: [
+      { label: "Duyurular", route: "duyurular" }, { label: "Profil ve Yedek", route: "profilim" },
+      { label: "Gelirler", route: "gelirler" }, { label: "Servisçiler (Bayiler)", route: "servisciler" },
+      { label: "Ürün Grupları", route: "urun-gruplari" }, { label: "Ürün İadesi Al", route: "urun-iade" },
+      { label: "İade Talepleri", route: "iade-talepleri" }, { label: "İstenen Ürünler (Talepler)", route: "talepler" },
+      { label: "Ürün Etiketi Üret", route: "urun-etiket" }, { label: "Ürün Analizi", route: "urun-analiz" },
+      { label: "Tarihsel Rapor", route: "rapor-tarihsel" }, { label: "Grupsal Rapor", route: "rapor-grupsal" },
       { label: "Ürün Korelasyon Raporu", route: "rapor-korelasyon" }, { label: "Stok Hareket Rapor", route: "rapor-stokhareket" },
       { label: "Personel Hareket Raporu", route: "rapor-personelhareket" },
-      { label: "📊 Müşteri Analizi", route: "musteri-analiz" }, { label: "📊 Ürün Analizi", route: "urun-analiz" },
-      { label: "🚗 Servis Raporları (Gün Sonu)", route: "servis-raporlari" },
-  ] },
-  { ico: "👤", label: "Müşteriler", route: "musteriler" },
-  { ico: "🧑‍🔧", label: "Servisçiler (Bayiler)", route: "servisciler" },
-  { ico: "🚚", label: "Araç Stoğu (Sayım)", route: "arac-yukleme" },
-  { ico: "🗂", label: "Ürünler", children: [
-      { label: "Ürünler", route: "urunler" }, { label: "Ürün Ekle & Güncelle", route: "urun-ekle" },
-      { label: "Varyantlı Ürün Ekle", route: "urun-varyantli" }, { label: "Ürün Grupları", route: "urun-gruplari" },
-      { label: "Ürün Transferleri", route: "urun-transfer" }, { label: "Alt Ürün Tanımları", route: "alt-urun" },
-      { label: "Ürün Varyantları", route: "urun-varyantlari" }, { label: "Ürün İadesi Al", route: "urun-iade" },
-      { label: "İade Talepleri", route: "iade-talepleri" }, { label: "İstenen Ürünler (Talepler)", route: "talepler" }, { label: "Ürün Etiketi Üret", route: "urun-etiket" },
-      { label: "Etiket Tasarla & Üret", route: "etiket-tasarla" }, { label: "Barkodlu Terazi Çıktısı", route: "terazi-cikti" },
-      { label: "💰 Fiyat Bakımı (Zam · Kontrol)", route: "fiyat-bakim" }, { label: "🛒 Alınacaklar", route: "alinacaklar" },
-  ] },
-  { ico: "📄", label: "Alış Faturaları", children: [
-      { label: "Alış Faturaları", route: "alis-faturalari" }, { label: "Alış Faturası Oluştur", route: "alis-olustur" },
-  ] },
-  { ico: "📰", label: "Firmalar", route: "firmalar" },
-  { ico: "✉", label: "E-Faturalar", children: [
+      { label: "Firmalar", route: "firmalar" }, { label: "Personeller", route: "personeller" },
+      { label: "Görevler", route: "gorevler" }, { label: "Ödeme Tipleri", route: "odeme-tipleri" },
       { label: "Yeni E-Fatura Oluştur", route: "efatura-olustur" }, { label: "Giden E-Faturalar", route: "efatura-giden" },
-      { label: "Gelen E-Faturalar", route: "efatura-gelen" }, { label: "Ayarlar", route: "efatura-ayarlar" },
+      { label: "Gelen E-Faturalar", route: "efatura-gelen" }, { label: "E-Fatura Ayarları", route: "efatura-ayarlar" },
+      { label: "Varyantlı Ürün Ekle", route: "urun-varyantli" }, { label: "Ürün Varyantları", route: "urun-varyantlari" },
+      { label: "Alt Ürün Tanımları", route: "alt-urun" }, { label: "Ürün Transferleri", route: "urun-transfer" },
+      { label: "Etiket Tasarla & Üret", route: "etiket-tasarla" }, { label: "Barkodlu Terazi Çıktısı", route: "terazi-cikti" },
   ] },
-  { ico: "🧊", label: "Stok Sayımı", route: "stok-sayimi" },
-  { ico: "🔁", label: "Gelir / Giderler", children: [
-      { label: "Gelirler", route: "gelirler" }, { label: "Giderler", route: "giderler" },
-  ] },
-  { ico: "👥", label: "Personeller", route: "personeller" },
-  { ico: "⋯", label: "Görevler", route: "gorevler" },
-  { ico: "💳", label: "Ödeme Tipleri", route: "odeme-tipleri" },
 ];
+/* Kök ekran = alt çubuktan ya da yan menüden doğrudan gelinen ekran. Oralarda "geri" okunun gidecek yeri yok; gösterilmez. */
+function ggKokMu(route) {
+  if (MOBILBAR.some((m) => m.route === route)) return true;
+  return MENU.some((m) => m.route === route || (m.children || []).some((c) => c.route === route));
+}
 
 /* ============ Çizgi ikonlar (emoji yerine) ============ */
 /* Tek renk (currentColor), 24'lük ızgara, dosya/istek yok: her telefonda aynı görünür.
@@ -823,7 +834,9 @@ function ikon(ad, boy, kalinlik) {
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function pageHead(title, sub, actions) {
   const acts = (actions || []).map((a) => `<button class="btn ${a.cls || ""}" type="button" ${a.route ? `data-goto="${a.route}"` : ""} ${a.act ? `data-act="${a.act}"` : ""}>${a.label}</button>`).join("");
-  return `<div class="page-head"><button class="pg-back" data-goback type="button" aria-label="Geri">&#8249;</button><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ""}<div class="actions">${acts}</div></div>`;
+  // Geri oku yalnız alt sayfalarda (müşteri detayı, ürün düzenle, satış detayı…). Kök ekranlarda yok.
+  const geri = ggKokMu(currentRoute()) ? "" : `<button class="pg-back" data-goback type="button" aria-label="Geri">${ikon("sol", 22, 2.2)}</button>`;
+  return `<div class="page-head${geri ? "" : " kok"}">${geri}<h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ""}<div class="actions">${acts}</div></div>`;
 }
 function field(f) {
   if (f.type === "select") return `<div class="field"><label>${f.label}</label><select>${(f.options || ["Tümü"]).map((o) => `<option>${o}</option>`).join("")}</select></div>`;
@@ -881,7 +894,7 @@ function formModal(title, fields, item, onSave) {
     if (f.type === "select") return `<div class="field"><label>${f.label}</label><select data-k="${f.key}">${f.options.map((o) => { const v = typeof o === "object" ? o.v : o; const t = typeof o === "object" ? o.t : o; return `<option value="${esc(v)}" ${String(val) === String(v) ? "selected" : ""}>${esc(t)}</option>`; }).join("")}</select></div>`;
     if (f.type === "textarea") return `<div class="field"><label>${f.label}</label><textarea data-k="${f.key}" rows="3">${esc(val)}</textarea></div>`;
     if (f.type === "checkbox") return `<label class="field field-chk"><input data-k="${f.key}" type="checkbox" ${val ? "checked" : ""} /> <span>${f.label}</span></label>`;
-    if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">📇 Rehber</button></div></div>`;
+    if (f.rehber) return `<div class="field"><label>${f.label}</label><div class="zk-hizli-row"><input data-k="${f.key}" type="${f.type || "text"}" value="${esc(val)}" placeholder="${f.ph || ""}" /><button class="btn soft" type="button" data-rehberfor="${f.key}">${ikon("kisiler")} Rehber</button></div></div>`;
     return `<div class="field"><label>${f.label}${f.req ? " *" : ""}</label><input data-k="${f.key}" type="${f.type || "text"}" ${f.step ? `step="${f.step}"` : ""} value="${esc(val)}" placeholder="${f.ph || ""}" /></div>`;
   }).join("");
   openModal(title, body, {
@@ -918,7 +931,7 @@ function crudPage(cfg) {
     return `<tr>${cells}${cfg.noEdit ? "" : acts}</tr>`;
   }).join("");
   const cols = cfg.noEdit ? cfg.columns : cfg.columns.concat(["İşlem"]);
-  const actions = [{ label: "＋ " + (cfg.newLabel || "Yeni Ekle"), act: "yeni" }].concat(cfg.extraActions || []);
+  const actions = [{ label: `${ikon("arti")} ` + (cfg.newLabel || "Yeni Ekle"), act: "yeni" }].concat(cfg.extraActions || []);
   return pageHead(cfg.title, typeof cfg.sub === "function" ? cfg.sub() : cfg.sub, actions) + tableCard(cols, rows, infoLine(items.length));
 }
 function mountCrud(cfg) {
@@ -993,7 +1006,7 @@ function renderUrunEkle() {
         <div class="field"><label>Bozulabilir mi (SKT'li)</label><select name="bozulabilir"><option value="0" ${!(p && p.bozulabilir) ? "selected" : ""}>Hayır</option><option value="1" ${p && p.bozulabilir ? "selected" : ""}>Evet</option></select></div>
         <div class="field"><label>Analiz Notu</label><input name="analizNotu" value="${v("analizNotu")}" placeholder="opsiyonel" /></div>
       </div>
-      <div style="margin-top:16px"><button class="btn green lg" type="submit">💾 ${p ? "Güncelle" : "Ürünü Kaydet"}</button></div>
+      <div style="margin-top:16px"><button class="btn green lg" type="submit">${ikon("tik")} ${p ? "Güncelle" : "Ürünü Kaydet"}</button></div>
     </form>`;
 }
 function mountUrunEkle() {
@@ -1033,9 +1046,9 @@ function renderServisciler() {
   const rows = liste.map((c, i) => {
     const borc = customerBorc(c.id);
     const ozelSay = c.ozelFiyatlar ? Object.keys(c.ozelFiyatlar).length : 0;
-    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td>${ozelSay ? ozelSay + " ürün" : "-"}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">✏ Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="warn" data-borcekle="${c.id}">Veresiye Borç Ekle</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
+    return `<tr><td>${i + 1}</td><td><button class="link-btn" data-detay="${c.id}">${esc(c.ad)}</button></td><td>${customerSalesCount(c.id)}</td><td>${ozelSay ? ozelSay + " ürün" : "-"}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td>${esc(c.telefon || "-")}</td><td><div class="act-btns"><button class="edit" data-duzenlec="${c.id}">${ikon("kalem")} Düzenle</button><button class="edit" data-odeme="${c.id}">Ödeme Al</button><button class="warn" data-borcekle="${c.id}">Veresiye Borç Ekle</button><button class="del" data-delc="${c.id}">Sil</button></div></td></tr>`;
   }).join("");
-  return pageHead("Servisçiler (Bayiler)", `${liste.length} servisçi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: "＋ Yeni Servisçi", act: "yeni-servisci" }]) +
+  return pageHead("Servisçiler (Bayiler)", `${liste.length} servisçi · Toplam borç: ${money.format(toplamBorc)}`, [{ label: `${ikon("arti")} Yeni Servisçi`, act: "yeni-servisci" }]) +
     `<p class="hint" style="margin:0 2px 10px">Servisçiler senden toptan/düşük fiyata alan bayiler. Özel fiyatları satış ekranından ürün satırına dokunup "bu fiyatı … için kaydet" ile tanımlanır; dükkan modunda satış onların stoğundan (dükkan) düşer.</p>` +
     tableCard(["Sıra", "Servisçi", "Alışveriş", "Özel Fiyat", "Kalan Borcu", "Telefon", "İşlem"], rows, infoLine(liste.length));
 }
@@ -1060,9 +1073,9 @@ function renderAracYukleme() {
       <td>${esc(p.ad)}<br><span class="badge">${esc(p.grup || "-")} · ${esc(p.birim || "Adet")}</span></td>
       <td><input class="ay-in" data-arac="${p.id}" type="number" inputmode="numeric" value="${Number(p.aracStok) || 0}" placeholder="0" /></td>
     </tr>`).join("");
-  return pageHead("Araç Stoğu (Sayım / Başlangıç)", `Araçta toplam ${num2.format(toplamArac)} birim`, [{ label: "↩ Ürünler", route: "urunler" }]) +
-    `<div class="ay-tools"><button class="btn ok" data-act="aracKaydet" type="button">✓ Araç Stoğunu Kaydet</button><button class="btn soft" data-act="aracYukle" type="button">🏪 Dükkandan Araca Yükle</button></div>
-     <p class="hint" style="margin:0 2px 8px"><b>Devreden model:</b> Araç stoğu ertesi güne devreder — her sabah doldur/boşalt YOK. Sadece <b>ilk kez</b> ya da sayım gerektiğinde araçtaki gerçek miktarı yaz. Satınca otomatik düşer; yolda alınca "🛒 Araca Al" ile eklenir.</p>` +
+  return pageHead("Araç Stoğu (Sayım / Başlangıç)", `Araçta toplam ${num2.format(toplamArac)} birim`, [{ label: `${ikon("geri")} Ürünler`, route: "urunler" }]) +
+    `<div class="ay-tools"><button class="btn ok" data-act="aracKaydet" type="button">${ikon("tik")} Araç Stoğunu Kaydet</button><button class="btn soft" data-act="aracYukle" type="button">${ikon("dukkan")} Dükkandan Araca Yükle</button></div>
+     <p class="hint" style="margin:0 2px 8px"><b>Devreden model:</b> Araç stoğu ertesi güne devreder — her sabah doldur/boşalt YOK. Sadece <b>ilk kez</b> ya da sayım gerektiğinde araçtaki gerçek miktarı yaz. Satınca otomatik düşer; yolda alınca "${ikon("sepet")} Araca Al" ile eklenir.</p>` +
     tableCard(["Ürün", "Araç Stok (mevcut)"], rows, "");
 }
 function mountAracYukleme() {
@@ -1358,7 +1371,7 @@ function renderTsiparisDetay() {
     const ekstraTxt = (h.ekstra || []).filter((x) => x.adet > 0).map((x) => x.ad + " " + num2.format(x.adet)).join(", ");
     return `<tr><td>${i + 1}</td><td>${esc(h.belgeNo || "-")}</td><td>${esc(teslimTxt || "-")}</td><td>${esc(ekstraTxt || "-")}</td><td>${money.format(h.odeme || 0)}</td><td>${esc(h.not || "-")}</td><td>${fmtDate(h.tarih)}</td></tr>`;
   }).join("");
-  return pageHead("Toplu Sipariş Detayı", (c ? esc(c.ad) + " · " : "") + (tsiparisAcikMi(t) ? "Açık" : "Kapandı"), [{ label: "Teslimat / Ödeme Gir", cls: "green", act: "hareket" }, { label: "🗑 Siparişi Sil", cls: "softred", act: "sil" }, { label: "Müşteriye Dön", cls: "soft", act: "musteriyeDon" }]) +
+  return pageHead("Toplu Sipariş Detayı", (c ? esc(c.ad) + " · " : "") + (tsiparisAcikMi(t) ? "Açık" : "Kapandı"), [{ label: "Teslimat / Ödeme Gir", cls: "green", act: "hareket" }, { label: `${ikon("cop")} Siparişi Sil`, cls: "softred", act: "sil" }, { label: "Müşteriye Dön", cls: "soft", act: "musteriyeDon" }]) +
     grid([["Sipariş Toplamı", money.format(t.toplamTutar), "blue"], ["Ödenen", money.format(tsiparisOdenen(t)), "green"], ["Kalan Tutar", money.format(tsiparisKalanTutar(t))], ["Not", esc(t.not || "-")]]) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Sipariş Kalemleri</h1>` + tableCard(["Sıra", "Ürün", "Sipariş Adet", "Teslim Edilen", "Kalan", "Birim Fiyat"], kalemRows, infoLine(t.kalemler.length)) +
     `<h1 style="font-size:15px;margin:18px 0 8px">Hareketler (Teslimat / Ödeme Fişleri)</h1>` + tableCard(["Sıra", "Belge No", "Teslim Edilen", "Ekstra Satış", "Ödeme", "Not", "Tarih"], hareketRows, infoLine(t.hareketler.length));
@@ -1451,15 +1464,15 @@ function printTsiparisFis(t, h) {
   const c = findCustomer(t.musteriId);
   const st = store.settings;
   const head = `<h2>${esc(st.fisBaslik || st.firmaAdi)}</h2>${st.fisAdres ? `<div class="c">${esc(st.fisAdres)}</div>` : ""}${st.fisTel ? `<div class="c">Tel: ${esc(st.fisTel)}</div>` : ""}<div class="c">Toplu Sipariş — Teslimat / Ödeme Fişi</div><hr>`;
-  const ekstraRows = (h.ekstra || []).map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${money.format(it.fiyat * it.adet)}</td></tr>`).join("");
+  const ekstraRows = (h.ekstra || []).map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${paraBelge.format(it.fiyat * it.adet)}</td></tr>`).join("");
   const ekstraToplam = (h.ekstra || []).reduce((a, it) => a + it.adet * it.fiyat, 0);
   const teslimRows = (h.teslim || []).map((it) => { const kalan = tsiparisKalemKalan(t, it.urunId); const sip = t.kalemler.find((k) => k.urunId === it.urunId); return `<tr><td>${esc(it.ad)}</td><td class="r">${num2.format(sip ? sip.adet : 0)} - ${num2.format(it.adet)} = ${num2.format(kalan)} kalan</td></tr>`; }).join("");
   const foot = `<hr><div class="c">${esc(st.fisAltbilgi || "Teşekkür ederiz")}</div>`;
   openPrint("Toplu Sipariş Fişi " + h.belgeNo, `${head}
     <div>Belge No: ${h.belgeNo}</div><div>Tarih: ${fmtDate(h.tarih)}</div>${c ? `<div>Müşteri: ${esc(c.ad)}</div>` : ""}<hr>
-    ${ekstraRows ? `<div class="c"><b>Ekstra Ürünler</b></div><table>${ekstraRows}</table><table><tr><td><b>Ekstra Toplam</b></td><td class="r"><b>${money.format(ekstraToplam)}</b></td></tr></table><hr>` : ""}
+    ${ekstraRows ? `<div class="c"><b>Ekstra Ürünler</b></div><table>${ekstraRows}</table><table><tr><td><b>Ekstra Toplam</b></td><td class="r"><b>${paraBelge.format(ekstraToplam)}</b></td></tr></table><hr>` : ""}
     ${teslimRows ? `<div class="c"><b>Toplu Siparişten Bırakılan</b></div><table>${teslimRows}</table><hr>` : ""}
-    <table>${h.odeme ? `<tr><td>Bugün Alınan Ödeme</td><td class="r">${money.format(h.odeme)}</td></tr>` : ""}<tr><td>Sipariş Kalan Tutarı</td><td class="r">${money.format(tsiparisKalanTutar(t))}</td></tr></table>
+    <table>${h.odeme ? `<tr><td>Bugün Alınan Ödeme</td><td class="r">${paraBelge.format(h.odeme)}</td></tr>` : ""}<tr><td>Sipariş Kalan Tutarı</td><td class="r">${paraBelge.format(tsiparisKalanTutar(t))}</td></tr></table>
     ${h.not ? `<div>Not: ${esc(h.not)}</div>` : ""}${foot}`);
 }
 
@@ -1487,7 +1500,7 @@ function buildFiyatListesi(secili) {
   let govde = "";
   gAdlari.forEach((g) => {
     govde += gAdlari.length > 1 ? `\n*${g}*\n` : "\n";
-    gruplar[g].forEach((p) => { govde += `• ${p.ad}${urunBirimEk(p)} — ${money.format(Number(p.satis) || 0)}\n`; });
+    gruplar[g].forEach((p) => { govde += `• ${p.ad}${urunBirimEk(p)} — ${paraBelge.format(Number(p.satis) || 0)}\n`; });
   });
   return `📋 ${firma} — FİYAT LİSTESİ\n${bugun}\n${govde}\nFiyatlarımıza KDV dahildir. Bilgilerinize sunarız.`;
 }
@@ -1504,7 +1517,7 @@ function fiyatListesiPDF(secili) {
   let govde = "";
   gAdlari.forEach((g) => {
     if (!tekGrup) govde += `<h3 style="font-size:14px;margin:14px 0 4px">${esc(g)}</h3>`;
-    const satir = gruplar[g].map((p) => `<tr><td>${esc(p.ad)}${esc(urunBirimEk(p))}</td><td class="r">${money.format(Number(p.satis) || 0)}</td></tr>`).join("");
+    const satir = gruplar[g].map((p) => `<tr><td>${esc(p.ad)}${esc(urunBirimEk(p))}</td><td class="r">${paraBelge.format(Number(p.satis) || 0)}</td></tr>`).join("");
     govde += `<table>${satir}</table>`;
   });
   const head = `<h2>${firma}</h2><div class="c">FİYAT LİSTESİ · ${bugun}</div>${st.fisTel ? `<div class="c">Tel: ${esc(st.fisTel)}</div>` : ""}<hr>`;
@@ -1536,13 +1549,13 @@ function openFiyatListesi(custId) {
   }
   const metin = buildFiyatListesi();
   const kime = c
-    ? esc(c.ad) + (c.telefon ? " · 📞 " + esc(c.telefon) : " · telefon kayıtlı değil, WhatsApp'ta kişi seçeceksin")
+    ? esc(c.ad) + (c.telefon ? " · " + ikon("telefon", 16) + " " + esc(c.telefon) : " · telefon kayıtlı değil, WhatsApp'ta kişi seçeceksin")
     : "WhatsApp açılınca kişiyi sen seçeceksin";
   const body = `
     <p class="hint" style="margin-bottom:6px">Alıcı: <b>${kime}</b></p>
     <p class="hint" style="margin:0 0 6px;font-size:12px"><b>1)</b> Bu müşteriye gidecek ürünleri seç (istemediğinin işaretini kaldır):</p>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <input id="flSearch" type="text" placeholder="🔍 Ürün ara..." style="flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line,#d9dee6);font-size:13px">
+      <input id="flSearch" type="text" placeholder="Ürün ara..." style="flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line,#d9dee6);font-size:13px">
       <button class="btn soft" id="flAll" type="button" style="min-height:38px">Tümü</button>
       <button class="btn soft" id="flNone" type="button" style="min-height:38px">Temizle</button>
     </div>
@@ -1551,13 +1564,13 @@ function openFiyatListesi(custId) {
     <p class="hint" style="margin:0 0 4px;font-size:12px"><b>2)</b> Metni gerekirse düzenle, sonra gönder:</p>
     <textarea id="flText" rows="8" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.55;padding:10px;border-radius:10px;border:1px solid var(--line,#d9dee6)">${esc(metin)}</textarea>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-      <button class="btn soft" id="flCopy" type="button" style="flex:1;justify-content:center;min-height:44px">📋 Tümünü Kopyala</button>
-      <button class="btn softgreen" id="flPdf" type="button" style="flex:1;justify-content:center;min-height:44px">📄 PDF olarak paylaş</button>
+      <button class="btn soft" id="flCopy" type="button" style="flex:1;justify-content:center;min-height:44px">${ikon("liste")} Tümünü Kopyala</button>
+      <button class="btn softgreen" id="flPdf" type="button" style="flex:1;justify-content:center;min-height:44px">${ikon("fis")} PDF olarak paylaş</button>
     </div>
     <p class="hint" style="margin-top:6px;font-size:11px">PDF: açılan yazdırma ekranından <b>"PDF olarak kaydet"</b> → dosyayı WhatsApp'ta müşteriye ekle.</p>`;
   openModal("Fiyat Listesi Gönder", body, {
     wide: true,
-    okLabel: "📲 WhatsApp'tan Gönder",
+    okLabel: `${ikon("paylas")} WhatsApp'tan Gönder`,
     onMount: (ov) => {
       const ta = ov.querySelector("#flText");
       const cnt = ov.querySelector("#flCount");
@@ -1567,7 +1580,7 @@ function openFiyatListesi(custId) {
       const yenile = () => {
         const s = seciliSet(), tum = kutular().length;
         ta.value = s.size ? buildFiyatListesi(s) : "";
-        cnt.textContent = s.size === 0 ? "⚠ Hiç ürün seçili değil" : (s.size === tum ? `Tüm ürünler seçili (${tum})` : `${s.size} / ${tum} ürün seçili`);
+        cnt.textContent = s.size === 0 ? "Hiç ürün seçili değil" : (s.size === tum ? `Tüm ürünler seçili (${tum})` : `${s.size} / ${tum} ürün seçili`);
       };
       list.addEventListener("change", yenile);
       ov.querySelector("#flAll").addEventListener("click", () => { kutular().forEach((cb) => (cb.checked = true)); yenile(); });
@@ -1579,9 +1592,9 @@ function openFiyatListesi(custId) {
       });
       const cp = ov.querySelector("#flCopy");
       cp.addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(ta.value); cp.textContent = "✓ Kopyalandı"; }
-        catch { ta.select(); try { document.execCommand("copy"); cp.textContent = "✓ Kopyalandı"; } catch { /* yoksay */ } }
-        setTimeout(() => { cp.textContent = "📋 Tümünü Kopyala"; }, 1500);
+        try { await navigator.clipboard.writeText(ta.value); cp.textContent = "Kopyalandı"; }
+        catch { ta.select(); try { document.execCommand("copy"); cp.textContent = "Kopyalandı"; } catch { /* yoksay */ } }
+        setTimeout(() => { cp.innerHTML = ikon("liste") + " Tümünü Kopyala"; }, 1500);
       });
       ov.querySelector("#flPdf").addEventListener("click", () => {
         const s = seciliSet();
@@ -1615,7 +1628,7 @@ function renderSatisDetay() {
   const musOpts = `<option value="">— Müşteri yok —</option>` + store.customers.map((m) => `<option value="${m.id}" ${s.musteriId === m.id ? "selected" : ""}>${esc(m.ad)}</option>`).join("");
   const otip = s.odeme.acik ? "acik" : (s.odeme.pos ? "pos" : "nakit");
   const odOpts = [["nakit", "NAKİT"], ["pos", "POS"], ["acik", "AÇIK HESAP"]].map((o) => `<option value="${o[0]}" ${otip === o[0] ? "selected" : ""}>${o[1]}</option>`).join("");
-  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: "🖨 İrsaliye", cls: "soft", act: "print" }, { label: "📲 WhatsApp", cls: "soft", act: "wa" }, { label: "🖼 Resim Paylaş", cls: "soft", act: "resim" }, { label: "🗑 Satışı Sil", cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
+  return pageHead("Satış Detayı", "Belge No: " + esc(s.belgeNo), [{ label: `${ikon("yazici")} İrsaliye`, cls: "soft", act: "print" }, { label: `${ikon("paylas")} WhatsApp`, cls: "soft", act: "wa" }, { label: `${ikon("paylas")} Resim Paylaş`, cls: "soft", act: "resim" }, { label: `${ikon("cop")} Satışı Sil`, cls: "softred", act: "delsale" }, { label: "Geri", cls: "soft", route: "rapor-tarihsel" }]) +
     `<div class="card"><div class="form-grid">
       <div class="field"><label>Müşteri</label><select id="sdMus">${musOpts}</select></div>
       <div class="field"><label>Ödeme Tipi</label><select id="sdOdeme">${odOpts}</select></div>
@@ -1627,7 +1640,7 @@ function renderSatisDetay() {
     <div class="card"><h1 style="font-size:15px;margin:0 0 12px">Ürünler</h1>
       <div class="sd-list" id="sdBody"></div>
       <div class="totbox sd-genel" style="margin-top:12px"><strong>Genel Toplam</strong><span id="sdTot">₺0,00</span></div>
-      <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="sdSave" type="button">💾 Güncelle</button></div>
+      <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="sdSave" type="button">${ikon("tik")} Güncelle</button></div>
     </div>`;
 }
 function sdRowHTML(r, i) {
@@ -2201,7 +2214,7 @@ function mountSatis() {
 /* Yazdırma */
 function openPrint(title, html) {
   // Uygulama-içi önizleme modalı (WebView'de ayrı pencere + window.close güvenilmez).
-  openModal(title, `<div class="fis-onizle">${html}</div><div style="text-align:right;margin-top:12px"><button class="btn soft" id="fisYazdir" type="button">🖨 Yazdır</button></div>`, {
+  openModal(title, `<div class="fis-onizle">${html}</div><div style="text-align:right;margin-top:12px"><button class="btn soft" id="fisYazdir" type="button">${ikon("yazici")} Yazdır</button></div>`, {
     noFoot: true,
     onMount: (ov) => { const y = ov.querySelector("#fisYazdir"); if (y) y.onclick = () => window.print(); },
   });
@@ -2209,17 +2222,48 @@ function openPrint(title, html) {
 function printSale(s) {
   const c = s.musteriId && findCustomer(s.musteriId);
   const st = store.settings;
-  const rows = s.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${money.format(it.fiyat * it.adet)}</td></tr>`).join("");
+  const rows = s.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${paraBelge.format(it.fiyat * it.adet)}</td></tr>`).join("");
   const head = `<h2>${esc(st.fisBaslik || st.firmaAdi)}</h2>${st.fisAdres ? `<div class="c">${esc(st.fisAdres)}</div>` : ""}${st.fisTel ? `<div class="c">Tel: ${esc(st.fisTel)}</div>` : ""}<div class="c">İrsaliye / Satış Fişi</div><hr>`;
   const foot = `<hr><div class="c">${esc(st.fisAltbilgi || "Teşekkür ederiz")}</div>`;
   openPrint("İrsaliye " + s.belgeNo, `${head}
     <div>Belge No: ${s.belgeNo}</div><div>Tarih: ${fmtDate(s.tarih)}</div>${c ? `<div>Müşteri: ${esc(c.ad)}</div>` : ""}<hr>
     <table>${rows}</table><hr>
-    <table>${s.iskonto ? `<tr><td>İskonto</td><td class="r">-${money.format(s.iskonto)}</td></tr>` : ""}<tr><td><b>TOPLAM</b></td><td class="r"><b>${money.format(s.toplam)}</b></td></tr>
+    <table>${s.iskonto ? `<tr><td>İskonto</td><td class="r">-${paraBelge.format(s.iskonto)}</td></tr>` : ""}<tr><td><b>TOPLAM</b></td><td class="r"><b>${paraBelge.format(s.toplam)}</b></td></tr>
     <tr><td>Ödeme</td><td class="r">${saleOdeme(s)}</td></tr></table>${foot}`);
 }
 
 /* ============ ANASAYFA ============ */
+/* Özet kalıbı (ana ekran + günlük rapor): üstte üç büyük rakam, gerisi "Ayrıntı"ya dokununca.
+   buyuk / ayrinti = [etiket, değer, altNot?]. Rakamların HESABI çağıranda (kasaHesap); burası yalnız sunum.
+   Her rakam .stat > .s-label + .s-value olarak durur (denemeler ve yazdırma buna bakıyor). */
+let ggAyrintiAcik = {};
+function ggOzetHTML(kimlik, buyuk, ayrinti) {
+  const acik = !!ggAyrintiAcik[kimlik];
+  const b = buyuk.map((x, i) => `<div class="stat gg-b${i === 0 ? " gg-b1" : ""}"><span class="s-label">${x[0]}</span><span class="s-value">${x[1]}</span>${x[2] ? `<span class="gg-not">${x[2]}</span>` : ""}</div>`).join("");
+  const a = ayrinti.map((x) => `<div class="stat gg-s"><span class="s-label">${x[0]}</span><span class="s-value">${x[1]}</span></div>`).join("");
+  return `<section class="gg-ozet" data-ggozet="${kimlik}">
+    <div class="gg-buyuk">${b}</div>
+    <button class="gg-ayrinti-btn" type="button" aria-expanded="${acik}" aria-controls="ggAyr-${kimlik}"><span class="gg-ayr-yazi">${acik ? "Ayrıntıyı gizle" : "Ayrıntı"}</span>${ikon("asagi", 20, 2.2)}</button>
+    <div class="gg-ayrinti" id="ggAyr-${kimlik}"${acik ? "" : " hidden"}>${a}</div>
+  </section>`;
+}
+function ggOzetWire() {
+  document.querySelectorAll(".gg-ozet").forEach((kok) => {
+    const btn = kok.querySelector(".gg-ayrinti-btn"), kutu = kok.querySelector(".gg-ayrinti"); if (!btn || !kutu) return;
+    btn.addEventListener("click", () => {
+      const ac = kutu.hidden; kutu.hidden = !ac; ggAyrintiAcik[kok.dataset.ggozet] = ac;
+      btn.setAttribute("aria-expanded", ac ? "true" : "false");
+      btn.querySelector(".gg-ayr-yazi").textContent = ac ? "Ayrıntıyı gizle" : "Ayrıntı";
+    });
+  });
+}
+/* "+%3691" rozeti yerine düz cümle. Dün hiç satış yoksa kıyas yok, bir şey yazılmaz. */
+function ggDunFarki(bugun, dun) {
+  if (!(dun > 0)) return "";
+  const f = kurus(bugun - dun);
+  if (Math.abs(f) < 0.005) return "Dünle aynı";
+  return "Dünden " + money.format(Math.abs(f)) + (f > 0 ? " fazla" : " az");
+}
 function renderAnasayfa() {
   const today = store.sales.filter((s) => isToday(s.tarih));
   const sum = (fn) => today.reduce((a, s) => a + fn(s), 0);
@@ -2229,42 +2273,41 @@ function renderAnasayfa() {
   const toplamBorc = store.customers.reduce((a, c) => a + customerBorc(c.id), 0);
   const kritik = store.products.filter((p) => (Number(p.stok) || 0) <= (Number(p.kritik) || 0) && p.kritik !== "" && p.kritik != null);
   const son = [...today].sort((a, b) => b.tarih.localeCompare(a.tarih)); // sadece bugünün satışları
-  const rows = son.map((s) => { const c = s.musteriId && findCustomer(s.musteriId); return `<tr><td><button class="link-btn" data-sale="${s.id}">${esc(s.belgeNo)}</button></td><td>${c ? esc(c.ad) : "-"}</td><td>${money.format(s.toplam)}</td><td>${saleOdeme(s)}</td><td>${fmtDate(s.tarih)}</td></tr>`; }).join("");
-  const kritikRows = kritik.slice(0, 10).map((p) => `<tr><td>${esc(p.ad)}</td><td class="stok-low">${num2.format(Number(p.stok) || 0)}</td><td>${Number(p.kritik) || 0}</td></tr>`).join("");
   const dun = localDateStr(new Date(Date.now() - 86400000));
   const dunCiro = store.sales.filter((s) => localDateStr(new Date(s.tarih)) === dun).reduce((a, s) => a + s.toplam, 0);
-  return pageHead("Bugünün Özeti", null, [{ label: "📈 Raporlar", cls: "soft", route: "rapor-gunluk" }]) +
-    grid([["Ciro (bugün)", money.format(ciro), "blue", trendBadge(ciro, dunCiro)], ["Nakit", money.format(nakit), "green"], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)]]) +
-    `<div style="height:14px"></div>` +
-    grid([["Nakit Kasa", money.format(k.nakitKasa), "green"], ["Kart / Havale ile Gelen", money.format(k.kartHavale)], ["Gider (bugün)", money.format(k.giderIsletme)], ["Kâr (bugün)", money.format(k.urunKar), "green"], ["Kâr Oranı", karOrani(ciro, maliyet), "green"]]
-      .concat(k.komisyon ? [["Kart (POS) Komisyonu", money.format(k.komisyon)]] : [])
-      .concat([["Net Kâr (gider sonrası)", money.format(k.netKar), "green"], ["Toplam Alacak", money.format(toplamBorc)]])) +
+  const kritikRows = kritik.slice(0, 10).map((p) => `<li><button class="gg-satir" type="button" data-ggurun="${p.id}"><span class="gg-sol"><span class="gg-ad">${esc(p.ad)}</span><span class="gg-alt">En az ${num2.format(Number(p.kritik) || 0)} olmalı</span></span><span class="gg-sag gg-uyari">${num2.format(Number(p.stok) || 0)} kaldı</span>${ikon("sag", 20)}</button></li>`).join("");
+  return pageHead("Bugünün Özeti", null) +
+    ggOzetHTML("ana",
+      [["Kasadaki nakit", money.format(k.nakitKasa)], ["Bugünkü ciro", money.format(ciro), ggDunFarki(ciro, dunCiro)], ["Net kâr", money.format(k.netKar), "Gider" + (k.komisyon ? " ve kart komisyonu" : "") + " düşülmüş"]],
+      [["Nakit", money.format(nakit)], ["POS", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Kart / Havale ile Gelen", money.format(k.kartHavale)], ["Gider (bugün)", money.format(k.giderIsletme)], ["Kâr (bugün)", money.format(k.urunKar)], ["Kâr Oranı", karOrani(ciro, maliyet)]]
+        .concat(k.komisyon ? [["Kart (POS) Komisyonu", money.format(k.komisyon)]] : [])
+        .concat([["Toplam Alacak", money.format(toplamBorc)]])) +
     (k.giderEksik ? `<div class="rapor-uyari pl-gider-uyari">Bugün satış var ama hiç gider yazılmadı. Yakıt, yemek gibi bir harcama olduysa <button class="link-btn" data-goto="giderler" type="button">gider ekle</button>.</div>` : "") +
-    `<h1 style="font-size:16px;margin:18px 0 10px">Borç Takibi</h1>` + vadeKartHTML() +
-    `<h1 style="font-size:16px;margin:18px 0 10px">Bugünün Satışları (${today.length})</h1>` + (son.length ? sonSatisListesi(son) : `<div class="card"><p class="sub">Bugün henüz satış yok.</p></div>`) +
-    `<h1 style="font-size:16px;margin:18px 0 10px">Kritik Stok (${kritik.length})</h1>` + tableCard(["Ürün", "Kalan Stok", "Kritik"], kritikRows, infoLine(kritik.length));
+    `<h2 class="gg-bolum">Borç Takibi</h2>` + vadeKartHTML() +
+    `<h2 class="gg-bolum">Bugünün Satışları (${today.length})</h2>` + (son.length ? sonSatisListesi(son) : `<div class="card gg-bos">Bugün henüz satış yok.</div>`) +
+    (kritik.length ? `<h2 class="gg-bolum">Kritik Stok (${kritik.length})</h2><ul class="gg-liste">${kritikRows}</ul>` + (kritik.length > 10 ? `<button class="btn soft gg-tumu" data-goto="alinacaklar" type="button">${kritik.length - 10} ürün daha — Alınacaklar</button>` : "") : "");
 }
 /* ============ DÜKKAN (hub) ============ */
 function renderDukkan() {
   const k = kasaHesap(todayStr(), todayStr()); // Anasayfa ve Günlük Rapor ile aynı hesap
   const gider = k.gider, gelir = k.gelir, nakitKasa = k.nakitKasa;
   const dusuk = store.products.filter((p) => { if (p.gorunur === false) return false; const stok = Number(p.stok) || 0; const min = (p.kritik !== "" && p.kritik != null) ? Number(p.kritik) || 0 : (Number(p.depoMin) || 0); return min > 0 ? stok <= min : stok <= 0; }).sort((a, b) => (Number(a.stok) || 0) - (Number(b.stok) || 0));
-  const stokRows = dusuk.slice(0, 10).map((p) => `<div class="dk-stok-row"><span class="dk-ad">${esc(p.ad)}</span><b class="${(Number(p.stok) || 0) <= 0 ? "sl-neg" : "stok-low"}">${num2.format(Number(p.stok) || 0)}</b></div>`).join("") || `<p class="hint" style="padding:6px">Azalan dükkan stoğu yok 👍</p>`;
+  const stokRows = dusuk.slice(0, 10).map((p) => `<div class="dk-stok-row"><span class="dk-ad">${esc(p.ad)}</span><b class="${(Number(p.stok) || 0) <= 0 ? "sl-neg" : "stok-low"}">${num2.format(Number(p.stok) || 0)}</b></div>`).join("") || `<p class="hint" style="padding:6px">Azalan dükkan stoğu yok </p>`;
   const talepler = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
-  const talepRows = talepler.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<div class="dk-not dk-talep"><div class="dk-not-txt"><span class="hint">${fmtDate(t.tarih)}${c ? " · " + esc(c.ad) : ""}</span> ${esc(t.metin)}</div><button class="edit" data-dtok="${t.id}" type="button" title="Karşılandı">✓</button></div>`; }).join("");
+  const talepRows = talepler.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<div class="dk-not dk-talep"><div class="dk-not-txt"><span class="hint">${fmtDate(t.tarih)}${c ? " · " + esc(c.ad) : ""}</span> ${esc(t.metin)}</div><button class="edit" data-dtok="${t.id}" type="button" title="Karşılandı">${ikon("tik")}</button></div>`; }).join("");
   const notlar = (store.dukkanNotlari || []).slice().reverse();
-  const notRows = notlar.map((n) => `<div class="dk-not"><div class="dk-not-txt"><span class="hint">${fmtDate(n.tarih)}</span> ${esc(n.metin)}</div><button class="rm" data-dnsil="${n.id}" type="button">✕</button></div>`).join("") || `<p class="hint" style="padding:6px">Not yok. Aşağıdan ekle.</p>`;
+  const notRows = notlar.map((n) => `<div class="dk-not"><div class="dk-not-txt"><span class="hint">${fmtDate(n.tarih)}</span> ${esc(n.metin)}</div><button class="rm" data-dnsil="${n.id}" type="button">${ikon("kapat")}</button></div>`).join("") || `<p class="hint" style="padding:6px">Not yok. Aşağıdan ekle.</p>`;
   return pageHead("Dükkan", null) +
-    `<div class="dk-aksiyon"><button class="btn green lg" data-act="dsatis" type="button">🛒 +Satış</button><button class="btn soft lg" data-goto="urunler" type="button">📦 Ürünler</button><button class="btn soft lg" data-goto="arac-yukleme" type="button">🚚 Araç Stoğu</button></div>
+    `<div class="dk-aksiyon"><button class="btn green lg" data-act="dsatis" type="button">${ikon("sepet")} +Satış</button><button class="btn soft lg" data-goto="urunler" type="button">${ikon("kutu")} Ürünler</button><button class="btn soft lg" data-goto="arac-yukleme" type="button">${ikon("kamyon")} Araç Stoğu</button></div>
      <div class="section-title">Dükkan Stoğu</div>
      <div class="card"><div class="dk-ozet"><span>${store.products.length} ürün</span><span class="${dusuk.length ? "sl-neg" : ""}">${dusuk.length} azalan/kritik</span><button class="link-btn" data-goto="urunler" type="button">Tüm ürünler →</button></div><div class="dk-stok-list">${stokRows}</div></div>
      <div class="section-title">Dükkan Evrakları</div>
-     <div class="card"><div class="dk-evrak"><button class="btn soft" data-goto="alis-faturalari" type="button">📄 Alış Faturaları</button><button class="btn soft" data-goto="alis-olustur" type="button">＋ Alış Oluştur</button><button class="btn soft" data-goto="efatura-giden" type="button">✉ E-Faturalar</button><button class="btn soft" data-goto="rapor-stokhareket" type="button">🔁 Stok Hareket</button><button class="btn soft" data-goto="stok-sayimi" type="button">🧊 Stok Sayımı</button></div></div>
+     <div class="card"><div class="dk-evrak"><button class="btn soft" data-goto="alis-faturalari" type="button">${ikon("fis")} Alış Faturaları</button><button class="btn soft" data-goto="alis-olustur" type="button">${ikon("arti")} Alış Oluştur</button><button class="btn soft" data-goto="efatura-giden" type="button">${ikon("mesaj")} E-Faturalar</button><button class="btn soft" data-goto="rapor-stokhareket" type="button">${ikon("yenile")} Stok Hareket</button><button class="btn soft" data-goto="stok-sayimi" type="button">${ikon("kutu")} Stok Sayımı</button></div></div>
      <div class="section-title">Gelir / Gider (Kasa)</div>
-     <div class="card"><div class="dk-kasa"><div class="dk-kbox green"><span>Nakit Kasa (bugün)</span><b>${money.format(nakitKasa)}</b></div><div class="dk-kbox"><span>Kart / Havale</span><b>${money.format(k.kartHavale)}</b></div><div class="dk-kbox"><span>Gelir</span><b>${money.format(gelir)}</b></div><div class="dk-kbox"><span>Gider</span><b>${money.format(gider)}</b></div></div><div class="dk-evrak" style="margin-top:8px"><button class="btn soft" data-goto="gelirler" type="button">＋ Gelirler</button><button class="btn soft" data-goto="giderler" type="button">＋ Giderler</button></div></div>
+     <div class="card"><div class="dk-kasa"><div class="dk-kbox green"><span>Nakit Kasa (bugün)</span><b>${money.format(nakitKasa)}</b></div><div class="dk-kbox"><span>Kart / Havale</span><b>${money.format(k.kartHavale)}</b></div><div class="dk-kbox"><span>Gelir</span><b>${money.format(gelir)}</b></div><div class="dk-kbox"><span>Gider</span><b>${money.format(gider)}</b></div></div><div class="dk-evrak" style="margin-top:8px"><button class="btn soft" data-goto="gelirler" type="button">${ikon("arti")} Gelirler</button><button class="btn soft" data-goto="giderler" type="button">${ikon("arti")} Giderler</button></div></div>
      <div class="section-title">Sipariş / İstek Notları</div>
      <div class="card">
-       <div class="dk-ozet"><span>🚚 Rotadan gelen istek/talepler (${talepler.length})</span><button class="link-btn" data-goto="talepler" type="button">Tümü →</button></div>
+       <div class="dk-ozet"><span>${ikon("kamyon")} Rotadan gelen istek/talepler (${talepler.length})</span><button class="link-btn" data-goto="talepler" type="button">Tümü →</button></div>
        ${talepler.length ? `<div class="dk-not-list">${talepRows}</div>` : `<p class="hint" style="padding:6px">Açık istek/talep yok.</p>`}
        <div class="dk-not-alt">Serbest dükkan notu</div>
        <div class="zk-hizli-row" style="margin:4px 0 0"><input id="dkNotIn" placeholder="Dükkan sipariş/karar notu ekle..." /><button class="btn green" id="dkNotEkle" type="button">Ekle</button></div>
@@ -2312,21 +2355,12 @@ function sonSatisListesi(son) {
   const rows = son.map((s) => {
     const c = s.musteriId && findCustomer(s.musteriId);
     const ad = c ? esc(c.ad) : "Müşterisiz satış";
-    const odenen = (s.odeme.nakit || 0) + (s.odeme.pos || 0);
-    const kalan = c ? `<span class="sl-metric"><span class="sl-k">Kalan</span><b class="${s.odeme.acik ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</b></span>` : "";
-    return `<li class="sl-row">
-      <div class="sl-main">
-        <span class="sl-ad">${ad}</span>
-        <span class="sl-nums">
-          <span class="sl-metric"><span class="sl-k">Tutar</span><b>${money.format(s.toplam)}</b></span>
-          <span class="sl-metric"><span class="sl-k">Ödenen</span><b>${money.format(odenen)}</b></span>
-          ${kalan}
-        </span>
-      </div>
-      <button class="sl-eye" type="button" data-saleview="${s.id}" aria-label="İrsaliye detayı">👁</button>
-    </li>`;
+    const d = new Date(s.tarih), saat = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    const kalan = Number(s.odeme.acik) || 0;
+    const alt = esc(saleOdeme(s)) + " · " + saat + (kalan > 0.005 ? ` · <b class="gg-borc">${money.format(kalan)} borca yazıldı</b>` : "");
+    return `<li><button class="gg-satir" type="button" data-saleview="${s.id}" aria-label="${ad} satışının ayrıntısı"><span class="gg-sol"><span class="gg-ad">${ad}</span><span class="gg-alt">${alt}</span></span><span class="gg-sag">${money.format(s.toplam)}</span>${ikon("sag", 20)}</button></li>`;
   }).join("");
-  return `<ul class="sl-list">${rows}</ul>`;
+  return `<ul class="gg-liste">${rows}</ul>`;
 }
 /* İrsaliye içeriği modalı — Düzenle → openSale */
 function openSaleView(id) {
@@ -2340,12 +2374,14 @@ function openSaleView(id) {
     <div class="sv-wrap"><table class="sv-items"><thead><tr><th>Ürün</th><th class="r">Adet</th><th class="r">B.Fiyat</th><th class="r">Tutar</th></tr></thead><tbody>${items}</tbody></table></div>
     <div class="sv-tot"><div><span>Toplam</span><b>${money.format(s.toplam)}</b></div><div><span>Ödenen</span><b>${money.format(odenen)}</b></div>${c ? `<div><span>Kalan</span><b class="${s.odeme.acik ? "sl-neg" : ""}">${money.format(s.odeme.acik || 0)}</b></div>` : ""}</div>
   </div>`;
-  openModal("İrsaliye " + esc(s.belgeNo), body, { okLabel: "✏️ Düzenle", onOk: () => { openSale(s.id); } });
+  openModal("İrsaliye " + esc(s.belgeNo), body, { okLabel: `${ikon("kalem")} Düzenle`, onOk: () => { openSale(s.id); } });
 }
 function mountAnasayfa() {
   wireSaleLinks();
   vadeKartWire();
+  ggOzetWire();
   document.querySelectorAll("[data-saleview]").forEach((b) => b.addEventListener("click", () => openSaleView(b.dataset.saleview)));
+  document.querySelectorAll("[data-ggurun]").forEach((b) => b.addEventListener("click", () => openProductEdit(b.dataset.ggurun)));
 }
 
 /* ============ RAPORLAR ============ */
@@ -2355,10 +2391,11 @@ function reportDateBar(route, def) {
   return `<div class="card"><div class="filters rapor-filtre">
     <div class="field"><label>Başlangıç Tarihi</label><input type="date" id="rFrom" value="${f.from}" /></div>
     <div class="field"><label>Bitiş Tarihi</label><input type="date" id="rTo" value="${f.to}" /></div>
-    <div class="field field-listele"><button class="btn" id="rListe" type="button">☰ Listele</button></div>
+    <div class="field field-listele"><button class="btn" id="rListe" type="button">${ikon("liste")} Listele</button></div>
   </div></div>`;
 }
 function mountReport(route) {
+  ggOzetWire();
   const b = document.getElementById("rListe");
   if (b) b.addEventListener("click", () => { reportFilters[route] = { from: document.getElementById("rFrom").value, to: document.getElementById("rTo").value }; render(); });
   wireTableSearch();
@@ -2401,25 +2438,26 @@ function renderRaporGunluk() {
   // tutarını aşan nakit eskiden satışa yazılıyordu) — sessizce basmak yerine söyle.
   const odemeFarki = kurus(nakit + pos_ + acik - ciro);
   const odemeUyari = Math.abs(odemeFarki) > 0.01
-    ? `<div class="rapor-uyari">⚠ Ödeme kırılımı ciroyu tutmuyor — fark <b>${money.format(odemeFarki)}</b>. Nakit + Pos + Açık Hesap toplamı Ciro'ya eşit olmalı.</div>`
+    ? `<div class="rapor-uyari">${ikon("dikkat")} Ödeme kırılımı ciroyu tutmuyor — fark <b>${money.format(odemeFarki)}</b>. Nakit + Pos + Açık Hesap toplamı Ciro'ya eşit olmalı.</div>`
     : "";
-  return pageHead("Günlük Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "⇩ Satış Listesi (Excel)", cls: "softgreen", act: "gunlukCsv" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
-    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) + odemeUyari +
-    `<div class="summary-grid rapor-metrik-grid">${[
-      ["Nakit", money.format(nakit), "green"], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)], ["Toplam", money.format(ciro), "blue"],
+  // Özet (genel): ana ekranla aynı düzen — üç büyük rakam, gerisi "Ayrıntı"da. Satış listesi aşağıda (liste bölümü).
+  const ozet = ggOzetHTML("gunluk",
+    [["Kasadaki nakit", money.format(k.nakitKasa)], ["Ciro", money.format(ciro), sales.length + " satış"], ["Net kâr", money.format(k.netKar), "Gider" + (k.komisyon ? " ve kart komisyonu" : "") + " düşülmüş"]],
+    [["Nakit", money.format(nakit)], ["Pos", money.format(pos_)], ["Açık Hesap", money.format(acik)],
       ["Alınan Ödemeler", money.format(k.tahsilat)], ["Firma Ödemeleri", money.format(k.firmaOde)], ["Giderler", money.format(k.gider)], ["Gelirler", money.format(k.gelir)]]
       .concat(k.alimNakit || k.alimDiger ? [["Peşin Mal Alımı", money.format(kurus(k.alimNakit + k.alimDiger))]] : [])
       .concat(k.iade || k.duzeltme ? [["İade / Düzeltme (kasaya girmez)", money.format(kurus(k.iade + k.duzeltme))]] : [])
-      .concat([["Nakit Kasa Raporu", money.format(k.nakitKasa), "green"], ["Kart / Havale ile Gelen", money.format(k.kartHavale)], ["Kâr", money.format(k.urunKar), "green"], ["Kâr Oranı", karOrani(ciro, mal), "green"]])
+      .concat([["Kart / Havale ile Gelen", money.format(k.kartHavale)], ["Kâr", money.format(k.urunKar)], ["Kâr Oranı", karOrani(ciro, mal)]])
       .concat(k.komisyon ? [["Kart (POS) Komisyonu", money.format(k.komisyon)]] : [])
-      .concat([["Net Kâr (gider sonrası)", money.format(k.netKar), "green"], ["Ciro", money.format(ciro), "blue"], ["Ürün Maliyeti", money.format(mal)]])
-      .map((s) => stat(s[0], s[1], s[2])).join("")}</div>
-    <p class="hint pl-kasa-not">Nakit kasa = nakit satış + nakit alınan ödeme + nakit gelir − nakit gider − firmaya nakit ödeme − peşin nakit mal alımı. Kartla ya da havaleyle gelen para, iadeler ve hesap düzeltmeleri kasaya sayılmaz.${k.giderEksik ? " <b>Bu tarihte satış var ama hiç gider yazılmamış.</b>" : ""}</p>`;
+      .concat([["Ürün Maliyeti", money.format(mal)]]));
+  return pageHead("Günlük Rapor", null, [{ label: ikon("ev") + " Bugünün Özeti", cls: "soft", act: "bugunozet" }, { label: ikon("indir") + " Satış Listesi (Excel)", cls: "soft", act: "gunlukCsv" }, { label: ikon("yazici") + " Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) + ozet +
+    `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales) + odemeUyari +
+    `<p class="hint pl-kasa-not">Nakit kasa = nakit satış + nakit alınan ödeme + nakit gelir − nakit gider − firmaya nakit ödeme − peşin nakit mal alımı. Kartla ya da havaleyle gelen para, iadeler ve hesap düzeltmeleri kasaya sayılmaz.${k.giderEksik ? " <b>Bu tarihte satış var ama hiç gider yazılmamış.</b>" : ""}</p>`;
 }
 function renderRaporTarihsel() {
   const route = "rapor-tarihsel", def = { from: monthStartStr(), to: todayStr() };
   const sales = salesInRange(route, def);
-  return pageHead("Tarihsel Rapor", null, [{ label: "📅 Bugün Özeti", cls: "soft", act: "bugunozet" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
+  return pageHead("Tarihsel Rapor", null, [{ label: `${ikon("takvim")} Bugün Özeti`, cls: "soft", act: "bugunozet" }, { label: `${ikon("yazici")} Yazdır`, cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     `<h2 class="rapor-satis-bas">Satışlar (${sales.length})</h2>` + raporSatisTablo(sales);
 }
 let sonUrunselRapor = null; // ekranda duran ürünsel rapor — "Excel'e Aktar" bunu dışa yazar
@@ -2431,7 +2469,7 @@ function renderRaporUrunsel() {
   const list = Object.values(agg).sort((a, b) => b.tutar - a.tutar);
   sonUrunselRapor = { list, from: f.from, to: f.to };
   const rows = list.map((a) => { const kar = a.tutar - a.mal; return `<tr><td>${esc(a.barkod) || "-"}</td><td>${esc(a.ad)}</td><td>${num2.format(a.adet)}</td><td>${num2.format(a.stok)}</td><td>${money.format(a.alis)}</td><td>${money.format(a.adet ? a.tutar / a.adet : 0)}</td><td>${money.format(a.adet ? kar / a.adet : 0)}</td><td>${money.format(a.tutar)}</td><td class="${kar < 0 ? "borc-red" : ""}">${money.format(kar)}</td></tr>`; }).join("");
-  return pageHead("Ürünsel Rapor", null, [{ label: "⇩ Excel'e Aktar", cls: "softgreen", act: "urunselCsv" }, { label: "🖨 Yazdır", cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
+  return pageHead("Ürünsel Rapor", null, [{ label: `${ikon("indir")} Excel'e Aktar`, cls: "softgreen", act: "urunselCsv" }, { label: `${ikon("yazici")} Yazdır`, cls: "soft", act: "rprint" }]) + reportDateBar(route, def) +
     tableCard(["Ürün Barkodu", "Ürün Adı", "Satış Miktarı", "Kalan Stok", "Ort. Birim Alış", "Ort. Birim Fiyatı", "Ort. Birim Kâr", "Toplam Tutar", "Kâr/Zarar"], rows, infoLine(list.length));
 }
 /* Ürünsel raporu CSV olarak dışa aktar. Türkçe Excel için ondalık virgüllü (csvBuild zaten ; ile ayırıyor). */
@@ -2475,7 +2513,7 @@ function renderRaporStokHareket() {
   store.stokHareket.forEach((m) => { if (inRange(m.tarih, f.from, f.to)) mov.push({ ad: m.ad, tur: m.tur || "Düzeltme", miktar: m.miktar, tarih: m.tarih }); });
   mov.sort((a, b) => b.tarih.localeCompare(a.tarih));
   const rows = mov.map((m) => `<tr><td>${esc(m.ad)}</td><td>${esc(m.tur)}</td><td class="${m.miktar < 0 ? "borc-red" : ""}">${num2.format(m.miktar)}</td><td>${fmtDate(m.tarih)}</td></tr>`).join("");
-  return pageHead("Stok Hareket Rapor", null, [{ label: "＋ Stok Düzeltme", act: "stokduz" }]) + reportDateBar(route, def) + tableCard(["Ürün", "Tür", "Miktar", "Tarih"], rows, infoLine(mov.length));
+  return pageHead("Stok Hareket Rapor", null, [{ label: `${ikon("arti")} Stok Düzeltme`, act: "stokduz" }]) + reportDateBar(route, def) + tableCard(["Ürün", "Tür", "Miktar", "Tarih"], rows, infoLine(mov.length));
 }
 function mountRaporStokHareket() {
   mountReport("rapor-stokhareket");
@@ -2661,16 +2699,16 @@ function satisMusteriDurumHTML(id, sepetTutar) {
   if (d.limit) h += " · Limit: " + money.format(d.limit) + (d.kalan >= 0 ? " · Kalan: <b>" + money.format(d.kalan) + "</b>" : "");
   else h += " · Limit yok";
   const u = [];
-  if (d.limit && d.kalan < -0.005) u.push("⛔ Limit " + money.format(-d.kalan) + " aşılmış");
-  else if (d.limit && Number(sepetTutar) > 0 && d.borc + Number(sepetTutar) > d.limit + 0.005) u.push("⚠ Bu sepet borca yazılırsa limit " + money.format(kurus(d.borc + Number(sepetTutar) - d.limit)) + " aşılır");
-  if (y && y.gecikmis) u.push("⏰ " + money.format(y.gecikmisTutar) + " borcu " + y.gecikmeGun + " gündür gecikmiş");
+  if (d.limit && d.kalan < -0.005) u.push(ikon("dikkat", 18) + " Limit " + money.format(-d.kalan) + " aşılmış");
+  else if (d.limit && Number(sepetTutar) > 0 && d.borc + Number(sepetTutar) > d.limit + 0.005) u.push(ikon("dikkat", 18) + " Bu sepet borca yazılırsa limit " + money.format(kurus(d.borc + Number(sepetTutar) - d.limit)) + " aşılır");
+  if (y && y.gecikmis) u.push(ikon("saat", 18) + " " + money.format(y.gecikmisTutar) + " borcu " + y.gecikmeGun + " gündür gecikmiş");
   return h + u.map((x) => `<em class="pl-uyari">${esc(x)}</em>`).join("");
 }
 /* Listelerde ad/borç yanına konan küçük işaretler. */
 function musteriRozetHTML(id) {
   const d = limitDurum(id, 0), y = borcYas(id); let h = "";
-  if (d.asim) h += ` <span class="pl-rozet kirmizi">⛔ limit aşıldı</span>`;
-  if (y && y.gecikmis) h += ` <span class="pl-rozet turuncu">⏰ ${y.gecikmeGun} gün gecikmiş</span>`;
+  if (d.asim) h += ` <span class="pl-rozet kirmizi">${ikon("dikkat")} limit aşıldı</span>`;
+  if (y && y.gecikmis) h += ` <span class="pl-rozet turuncu">${ikon("saat")} ${y.gecikmeGun} gün gecikmiş</span>`;
   return h;
 }
 function vadeListesi() {
@@ -2683,14 +2721,14 @@ function vadeSatirHTML(x) {
   if (x.y.gecikmis) alt.push(`<b>${money.format(x.y.gecikmisTutar)}</b> · ${x.y.gecikmeGun} gün gecikmiş`);
   if (x.l.asim) alt.push(`limit ${money.format(x.l.asim)} aşıldı`);
   return `<div class="pv-satir"><div class="pv-mid"><button class="link-btn pv-ad" data-detay="${x.c.id}" type="button">${esc(x.c.ad)}</button><span class="pv-alt">${alt.join(" · ")} · toplam borç ${money.format(x.y.borc)}</span></div>
-    <div class="pv-btns"><button class="btn soft pv-btn" data-hatirlat="${x.c.id}" type="button">📲 Hatırlat</button><button class="btn green pv-btn" data-odeme="${x.c.id}" type="button">Ödeme Al</button></div></div>`;
+    <div class="pv-btns"><button class="btn soft pv-btn" data-hatirlat="${x.c.id}" type="button">${ikon("paylas")} Hatırlat</button><button class="btn green pv-btn" data-odeme="${x.c.id}" type="button">Ödeme Al</button></div></div>`;
 }
 /* Anasayfa kartı: vadesi geçenler + limiti aşanlar. */
 function vadeKartHTML() {
   const list = vadeListesi(), gec = list.filter((x) => x.y.gecikmis);
   const top = kurus(gec.reduce((a, x) => a + x.y.gecikmisTutar, 0));
   const alt = `<p class="hint pv-ayar">Vadesi yazılmamış müşteride ${genelVade()} gün sayılır. <button class="link-btn" data-act="genelvade" type="button">Değiştir</button></p>`;
-  if (!list.length) return `<div class="card pv-kart"><div class="pv-bas"><b>Vadesi geçen borç yok</b> <span class="pv-ok">✓</span></div>${alt}</div>`;
+  if (!list.length) return `<div class="card pv-kart"><div class="pv-bas"><b>Vadesi geçen borç yok</b> <span class="pv-ok">${ikon("tik")}</span></div>${alt}</div>`;
   const ilk = list.slice(0, 5), kalan = list.slice(5);
   return `<div class="card pv-kart"><div class="pv-bas"><b>Vadesi geçenler (${gec.length})</b><span class="pv-top">${money.format(top)}</span></div>
     ${ilk.map(vadeSatirHTML).join("")}
@@ -2717,15 +2755,15 @@ function musteriDurumKartHTML(id) {
   h += satir("Vade", y.vade + " gün" + (y.vadeOzel ? "" : " (genel)"));
   if (y.enEski) h += satir("En eski ödenmemiş borç", fmtDateShort(y.enEski.t) + " · " + y.enEski.gun + " gün önce" + (y.enEski.acilis ? " (açılış borcu)" : ""));
   h += satir("Durum", y.gecikmis ? money.format(y.gecikmisTutar) + " borcu " + y.gecikmeGun + " gündür gecikmiş" : (d.borc > 0.5 ? "Vadesi geçen borç yok" : "Borcu yok"), y.gecikmis ? "borc-red" : "");
-  return `<div class="card pd-kart">${h}${d.borc > 0.5 ? `<button class="btn soft pd-btn" data-hatirlat="${id}" type="button">📲 Nazik Hatırlatma Gönder (WhatsApp)</button>` : ""}</div>`;
+  return `<div class="card pd-kart">${h}${d.borc > 0.5 ? `<button class="btn soft pd-btn" data-hatirlat="${id}" type="button">${ikon("paylas")} Nazik Hatırlatma Gönder (WhatsApp)</button>` : ""}</div>`;
 }
 /* ---- Nazik hatırlatma: hazır metin + WhatsApp'ı açar. Kendiliğinden hiçbir şey göndermez. ---- */
 function waNo(c) { let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d; return d; }
 function hatirlatmaMetni(id) {
   const c = findCustomer(id); if (!c) return "";
   const y = borcYas(id), st = store.settings || {}, firma = st.fisBaslik || st.firmaAdi || "Özgür Ticaret";
-  return "Merhaba " + c.ad + ",\n" + firma + " olarak küçük bir hatırlatma yapmak istedik. Hesabınızda " + money.format(y.borc) + " bakiye görünüyor" +
-    (y.gecikmis ? "; bunun " + money.format(y.gecikmisTutar) + " kadarı " + y.gecikmeGun + " gündür bekliyor" : "") +
+  return "Merhaba " + c.ad + ",\n" + firma + " olarak küçük bir hatırlatma yapmak istedik. Hesabınızda " + paraBelge.format(y.borc) + " bakiye görünüyor" +
+    (y.gecikmis ? "; bunun " + paraBelge.format(y.gecikmisTutar) + " kadarı " + y.gecikmeGun + " gündür bekliyor" : "") +
     ".\nMüsait olduğunuzda ödeme için haber verirseniz çok seviniriz. Bir yanlışlık varsa lütfen söyleyin, hemen düzeltelim.\nTeşekkür eder, hayırlı işler dileriz.";
 }
 function hatirlatmaAc(id) {
@@ -2734,14 +2772,14 @@ function hatirlatmaAc(id) {
   openModal("Hatırlatma — " + esc(c.ad), `<p class="hint">Mesajı istersen değiştir. Düğmeye basınca WhatsApp açılır; <b>göndermek için orada sen basarsın</b>.</p>
     <textarea id="htMetin" class="pl-metin" rows="9">${esc(hatirlatmaMetni(id))}</textarea>
     ${d ? "" : `<p class="hint">Bu müşteride telefon yok — WhatsApp'ta kişiyi kendin seçersin.</p>`}
-    <button class="btn green lg pl-tam" id="htGonder" type="button">📲 WhatsApp'ta Aç</button>`, {
+    <button class="btn green lg pl-tam" id="htGonder" type="button">${ikon("paylas")} WhatsApp'ta Aç</button>`, {
     noFoot: true,
     onMount: (ov) => { ov.querySelector("#htGonder").onclick = () => { window.open((d ? "https://wa.me/" + d : "https://wa.me/") + "?text=" + encodeURIComponent(ov.querySelector("#htMetin").value), "_blank"); }; },
   });
 }
 /* ---- Tahsilat türü seçici (Ödeme Al) ---- */
 function turSeciciHTML(secili) {
-  return `<div class="pt-sec" id="pTur" data-tur="${secili || "nakit"}">${[["nakit", "💵 Nakit"], ["kart", "💳 Kart"], ["havale", "🏦 Havale"]].map((t) => `<button class="pt-btn ${t[0] === (secili || "nakit") ? "on" : ""}" data-ptur="${t[0]}" type="button">${t[1]}</button>`).join("")}</div>`;
+  return `<div class="pt-sec" id="pTur" data-tur="${secili || "nakit"}">${[["nakit", ikon("para") + " Nakit"], ["kart", ikon("kart") + " Kart"], ["havale", ikon("banka") + " Havale"]].map((t) => `<button class="pt-btn ${t[0] === (secili || "nakit") ? "on" : ""}" data-ptur="${t[0]}" type="button">${t[1]}</button>`).join("")}</div>`;
 }
 function turSeciciWire(ov) {
   const kutu = ov.querySelector("#pTur"); if (!kutu) return;
@@ -2759,8 +2797,8 @@ function musteriUrunFiyat(musteriId, urunId) {
 }
 
 /* ---- GİDERLER: tek dokunuşla tür seç, tutarı yaz ---- */
-const GIDER_HIZLI = [["Yakıt", "⛽"], ["Yemek", "🍽"], ["Araç Bakım", "🔧"], ["Otopark / Köprü", "🅿"], ["Telefon", "📱"], ["Diğer", "➕"]];
-function giderHizliHTML() { return `<div class="pg-hizli">${GIDER_HIZLI.map((g) => `<button class="pg-chip" data-gkat="${esc(g[0])}" type="button"><span>${g[1]}</span>${esc(g[0])}</button>`).join("")}</div>`; }
+const GIDER_HIZLI = [["Yakıt", "araba"], ["Yemek", "bardak"], ["Araç Bakım", "ayar"], ["Otopark / Köprü", "konum"], ["Telefon", "telefon"], ["Diğer", "arti"]];   // [ad, ikon() adı]
+function giderHizliHTML() { return `<div class="pg-hizli">${GIDER_HIZLI.map((g) => `<button class="pg-chip" data-gkat="${esc(g[0])}" type="button"><span>${ikon(g[1], 22)}</span>${esc(g[0])}</button>`).join("")}</div>`; }
 function giderEkleModal(kategori, sonra) {
   const diger = kategori === "Diğer";
   const m = openModal("Gider — " + esc(kategori), `
@@ -2796,8 +2834,8 @@ function ayOzet(ym) {
 function renderGiderler() {
   const ym = todayStr().slice(0, 7), a = ayOzet(ym), bugun = kasaHesap(todayStr(), todayStr());
   const liste = store.expenses.slice().sort((x, y) => String(y.tarih).localeCompare(String(x.tarih)));
-  const rows = liste.slice(0, 200).map((e) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(giderKategori(e))}</b><span class="pg-alt">${e.tarih && !isNaN(new Date(e.tarih)) ? fmtDateShort(e.tarih) : "tarihsiz"}${e.not ? " · " + esc(e.not) : ""}${kayitNakitMi(e) ? "" : " · " + esc(e.odeme || e.odemeTuru)}</span></div><b class="pg-tut">${money.format(Number(e.tutar) || 0)}</b><button class="pg-sil" data-gsil="${e.id}" type="button" aria-label="Sil">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Henüz gider yazılmamış.</p>`;
-  const sabit = sabitGiderler().map((g) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(g.ad)}</b><span class="pg-alt">her ay${g.baslangic ? " · " + esc(g.baslangic) + "'den beri" : ""}</span></div><b class="pg-tut">${money.format(Number(g.tutar) || 0)}</b><button class="pg-sil" data-sgsil="${g.id}" type="button" aria-label="Sil">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Her ay aynı gelen gider (telefon, sigorta, kira…) varsa buraya bir kez yaz; her ayın net kârından kendiliğinden düşülür.</p>`;
+  const rows = liste.slice(0, 200).map((e) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(giderKategori(e))}</b><span class="pg-alt">${e.tarih && !isNaN(new Date(e.tarih)) ? fmtDateShort(e.tarih) : "tarihsiz"}${e.not ? " · " + esc(e.not) : ""}${kayitNakitMi(e) ? "" : " · " + esc(e.odeme || e.odemeTuru)}</span></div><b class="pg-tut">${money.format(Number(e.tutar) || 0)}</b><button class="pg-sil" data-gsil="${e.id}" type="button" aria-label="Sil">${ikon("kapat")}</button></div>`).join("") || `<p class="hint" style="padding:8px">Henüz gider yazılmamış.</p>`;
+  const sabit = sabitGiderler().map((g) => `<div class="pg-satir"><div class="pg-mid"><b>${esc(g.ad)}</b><span class="pg-alt">her ay${g.baslangic ? " · " + esc(g.baslangic) + "'den beri" : ""}</span></div><b class="pg-tut">${money.format(Number(g.tutar) || 0)}</b><button class="pg-sil" data-sgsil="${g.id}" type="button" aria-label="Sil">${ikon("kapat")}</button></div>`).join("") || `<p class="hint" style="padding:8px">Her ay aynı gelen gider (telefon, sigorta, kira…) varsa buraya bir kez yaz; her ayın net kârından kendiliğinden düşülür.</p>`;
   const oz = (k, v, cls) => `<div class="pd-satir"><span>${k}</span><b class="${cls || ""}">${v}</b></div>`;
   return pageHead("Giderler", "Bugün " + money.format(bugun.giderIsletme) + " · bu ay " + money.format(a.giderIsletme)) +
     `<div class="card"><div class="pg-bas">Gider ekle — türüne dokun</div>${giderHizliHTML()}</div>
@@ -2812,7 +2850,7 @@ function renderGiderler() {
        ${a.giderMal ? `<p class="hint">Araca alınan mal (${money.format(a.giderMal)}) gider sayılmadı: o malın parası satılınca kârdan zaten düşüyor.</p>` : ""}
      </div>
      <div class="section-title">Aylık sabit giderler</div>
-     <div class="card">${sabit}<button class="btn soft pl-tam" data-act="sabitekle" type="button">＋ Sabit gider ekle</button></div>
+     <div class="card">${sabit}<button class="btn soft pl-tam" data-act="sabitekle" type="button">${ikon("arti")} Sabit gider ekle</button></div>
      <div class="section-title">Yazılan giderler (${liste.length})</div>
      <div class="card">${rows}</div>`;
 }
@@ -2855,7 +2893,7 @@ function giderHatirlatModal(devam) {
 function renderFirmalar() {
   const toplam = store.firmalar.reduce((s, f) => s + firmaBorc(f.id), 0);
   const rows = store.firmalar.map((f, i) => { const borc = firmaBorc(f.id); const alis = store.purchases.filter((p) => p.firmaId === f.id).reduce((s, p) => s + p.toplam, 0); const ode = store.firmaPayments.filter((p) => p.firmaId === f.id).reduce((s, p) => s + p.tutar, 0); return `<tr><td>${i + 1}</td><td>${esc(f.ad)}</td><td>${money.format(alis)}</td><td>${money.format(ode)}</td><td class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</td><td><div class="act-btns"><button class="edit" data-fode="${f.id}">Ödeme Yap</button><button class="del" data-delf="${f.id}">Sil</button></div></td></tr>`; }).join("");
-  return pageHead("Firmalar", "Tüm firmalara kalan borcunuz: " + money.format(toplam), [{ label: "＋ Yeni Firma Oluştur", act: "yenifirma" }]) +
+  return pageHead("Firmalar", "Tüm firmalara kalan borcunuz: " + money.format(toplam), [{ label: `${ikon("arti")} Yeni Firma Oluştur`, act: "yenifirma" }]) +
     tableCard(["Sıra", "Firma Adı", "Toplam Alış", "Toplam Ödeme", "Kalan Borç", "İşlem"], rows, infoLine(store.firmalar.length));
 }
 function mountFirmalar() {
@@ -2870,7 +2908,7 @@ function alisOdemeAd(p) { return p.odeme === "veresiye" ? "Veresiye" : "Peşin" 
 function renderAlisFaturalari() {
   const liste = store.purchases.slice().sort((a, b) => String(b.tarih).localeCompare(String(a.tarih)));
   const rows = liste.map((p, i) => { const f = p.firmaId && findFirma(p.firmaId); return `<tr><td>${i + 1}</td><td>${esc(p.no || "-")}</td><td>${fmtDateShort(p.tarih)}</td><td>${f ? esc(f.ad) : "-"}</td><td>${stkHavuzAd(p.hedef)}</td><td>${alisOdemeAd(p)}</td><td>${num2.format((p.items || []).reduce((a, it) => a + (Number(it.adet) || 0), 0))}</td><td>${money.format(Number(p.toplam) || 0)}</td><td><button class="btn softred" data-delp="${p.id}">Sil</button></td></tr>`; }).join("");
-  return pageHead("Alış Faturaları", store.purchases.length + " fatura", [{ label: "＋ Yeni oluştur", route: "alis-olustur" }]) +
+  return pageHead("Alış Faturaları", store.purchases.length + " fatura", [{ label: `${ikon("arti")} Yeni oluştur`, route: "alis-olustur" }]) +
     tableCard(["Sıra", "Fatura No", "Fatura Tarihi", "Firma", "Mal Nereye Girdi", "Ödeme", "Toplam Ürün", "Toplam Tutar", "İşlem"], rows, infoLine(store.purchases.length));
 }
 function mountAlisFaturalari() {
@@ -2884,10 +2922,10 @@ let alisRows = [];
 function alisBosSatir() { return { urunId: "", ad: "", adet: 1, birimFiyat: 0 }; }
 function renderAlisOlustur() {
   alisRows = [alisBosSatir()];
-  const firmaOpts = `<option value="">Firmasız</option>` + store.firmalar.map((f) => `<option value="${f.id}">${esc(f.ad)}</option>`).join("") + `<option value="__yeni">＋ Yeni firma…</option>`;
+  const firmaOpts = `<option value="">Firmasız</option>` + store.firmalar.map((f) => `<option value="${f.id}">${esc(f.ad)}</option>`).join("") + `<option value="__yeni">Yeni firma…</option>`;
   return pageHead("Alış Faturası Oluştur", null, [{ label: "Faturalar", cls: "soft", route: "alis-faturalari" }]) +
     `<div class="card stk-form">
-      <div class="field"><label>Mal nereye girdi?</label>${stkSecim("aHedef", [["dukkan", "🏪 Dükkana"], ["arac", "🚚 Araca"]], stokModu === "arac" ? "arac" : "dukkan")}</div>
+      <div class="field"><label>Mal nereye girdi?</label>${stkSecim("aHedef", [["dukkan", ikon("dukkan") + " Dükkana"], ["arac", ikon("kamyon") + " Araca"]], stokModu === "arac" ? "arac" : "dukkan")}</div>
       <div class="field"><label>Firma</label><select id="aFirma">${firmaOpts}</select><input id="aFirmaYeni" placeholder="Yeni firmanın adı" style="display:none;margin-top:6px" /></div>
       <div class="stk-iki"><div class="field"><label>Fatura No</label><input id="aNo" placeholder="isteğe bağlı" /></div><div class="field"><label>Fatura Tarihi</label><input id="aTarih" type="date" value="${todayStr()}" /></div></div>
       <div class="field"><label>Ödeme</label>${stkSecim("aOdeme", [["pesin", "Peşin ödedim"], ["veresiye", "Veresiye (borç)"]], "pesin")}</div>
@@ -2896,18 +2934,18 @@ function renderAlisOlustur() {
     <div class="card stk-form">
       <div class="section-title" style="margin-top:0">Alınan ürünler</div>
       <div id="aBody"></div>
-      <button class="btn soft" id="aAddRow" type="button" style="width:100%;justify-content:center">＋ Ürün ekle</button>
+      <button class="btn soft" id="aAddRow" type="button" style="width:100%;justify-content:center">${ikon("arti")} Ürün ekle</button>
       <p class="hint">Listeden ürün seçersen o ürünün stoğu artar ve alış fiyatı güncellenir. "Listede yok" seçersen faturaya yazılır ama stok tutulmaz.</p>
       <div class="field"><label>Faturada yazan toplam (boş bırakırsan satırların toplamı)</label><input id="aFisToplam" type="number" inputmode="decimal" step="0.01" placeholder="örn. 20567,50" /></div>
       <div class="stk-toplam"><span>Genel Toplam</span><b id="aTotal">₺0,00</b></div>
       <p class="hint" id="aFark" style="display:none"></p>
-      <button class="btn green lg" id="aSave" type="button" style="width:100%;justify-content:center;margin-top:10px">💾 Alış Faturasını Kaydet</button>
+      <button class="btn green lg" id="aSave" type="button" style="width:100%;justify-content:center;margin-top:10px">${ikon("tik")} Alış Faturasını Kaydet</button>
     </div>`;
 }
 function alisRowHTML(r, i) {
   const opts = `<option value="">— listede yok (yeni ürün) —</option>` + store.products.map((p) => `<option value="${p.id}" ${r.urunId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("");
   return `<div class="stk-alis-satir">
-    <div class="stk-yan"><select data-ar="${i}" data-fld="urunId">${opts}</select><button class="rm" data-armv="${i}" type="button" aria-label="Satırı sil">✕</button></div>
+    <div class="stk-yan"><select data-ar="${i}" data-fld="urunId">${opts}</select><button class="rm" data-armv="${i}" type="button" aria-label="Satırı sil">${ikon("kapat")}</button></div>
     ${r.urunId ? "" : `<input data-ar="${i}" data-fld="ad" placeholder="Ürün adı" value="${esc(r.ad)}" />`}
     <div class="stk-uc"><label>Miktar<input data-ar="${i}" data-fld="adet" type="number" inputmode="decimal" step="0.01" value="${r.adet}" /></label><label>Birim fiyat (₺)<input data-ar="${i}" data-fld="birimFiyat" type="number" inputmode="decimal" step="0.01" value="${r.birimFiyat}" /></label><span class="stk-tutar" data-artut="${i}">${money.format((Number(r.adet) || 0) * (Number(r.birimFiyat) || 0))}</span></div>
   </div>`;
@@ -3016,11 +3054,11 @@ function mountAlisOlustur() {
 /* ============ STOK SAYIMI ============ */
 function sayimHavuz(s) { return s && s.havuz === "arac" ? "arac" : "dukkan"; }   // eski sayımlarda alan yok → dükkan
 function renderStokSayimi() {
-  const rows = store.stokSayimlari.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.kod)}</td><td>${esc(s.ad || "-")}</td><td>${stkHavuzAd(sayimHavuz(s))}</td><td>${s.durum === "acik" ? '<span class="badge">Açık</span>' : '<span style="color:var(--green-d)">✔ Tamamlandı</span>'}</td><td>${fmtDateShort(s.tarih)}</td><td>${s.items ? s.items.filter((it) => it.sayilan !== "" && it.sayilan != null).length : 0}</td><td><div class="act-btns"><button class="edit" data-sayim="${s.id}">${s.durum === "acik" ? "Devam Et" : "Görüntüle"}</button><button class="del" data-delsayim="${s.id}">Sil</button></div></td></tr>`).join("");
+  const rows = store.stokSayimlari.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.kod)}</td><td>${esc(s.ad || "-")}</td><td>${stkHavuzAd(sayimHavuz(s))}</td><td>${s.durum === "acik" ? '<span class="badge">Açık</span>' : '<span style="color:var(--green-d)">' + ikon("tik", 16) + ' Tamamlandı</span>'}</td><td>${fmtDateShort(s.tarih)}</td><td>${s.items ? s.items.filter((it) => it.sayilan !== "" && it.sayilan != null).length : 0}</td><td><div class="act-btns"><button class="edit" data-sayim="${s.id}">${s.durum === "acik" ? "Devam Et" : "Görüntüle"}</button><button class="del" data-delsayim="${s.id}">Sil</button></div></td></tr>`).join("");
   const eksi = stkEksiler(store), eD = eksi.filter((e) => e.havuz === "dukkan").length, eA = eksi.filter((e) => e.havuz === "arac").length;
   return pageHead("Stok Sayımları", store.stokSayimlari.length + " stok sayımı") +
-    `<div class="stk-dugmeler buyuk"><button class="btn lg" type="button" data-act="sayDukkan">🏪 Dükkanı Say</button><button class="btn lg" type="button" data-act="sayArac">🚚 Aracı Say</button></div>` +
-    (eksi.length ? `<div class="stk-uyari"><b>⚠ Stok eksi görünen ürünler var</b><span>Dükkanda ${eD}, araçta ${eA} üründe kayıtlı stok sıfırın altında. Stok eksi olamaz; mal girişi yazılmadan satış yapıldığı için birikmiş. Sayım yaparak gerçek miktarı girin ya da hepsini sıfırlayın.</span><button class="btn soft" type="button" data-act="eksiSifirla">Eksi stokları sıfırla (${eksi.length})</button></div>` : "") +
+    `<div class="stk-dugmeler buyuk"><button class="btn lg" type="button" data-act="sayDukkan">${ikon("dukkan")} Dükkanı Say</button><button class="btn lg" type="button" data-act="sayArac">${ikon("kamyon")} Aracı Say</button></div>` +
+    (eksi.length ? `<div class="stk-uyari"><b>${ikon("dikkat")} Stok eksi görünen ürünler var</b><span>Dükkanda ${eD}, araçta ${eA} üründe kayıtlı stok sıfırın altında. Stok eksi olamaz; mal girişi yazılmadan satış yapıldığı için birikmiş. Sayım yaparak gerçek miktarı girin ya da hepsini sıfırlayın.</span><button class="btn soft" type="button" data-act="eksiSifirla">Eksi stokları sıfırla (${eksi.length})</button></div>` : "") +
     tableCard(["Sıra", "Sayım Kodu", "Sayım Adı", "Nerede", "Durum", "Tarih", "Sayılan Ürün", "Detay"], rows, infoLine(store.stokSayimlari.length));
 }
 function sayimBaslat(havuz) {
@@ -3069,7 +3107,7 @@ function renderStokSayimiDetay() {
     const bas = !ayrac && !(x.satilan > 0) ? (ayrac = true, `<div class="stk-grup">Son 3 ayda satılmayanlar</div>`) : "";
     return bas + `<div class="stk-say-satir ${x.it.sayilan !== "" && x.it.sayilan != null ? "tamam" : ""}" data-ara="${esc(ocrNorm(x.pr.ad))}" data-eksi="${x.it.sistem < 0 ? 1 : 0}" data-sayrow="${x.i}">
       <div class="stk-s-sol"><b>${esc(x.pr.ad)}</b><span>Kayıtlı: <i class="${x.it.sistem < 0 ? "eksi" : ""}">${num2.format(x.it.sistem)}</i> ${esc(x.pr.birim || "Adet")}</span></div>
-      <div class="stk-adim"><button type="button" data-sayeksi="${x.i}" aria-label="Azalt">−</button><input type="number" inputmode="decimal" step="0.01" data-say="${x.i}" value="${x.it.sayilan}" placeholder="say" /><button type="button" data-sayarti="${x.i}" aria-label="Artır">＋</button></div>
+      <div class="stk-adim"><button type="button" data-sayeksi="${x.i}" aria-label="Azalt">−</button><input type="number" inputmode="decimal" step="0.01" data-say="${x.i}" value="${x.it.sayilan}" placeholder="say" /><button type="button" data-sayarti="${x.i}" aria-label="Artır">${ikon("arti")}</button></div>
     </div>`;
   }).join("");
   return pageHead(stkHavuzAd(havuz) + " Sayımı", esc(s.kod), [{ label: "Vazgeç", cls: "soft", route: "stok-sayimi" }]) +
@@ -3077,7 +3115,7 @@ function renderStokSayimiDetay() {
       <div class="stk-cipler">${[["hepsi", "Hepsi"], ["kalan", "Sayılmayan"], ["eksi", "Stoğu eksi"]].map((c) => `<button type="button" class="stk-cip ${sayimSuzgec === c[0] ? "on" : ""}" data-saysuz="${c[0]}">${c[1]}</button>`).join("")}</div></div>
     <p class="hint" style="margin:0 2px 8px">${havuz === "arac" ? "Araçtaki" : "Dükkandaki"} gerçek miktarı yazın. Boş bıraktığınız ürün değişmez; "hiç yok" için 0 yazın.</p>
     <div class="stk-liste" id="sayListe">${rows}</div>
-    <div class="stk-say-alt"><span id="sayDurum">${sayilan} / ${sira.length} sayıldı</span><button class="btn green lg" type="button" data-act="tamamla">✔ Sayımı Bitir</button></div>`;
+    <div class="stk-say-alt"><span id="sayDurum">${sayilan} / ${sira.length} sayıldı</span><button class="btn green lg" type="button" data-act="tamamla">${ikon("tik")} Sayımı Bitir</button></div>`;
 }
 function mountStokSayimiDetay() {
   const s = store.stokSayimlari.find((x) => x.id === activeSayimId); if (!s || s.durum !== "acik") return;
@@ -3544,7 +3582,7 @@ function stkOkuSayi(v) { return v === "" || v == null ? NaN : Number(String(v).r
 async function stkPaylas(baslik, metin) {
   if (navigator.share) { try { await navigator.share({ title: baslik, text: metin }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
   openModal(baslik, `<textarea id="stkPayMetin" class="stk-metin" readonly>${esc(metin)}</textarea>
-    <div class="stk-dugmeler"><button class="btn ok" id="stkPayKopya" type="button">📋 Kopyala</button><button class="btn soft" id="stkPayWa" type="button">📲 WhatsApp</button></div>`, {
+    <div class="stk-dugmeler"><button class="btn ok" id="stkPayKopya" type="button">${ikon("liste")} Kopyala</button><button class="btn soft" id="stkPayWa" type="button">${ikon("paylas")} WhatsApp</button></div>`, {
     noFoot: true,
     onMount: (ov) => {
       const ta = ov.querySelector("#stkPayMetin");
@@ -3561,7 +3599,7 @@ function stkMarjUyariGoster(etki, sonra) {
       <div class="stk-uy-satir ${x.zarar ? "kotu" : x.dusuk ? "az" : ""}"><span>Alış ${money.format(x.alis)} · liste ${money.format(x.satis)}</span><b>${x.zarar ? "ZARAR" : "kâr " + stkYuzde(x.marj)}</b></div>
       ${x.musteriler.map((m) => `<div class="stk-uy-satir ${m.fiyat <= x.alis ? "kotu" : "az"}"><span>${esc(m.c.ad)} — özel fiyat ${money.format(m.fiyat)}</span><b>${m.fiyat <= x.alis ? "ZARAR" : "kâr " + stkYuzde(m.marj)}</b></div>`).join("")}
     </div>`).join("");
-  const m = openModal("⚠ Kârı düşen fiyatlar", `<p class="hint" style="margin:0 0 10px">Alış fiyatı değişti. Aşağıdakilerin kârı <b>${stkYuzde(esik)}</b> altına düştü — satış fiyatını ya da müşterinin özel fiyatını gözden geçir.</p>${html}
+  const m = openModal(`${ikon("dikkat")} Kârı düşen fiyatlar`, `<p class="hint" style="margin:0 0 10px">Alış fiyatı değişti. Aşağıdakilerin kârı <b>${stkYuzde(esik)}</b> altına düştü — satış fiyatını ya da müşterinin özel fiyatını gözden geçir.</p>${html}
     <div class="stk-dugmeler"><button class="btn ok" type="button" id="stkUyTamam">Anladım</button><button class="btn soft" type="button" id="stkUyBak">Fiyat Bakımına Git</button></div>`, { noFoot: true, onMount: (ov) => {
     ov.querySelector("#stkUyTamam").onclick = () => { m.close(); if (sonra) sonra(); };
     ov.querySelector("#stkUyBak").onclick = () => { m.close(); navigate("fiyat-bakim"); };
@@ -3574,7 +3612,7 @@ let alinacakAyar = { hafta: 6, hedefHafta: 2 };
 function stkEksiUyariHTML() {
   const n = new Set(stkEksiler(store).map((e) => e.p.id)).size;
   if (!n) return "";
-  return `<div class="stk-uyari"><b>⚠ Bu liste henüz güvenilir değil</b><span>${n} üründe kayıtlı stok eksi görünüyor (mal girişi yazılmamış). Önce sayım yapıp stoğu düzeltin.</span><button class="btn soft" type="button" data-goto="stok-sayimi">Stok Sayımına Git</button></div>`;
+  return `<div class="stk-uyari"><b>${ikon("dikkat")} Bu liste henüz güvenilir değil</b><span>${n} üründe kayıtlı stok eksi görünüyor (mal girişi yazılmamış). Önce sayım yapıp stoğu düzeltin.</span><button class="btn soft" type="button" data-goto="stok-sayimi">Stok Sayımına Git</button></div>`;
 }
 function renderAlinacaklar() {
   const r = stkAlinacaklar(store, alinacakAyar);
@@ -3586,10 +3624,10 @@ function renderAlinacaklar() {
     rows += `<div class="stk-satir ${x.eksi ? "eksi" : ""}"><div class="stk-s-sol"><b>${esc(x.p.ad)}</b><span>${x.haftalik > 0 ? "Haftada ~" + stkAdet(Math.round(x.haftalik * 10) / 10) + " satılıyor · " : ""}dükkan ${stkAdet(x.dukkan)} · araç ${stkAdet(x.arac)}${x.eksi ? " · <em>stok eksi</em>" : ""}</span></div><div class="stk-s-sag"><b>${stkAdet(x.oneri)}</b><span>${esc(x.p.birim || "Adet")}</span></div></div>`;
   });
   const hSec = (id, deger, secenekler) => `<select id="${id}">${secenekler.map((n) => `<option value="${n}" ${n === deger ? "selected" : ""}>${n} hafta</option>`).join("")}</select>`;
-  return pageHead("Alınacaklar", r.satirlar.length ? r.satirlar.length + " ürün azaldı" : "Azalan ürün yok", [{ label: "📤 Listeyi Paylaş", act: "alPaylas" }]) +
+  return pageHead("Alınacaklar", r.satirlar.length ? r.satirlar.length + " ürün azaldı" : "Azalan ürün yok", [{ label: `${ikon("paylas")} Listeyi Paylaş`, act: "alPaylas" }]) +
     stkEksiUyariHTML() +
     `<div class="card stk-ayar"><div class="field"><label>Elde kaç haftalık mal dursun?</label>${hSec("alHedef", r.hedefHafta, [1, 2, 3, 4])}</div><div class="field"><label>Satış hızı (son kaç hafta)</label>${hSec("alHafta", r.hafta, [4, 6, 8])}</div></div>` +
-    (r.satirlar.length ? `<div class="stk-liste" id="alListe">${rows}</div><div class="stk-toplam"><span>Tahmini tutar (alış fiyatıyla)</span><b>${money.format(r.tutar)}</b></div>` : `<div class="card"><p class="sub">Dükkan ve araçtaki mal ${r.hedefHafta} haftalık satışa yetiyor görünüyor 👍</p></div>`) +
+    (r.satirlar.length ? `<div class="stk-liste" id="alListe">${rows}</div><div class="stk-toplam"><span>Tahmini tutar (alış fiyatıyla)</span><b>${money.format(r.tutar)}</b></div>` : `<div class="card"><p class="sub">Dükkan ve araçtaki mal ${r.hedefHafta} haftalık satışa yetiyor görünüyor </p></div>`) +
     `<div class="card stk-kritik"><div><b>Uyarı (kritik) seviyeleri</b><p class="hint">Bir ürün bu seviyeye inince üstteki zilde görünür. Satış hızına göre ${oneri.length ? `<b>${oneri.length} ürün</b> için öneri var.` : "önerilecek değişiklik yok."}</p></div>${oneri.length ? `<button class="btn" type="button" id="alKritik">Önerileri Gör</button>` : ""}</div>`;
 }
 function mountAlinacaklar() {
@@ -3616,13 +3654,13 @@ function kritikOneriModal() {
 function renderFiyatBakim() {
   const k = stkFiyatKontrol(store);
   const urunSatir = (x, kotu) => `<button class="stk-satir stk-tik ${kotu ? "kotu" : ""}" type="button" data-fburun="${x.p.id}"><div class="stk-s-sol"><b>${esc(x.p.ad)}</b><span>Alış ${money.format(stkN(x.p.alis))} · satış ${money.format(stkN(x.p.satis))}</span></div><div class="stk-s-sag"><b>${stkYuzde(x.marj)}</b><span>kâr</span></div></button>`;
-  const bolum = (cls, baslik, n, aciklama, icerik) => `<details class="stk-bolum ${cls}" ${n ? "open" : ""}><summary><b>${baslik}</b><span class="stk-say">${n}</span></summary>${n ? `<p class="hint">${aciklama}</p><div class="stk-liste">${icerik}</div>` : `<p class="hint">Yok 👍</p>`}</details>`;
+  const bolum = (cls, baslik, n, aciklama, icerik) => `<details class="stk-bolum ${cls}" ${n ? "open" : ""}><summary><b>${baslik}</b><span class="stk-say">${n}</span></summary>${n ? `<p class="hint">${aciklama}</p><div class="stk-liste">${icerik}</div>` : `<p class="hint">Yok </p>`}</details>`;
   const ozelDusuk = k.ozelDusuk.map((x) => `<button class="stk-satir stk-tik ${x.zarar ? "kotu" : ""}" type="button" data-fbmus="${x.c.id}"><div class="stk-s-sol"><b>${esc(x.c.ad)}</b><span>${esc(x.p.ad)} · alış ${money.format(stkN(x.p.alis))} · özel fiyat ${money.format(x.fiyat)}</span></div><div class="stk-s-sag"><b>${x.zarar ? "ZARAR" : stkYuzde(x.marj)}</b><span>${x.zarar ? "" : "kâr"}</span></div></button>`).join("");
   const yuksek = k.ozelYuksek.map((x, i) => `<div class="stk-kart"><b>${esc(x.urunler[0].ad)}${x.urunler.length > 1 ? ` <span class="badge">+${x.urunler.length - 1} çeşit</span>` : ""}</b>
       <span>Liste fiyatı ${money.format(x.liste)} · ${x.musteriler.length} müşteri daha pahalıya alıyor:</span>
       <span class="stk-kucuk">${x.musteriler.map((m) => esc(m.c.ad) + " " + money.format(m.fiyat)).join(" · ")}</span>
       ${x.oneri != null ? `<button class="btn soft" type="button" data-fbcek="${i}">Liste fiyatını ${money.format(x.oneri)} yap</button>` : ""}</div>`).join("");
-  return pageHead("Fiyat Bakımı", "Zam yap, kârı düşen fiyatları gör", [{ label: "％ Toplu Zam", route: "toplu-zam" }, { label: "🕘 Fiyat Geçmişi", cls: "soft", route: "fiyat-gecmisi" }]) +
+  return pageHead("Fiyat Bakımı", "Zam yap, kârı düşen fiyatları gör", [{ label: "％ Toplu Zam", route: "toplu-zam" }, { label: `${ikon("saat")} Fiyat Geçmişi`, cls: "soft", route: "fiyat-gecmisi" }]) +
     `<div class="card stk-ayar"><div class="field"><label>Kâr en az yüzde kaç olsun? (altı uyarılır)</label><div class="stk-yan"><input id="fbEsik" type="number" inputmode="decimal" step="1" min="0" value="${k.esik}" /><button class="btn soft" type="button" id="fbEsikKaydet">Kaydet</button></div></div></div>` +
     bolum("kirmizi", "Zararına satılanlar", k.zarar.length, "Satış fiyatı alış fiyatına eşit ya da altında. Dokununca ürün açılır.", k.zarar.map((x) => urunSatir(x, true)).join("")) +
     bolum("turuncu", "Kârı düşük ürünler", k.dusuk.length, "Kârı " + stkYuzde(k.esik) + " altında kalan ürünler.", k.dusuk.map((x) => urunSatir(x, false)).join("")) +
@@ -3667,7 +3705,7 @@ function renderTopluZam() {
       <div class="field"><label id="zDegerEt">${zamForm.tur === "tutar" ? "Kaç lira eklensin?" : "Yüzde kaç zam?"}</label><input id="zDeger" type="text" inputmode="decimal" value="${esc(zamForm.deger)}" placeholder="örn. 10" /><span class="hint">İndirim için başına eksi koy (örn. -5).</span></div>
       <div class="field"><label>Yeni fiyat yuvarlansın mı?</label><div class="stk-yan"><select id="zYuv">${[["0", "Yuvarlama yok"], ["0.5", "50 kuruşa"], ["1", "1 liraya"], ["5", "5 liraya"], ["10", "10 liraya"]].map((o) => `<option value="${o[0]}" ${zamForm.yuvarla === o[0] ? "selected" : ""}>${o[1]}</option>`).join("")}</select><select id="zYon">${[["yakin", "en yakına"], ["yukari", "yukarı"], ["asagi", "aşağı"]].map((o) => `<option value="${o[0]}" ${zamForm.yon === o[0] ? "selected" : ""}>${o[1]}</option>`).join("")}</select></div></div>
       <div class="field"><label>Müşterilere özel fiyatlar ne olsun?</label>${stkSecim("zOzel", [["dokunma", "Aynı kalsın"], ["ayni", "Onlar da artsın"]], zamForm.ozel)}</div>
-      <button class="btn lg" type="button" id="zOnizle" style="width:100%;justify-content:center">👁 Önizle</button>
+      <button class="btn lg" type="button" id="zOnizle" style="width:100%;justify-content:center">${ikon("goz")} Önizle</button>
     </div><div id="zOnizleme"></div>`;
 }
 function zamFormOku() {
@@ -3692,9 +3730,9 @@ function zamOnizle() {
     ? `<details class="stk-bolum mavi"><summary><b>Değişecek özel fiyatlar</b><span class="stk-say">${plan.ozel.length}</span></summary><div class="stk-liste">${plan.ozel.map((o) => `<div class="stk-satir"><div class="stk-s-sol"><b>${esc(o.c.ad)}</b><span>${esc(o.p.ad)} · ${money.format(o.eski)} → <strong>${money.format(o.yeni)}</strong></span></div></div>`).join("")}</div></details>`
     : (plan.ozelSayisi && a.ozel !== "ayni" ? `<p class="hint" style="margin:8px 2px">Bu ürünlerde ${plan.ozelSayisi} özel fiyat var; onlar <b>aynı kalacak</b> (o müşteriler eski fiyattan alır).</p>` : "");
   kutu.innerHTML = `<div class="section-title">Önizleme — ${plan.urunler.length} ürünün fiyatı değişecek</div>
-    ${plan.uyarilar.map((u) => `<div class="stk-uyari"><b>⚠ Dikkat</b><span>${esc(u)}</span></div>`).join("")}
+    ${plan.uyarilar.map((u) => `<div class="stk-uyari"><b>${ikon("dikkat")} Dikkat</b><span>${esc(u)}</span></div>`).join("")}
     <div class="stk-liste" id="zListe">${rows}</div>${ozel}
-    <button class="btn green lg" type="button" id="zUygula" style="width:100%;justify-content:center;margin-top:12px">✔ Zammı Uygula (${plan.urunler.length} ürün${plan.ozel.length ? " + " + plan.ozel.length + " özel fiyat" : ""})</button>`;
+    <button class="btn green lg" type="button" id="zUygula" style="width:100%;justify-content:center;margin-top:12px">${ikon("tik")} Zammı Uygula (${plan.urunler.length} ürün${plan.ozel.length ? " + " + plan.ozel.length + " özel fiyat" : ""})</button>`;
   document.getElementById("zUygula").addEventListener("click", () => {
     if (!confirm(plan.urunler.length + " ürünün fiyatı değişecek" + (plan.ozel.length ? ", " + plan.ozel.length + " özel fiyat da değişecek" : "") + ". Emin misin?")) return;
     const tanim = a.tur === "yuzde" ? "%" + stkAdet(a.deger) : stkAdet(a.deger) + " ₺";
@@ -3761,7 +3799,7 @@ function sipSeritGuncelle() {
   const enEski = bekleyen.reduce((m, o) => Math.max(m, stkSiparisYasSaat(o)), 0);
   el.classList.toggle("gec", enEski >= 24);
   if (yeniGeldi) el.classList.add("yeni");
-  el.innerHTML = `<span class="stk-serit-ic">🔔</span><span class="stk-serit-yazi"><b>${bekleyen.length} sipariş bekliyor</b><small>${bekleyen.length === 1 ? esc(bekleyen[0].dealer) + " · " : "en eskisi "}${stkYasMetin(enEski)}${enEski >= 24 ? " — gecikti" : ""}</small></span><span class="stk-serit-git">Gör ›</span>`;
+  el.innerHTML = `<span class="stk-serit-ic">${ikon("zil")}</span><span class="stk-serit-yazi"><b>${bekleyen.length} sipariş bekliyor</b><small>${bekleyen.length === 1 ? esc(bekleyen[0].dealer) + " · " : "en eskisi "}${stkYasMetin(enEski)}${enEski >= 24 ? " — gecikti" : ""}</small></span><span class="stk-serit-git">Gör ›</span>`;
 }
 /* Tarayıcı bildirimi izni — yalnız kullanıcı dokununca istenir. */
 function sipBildirimIzniIste() {
@@ -3801,7 +3839,7 @@ function renderUrunIade() {
       <div class="field"><label>Ürün</label><select id="iUrun"><option value="">Ürün seçin</option>${store.products.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("")}</select></div>
       <div class="stk-iki"><div class="field"><label>Miktar</label><input id="iAdet" type="number" inputmode="decimal" step="0.01" value="1" /></div><div class="field"><label>Birim fiyat (₺)</label><input id="iFiyat" type="number" inputmode="decimal" step="0.01" placeholder="0" /></div></div>
       <p class="hint" id="iFiyatNot" style="margin-top:0">Müşteri ve ürün seçince, müşterinin o ürünü en son aldığı fiyat gelir.</p>
-      <div class="field"><label>Mal nereye girdi?</label>${stkSecim("iHavuz", [["arac", "🚚 Araca"], ["dukkan", "🏪 Dükkana"]], "arac")}</div>
+      <div class="field"><label>Mal nereye girdi?</label>${stkSecim("iHavuz", [["arac", ikon("kamyon") + " Araca"], ["dukkan", ikon("dukkan") + " Dükkana"]], "arac")}</div>
       <div class="stk-toplam"><span>İade tutarı</span><b id="iTutar">${money.format(0)}</b></div>
       <button class="btn green lg" id="iSave" type="button" style="width:100%;justify-content:center;margin-top:10px">İadeyi Al</button>
       <p class="hint">İade alınan ürünün stoğu artar. Müşteri seçilirse iade tutarı borcundan ve o günün satışından düşülür.</p>
@@ -3837,7 +3875,7 @@ function renderUrunEtiket() {
     `<div class="card"><div class="filters">
       <div class="field" style="flex:1"><label>Ürün</label><select id="etUrun">${store.products.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("") || "<option>Ürün yok</option>"}</select></div>
       <div class="field"><label>Adet</label><input id="etAdet" type="number" value="6" /></div>
-      <div class="field"><label>&nbsp;</label><button class="btn" id="etPrint" type="button">🖨 Etiket Yazdır</button></div>
+      <div class="field"><label>&nbsp;</label><button class="btn" id="etPrint" type="button">${ikon("yazici")} Etiket Yazdır</button></div>
     </div><p class="hint">Seçilen ürün için barkod/fiyat etiketi yazdırır.</p></div>`;
 }
 function mountUrunEtiket() {
@@ -3865,7 +3903,7 @@ function gelirGiderPage(key, title, tur) {
 
 /* ============ Jenerik shell liste ============ */
 const DATE_FILTERS = [{ label: "Başlangıç Tarihi", value: todayStr() }, { label: "Bitiş Tarihi", value: todayStr() }];
-function listPage(cfg) { return pageHead(cfg.title, cfg.sub, cfg.actions) + (cfg.filters ? `<div class="card"><div class="filters">${cfg.filters.map(field).join("")}<div class="field"><label>&nbsp;</label><button class="btn">☰ Listele</button></div></div></div>` : "") + tableCard(cfg.columns) + (cfg.summary ? grid(cfg.summary) : ""); }
+function listPage(cfg) { return pageHead(cfg.title, cfg.sub, cfg.actions) + (cfg.filters ? `<div class="card"><div class="filters">${cfg.filters.map(field).join("")}<div class="field"><label>&nbsp;</label><button class="btn">${ikon("liste")} Listele</button></div></div></div>` : "") + tableCard(cfg.columns) + (cfg.summary ? grid(cfg.summary) : ""); }
 
 /* ============ Çay Ocağı Siparişleri (çay ocağı uygulamasından gelen) ============ */
 /* Sipariş kodu formatı çay ocağı uygulamasıyla AYNI: "CAYSIP1:" + base64(JSON{v:1,order}) */
@@ -4748,7 +4786,7 @@ async function yedekListeGetir() {
 function yedekDurumHTML() {
   const g = _esGunluk;
   const son = g.sonBasari ? fmtDate(new Date(g.sonBasari).toISOString()) : "henüz yok";
-  const bek = esBekleyenVar() ? `<b class="yd-uyari">${esc(esBekleyenMetni())} gönderilmeyi bekliyor</b>` : "Bekleyen kayıt yok ✔";
+  const bek = esBekleyenVar() ? `<b class="yd-uyari">${esc(esBekleyenMetni())} gönderilmeyi bekliyor</b>` : "Bekleyen kayıt yok";
   return `<div><span>İnternete son gönderim</span><b>${esc(son)}</b></div><div><span>Telefonda bekleyen</span>${bek}</div>` +
     (_esDurum.yedekHata ? `<div><span>Günlük yedek</span><b class="yd-uyari">Bugünkü yedek alınamadı; sonraki kayıtta yine denenecek.</b></div>` : "") +
     (g.ezilme ? `<div><span>Dikkat</span><b class="yd-uyari">${esc(fmtDate(new Date(g.ezilme).toISOString()))} sıralarında buluttaki kayıtlar eski bir uygulama sürümüyle ezildi. Eksik kayıt varsa aşağıdan önceki bir yedeğe dönebilirsin.</b></div>` : "");
@@ -4805,7 +4843,7 @@ function internetOverlay(goster) {
     el = document.createElement("div");
     el.id = "net-kapi";
     el.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#0f1115;color:#e8e8ea;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px";
-    el.innerHTML = '<div style="font-size:48px">📡</div><div style="font-weight:700;font-size:20px">İnternet bağlantısı gerekli</div><div style="opacity:.75;max-width:320px">Bu telefona veriler henüz inmedi. İlk açılış için internet gerekir; bağlantı gelince kendiliğinden açılır.</div>';
+    el.innerHTML = `<div>${ikon("internetyok", 48)}</div><div style="font-weight:700;font-size:20px">İnternet bağlantısı gerekli</div><div style="opacity:.75;max-width:320px">Bu telefona veriler henüz inmedi. İlk açılış için internet gerekir; bağlantı gelince kendiliğinden açılır.</div>`;
     document.body.appendChild(el);
   } else if (!goster && el) { el.remove(); }
 }
@@ -4905,7 +4943,7 @@ function esSeritCiz() {
     document.body.appendChild(el);
   }
   el.className = "es-serit " + tur;
-  const html = `<span class="es-ikon" aria-hidden="true">${tur === "uyari" ? "📡" : "⚠️"}</span><span class="es-yazi"><b>${esc(baslik)}</b><small>${esc(alt)}</small></span>`;
+  const html = `<span class="es-ikon" aria-hidden="true">${ikon(tur === "uyari" ? "internetyok" : "dikkat", 24)}</span><span class="es-yazi"><b>${esc(baslik)}</b><small>${esc(alt)}</small></span>`;
   if (el._html !== html) { el.innerHTML = html; el._html = html; }
   document.body.classList.add("es-seritli");
   document.documentElement.style.setProperty("--es-serit-h", el.offsetHeight + "px");
@@ -4955,9 +4993,9 @@ function cayDagitim(o) {
 }
 function cayGonder(o) {
   const st = store.settings;
-  const satir = o.items.map((l) => `• ${num2.format(l.adet)} ${l.birim} ${l.ad} — ${money.format(l.fiyat * l.adet)}`).join("\n");
+  const satir = o.items.map((l) => `• ${num2.format(l.adet)} ${l.birim} ${l.ad} — ${paraBelge.format(l.fiyat * l.adet)}`).join("\n");
   const tesl = o.teslimTarih ? `\nTeslim: ${o.teslimTarih} ${o.teslimSaat || ""}` : "";
-  const txt = `${st.firmaAdi} — SİPARİŞ FİŞİ\nFiş No: ${o.fisNo || "-"}\n${satir}\nTOPLAM: ${money.format(o.toplam)}${tesl}`;
+  const txt = `${st.firmaAdi} — SİPARİŞ FİŞİ\nFiş No: ${o.fisNo || "-"}\n${satir}\nTOPLAM: ${paraBelge.format(o.toplam)}${tesl}`;
   const tel = (o.dealerTel || "").replace(/\D/g, "");
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(txt)}`, "_blank");
 }
@@ -4982,7 +5020,7 @@ function cayTeslimOde(o) {
   const kural = minPesin ? ` Bu müşteri için açık hesapta <b>${money.format(minPesin)} (%40)</b> peşin ödeme zorunludur.` : "";
   const body = `<p class="sub" style="margin:0 0 12px">Müşterinin seçimi: <b>${secilen}</b>. Teslimatta gerekirse değiştirebilirsin. <b>Bakiye</b> seçilirse tutar bayinin açık hesabına (cari borç) yazılır.${kural}</p>
     <div class="cay-ode-tut">Tutar <b>${money.format(o.toplam)}</b></div>
-    <div class="field"><label>Mal nereden çıktı?</label>${stkSecim("cayHavuz", [["dukkan", "🏪 Dükkandan"], ["arac", "🚚 Araçtan"]], stokModu === "arac" ? "arac" : "dukkan")}</div>
+    <div class="field"><label>Mal nereden çıktı?</label>${stkSecim("cayHavuz", [["dukkan", ikon("dukkan") + " Dükkandan"], ["arac", ikon("kamyon") + " Araçtan"]], stokModu === "arac" ? "arac" : "dukkan")}</div>
     <div class="cay-ode-sec">
       ${o.odemeTuru === "parcali" ? `<button class="btn cay-ode" type="button" data-ode="parcali">Siparişte seçilen parçalı ödeme</button>` : ""}
       <button class="btn cay-ode" type="button" data-ode="nakit">Nakit</button>
@@ -4998,22 +5036,22 @@ function cayTeslimOde(o) {
 /* Teklif / Fiş yazdırma */
 function cayDoc(o, tur) {
   const st = store.settings;
-  const rows = o.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)} ${esc(it.birim)}</td><td class="r">${money.format(it.fiyat * it.adet)}</td></tr>`).join("");
+  const rows = o.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)} ${esc(it.birim)}</td><td class="r">${paraBelge.format(it.fiyat * it.adet)}</td></tr>`).join("");
   const tesl = o.teslimTarih ? `<div>Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</div>` : "";
   const no = tur === "Teklif" ? (o.teklifNo ? `<div>Teklif No: ${esc(o.teklifNo)}</div>` : "") : (o.fisNo ? `<div>Fiş No: ${esc(o.fisNo)}</div>` : "");
   openPrint(tur + " " + o.dealer, `<h2>${esc(st.fisBaslik || st.firmaAdi)}</h2><div class="c">${tur.toUpperCase()}</div><hr>
     <div>Bayi: ${esc(o.dealer)}</div>${o.dealerTel ? `<div>Tel: ${esc(o.dealerTel)}</div>` : ""}${no}${tesl}<hr>
     <table>${rows}</table><hr>
-    <table>${o.iskonto ? `<tr><td>Nakit indirimi</td><td class="r">-${money.format(o.iskonto)}</td></tr>` : ""}<tr><td><b>TOPLAM</b></td><td class="r"><b>${money.format(o.toplam)}</b></td></tr></table><hr>
+    <table>${o.iskonto ? `<tr><td>Nakit indirimi</td><td class="r">-${paraBelge.format(o.iskonto)}</td></tr>` : ""}<tr><td><b>TOPLAM</b></td><td class="r"><b>${paraBelge.format(o.toplam)}</b></td></tr></table><hr>
     <div class="c">${esc(st.fisAltbilgi || "Teşekkür ederiz")}</div>`);
 }
 
 function cayIslemBtns(o) {
   const b = [];
-  if (o.durum === "yeni") b.push(`<button class="btn" style="padding:4px 8px" data-onayla="${o.id}">✔ Onayla</button>`);
-  if (o.durum === "onay") { b.push(`<button class="btn soft" style="padding:4px 8px" data-teklif="${o.id}">📄 Teklif</button>`); b.push(`<button class="btn" style="padding:4px 8px" data-dagitim="${o.id}">🚚 Dağıtıma Al</button>`); }
-  if (o.durum === "dagitim") { b.push(`<button class="btn soft" style="padding:4px 8px" data-fis="${o.id}">🧾 Fiş</button>`); b.push(`<button class="btn soft" style="padding:4px 8px" data-gonder="${o.id}">📤 Gönder</button>`); b.push(`<button class="btn" style="padding:4px 8px" data-teslim="${o.id}">✅ Teslim Et</button>`); }
-  if (o.durum === "teslim") b.push(`<button class="btn soft" style="padding:4px 8px" data-fis="${o.id}">🧾 Fiş</button>`);
+  if (o.durum === "yeni") b.push(`<button class="btn" style="padding:4px 8px" data-onayla="${o.id}">${ikon("tik")} Onayla</button>`);
+  if (o.durum === "onay") { b.push(`<button class="btn soft" style="padding:4px 8px" data-teklif="${o.id}">${ikon("fis")} Teklif</button>`); b.push(`<button class="btn" style="padding:4px 8px" data-dagitim="${o.id}">${ikon("kamyon")} Dağıtıma Al</button>`); }
+  if (o.durum === "dagitim") { b.push(`<button class="btn soft" style="padding:4px 8px" data-fis="${o.id}">${ikon("fis")} Fiş</button>`); b.push(`<button class="btn soft" style="padding:4px 8px" data-gonder="${o.id}">${ikon("paylas")} Gönder</button>`); b.push(`<button class="btn" style="padding:4px 8px" data-teslim="${o.id}">${ikon("tik")} Teslim Et</button>`); }
+  if (o.durum === "teslim") b.push(`<button class="btn soft" style="padding:4px 8px" data-fis="${o.id}">${ikon("fis")} Fiş</button>`);
   b.push(`<button class="del" data-caydel="${o.id}">Sil</button>`);
   return b.join(" ");
 }
@@ -5058,7 +5096,7 @@ function caySiparisListRow(o) {
         ${o.durum !== "teslim" ? `<span class="stk-yas ${stkSiparisYasSaat(o) >= 24 ? "gec" : ""}">${stkYasMetin(stkSiparisYasSaat(o))}</span>` : ""}
       </span>
     </div>
-    <button class="sl-eye" type="button" data-cayopen="${o.id}" aria-label="Siparişi aç">👁</button>
+    <button class="sl-eye" type="button" data-cayopen="${o.id}" aria-label="Siparişi aç">${ikon("goz")}</button>
   </li>`;
 }
 /* Sipariş modalı — ürünler + aşama aksiyonları (Onayla / Teslim Et …) */
@@ -5066,15 +5104,15 @@ function cayOrderModal(o) {
   const a = cayAsama(o.durum);
   const rows = o.items.map((l) => `<div class="cay-urow"><span class="cay-uad">${esc(l.ad)}</span><span class="cay-uqty">${num2.format(l.adet)} ${esc(l.birim || "")}</span><span class="cay-utut">${money.format(l.fiyat * l.adet)}</span></div>`).join("");
   const btns = [];
-  if (o.durum === "yeni") btns.push(`<button class="btn" type="button" data-m-onayla>✔ Onayla</button>`);
-  if (o.durum === "onay") btns.push(`<button class="btn soft" type="button" data-m-dagitim>🚚 Dağıtıma Al</button>`);
-  if (o.durum === "onay" || o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-teklif>📄 Teklif</button>`);
-  if (o.durum === "dagitim" || o.durum === "teslim") btns.push(`<button class="btn soft" type="button" data-m-fis>🧾 Fiş</button>`);
-  if (o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-gonder>📤 Gönder</button>`);
-  if (o.durum !== "teslim") btns.push(`<button class="btn cay-teslim-btn" type="button" data-m-teslim>✅ Teslim Et</button>`);
-  if (o.durum !== "teslim") btns.push(`<button class="btn soft" type="button" data-m-kapat>☑ Zaten teslim ettim (satış yazma)</button>`);
+  if (o.durum === "yeni") btns.push(`<button class="btn" type="button" data-m-onayla>${ikon("tik")} Onayla</button>`);
+  if (o.durum === "onay") btns.push(`<button class="btn soft" type="button" data-m-dagitim>${ikon("kamyon")} Dağıtıma Al</button>`);
+  if (o.durum === "onay" || o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-teklif>${ikon("fis")} Teklif</button>`);
+  if (o.durum === "dagitim" || o.durum === "teslim") btns.push(`<button class="btn soft" type="button" data-m-fis>${ikon("fis")} Fiş</button>`);
+  if (o.durum === "dagitim") btns.push(`<button class="btn soft" type="button" data-m-gonder>${ikon("paylas")} Gönder</button>`);
+  if (o.durum !== "teslim") btns.push(`<button class="btn cay-teslim-btn" type="button" data-m-teslim>${ikon("tik")} Teslim Et</button>`);
+  if (o.durum !== "teslim") btns.push(`<button class="btn soft" type="button" data-m-kapat>${ikon("tik")} Zaten teslim ettim (satış yazma)</button>`);
   btns.push(`<button class="del" type="button" data-m-del>Sil</button>`);
-  const tesl = o.teslimTarih ? `<div class="cay-sub">🚚 Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</div>` : "";
+  const tesl = o.teslimTarih ? `<div class="cay-sub">${ikon("kamyon")} Teslim: ${esc(o.teslimTarih)} ${esc(o.teslimSaat || "")}</div>` : "";
   const body = `
     <div class="cay-modal-meta">
       <div><span>Bayi</span><b>${esc(o.dealer)}</b></div>
@@ -5086,7 +5124,7 @@ function cayOrderModal(o) {
     <div class="cay-sub">Ödeme: ${esc(o.odemeTuru === "nakit" ? "Nakit" : o.odemeTuru === "kart" ? "Kart" : "Açık Hesap")}</div>
     ${o.not ? `<div class="cay-unot">Not: ${esc(o.not)}</div>` : ""}
     ${tesl}
-    ${o.elleKapandi ? `<div class="cay-sub">☑ Satış yazılmadan kapatıldı${o.kapanisNot ? " — " + esc(o.kapanisNot) : ""}</div>` : ""}
+    ${o.elleKapandi ? `<div class="cay-sub">${ikon("tik")} Satış yazılmadan kapatıldı${o.kapanisNot ? " — " + esc(o.kapanisNot) : ""}</div>` : ""}
     <div class="cay-modal-act">${btns.join("")}</div>`;
   const m = openModal(`${esc(o.dealer)} — Sipariş`, body, { noFoot: true, onMount: (ov) => {
     const on = (sel, fn) => { const b = ov.querySelector(sel); if (b) b.addEventListener("click", fn); };
@@ -5107,9 +5145,9 @@ function renderCayOcagi() {
   const rows = acik.concat(kapali).map(caySiparisListRow).join("");
   const yeni = store.gelenSiparisler.filter((o) => o.durum === "yeni").length;
   return pageHead("Çay Ocağı Siparişleri", (store.gelenSiparisler.length + " sipariş") + (yeni ? ` · ${yeni} yeni` : ""), [
-    { label: "📥 Kod Yapıştır", act: "cayKod" },
-    { label: "📂 Dosyadan Al", cls: "soft", act: "cayDosya" },
-  ].concat(acik.length ? [{ label: "☑ Teslim Edilenleri Kapat", cls: "soft", act: "cayTopluKapat" }] : [])) + `<div class="cay-wrap">
+    { label: `${ikon("indir")} Kod Yapıştır`, act: "cayKod" },
+    { label: `${ikon("defter")} Dosyadan Al`, cls: "soft", act: "cayDosya" },
+  ].concat(acik.length ? [{ label: `${ikon("tik")} Teslim Edilenleri Kapat`, cls: "soft", act: "cayTopluKapat" }] : [])) + `<div class="cay-wrap">
     <div class="cay-search"><input type="text" class="cay-q" placeholder="Bayi, telefon veya ürün ara…" /></div>
     ${rows ? `<ul class="sl-list cay-sl">${rows}</ul>` : '<div class="cay-empty">Henüz sipariş yok.</div>'}
   </div>`;
@@ -5169,7 +5207,7 @@ const PAGES = {
   "arac-yukleme": { render: renderAracYukleme, mount: mountAracYukleme },
   "urun-ekle": { render: renderUrunEkle, mount: mountUrunEkle },
   "urun-varyantli": { render: () => renderUrunEkle(), mount: mountUrunEkle },
-  "urun-gruplari": { render: () => crudPage({ title: "Ürün Grupları", key: "groups", newLabel: "Yeni Grup", columns: ["Sıra", "Grup Adı"], row: (g, i) => [i + 1, esc(g.ad)], fields: [{ key: "ad", label: "Grup Adı", req: true }] }) + `<div class="card" style="margin-top:12px"><button class="btn green lg" id="autoKat" type="button">🏷️ Ürünleri Otomatik Kategorile</button><p class="hint" style="margin-top:8px">Tüm ürünlerini Sıcak/Soğuk İçecekler, Temizlik, Servis vb. temiz kategorilere dağıtır. Zaten kategorili ürünlere ve elle seçtiklerine dokunmaz.</p></div>`, mount: () => { mountCrud({ key: "groups", fields: [{ key: "ad", label: "Grup Adı", req: true }] }); const b = document.getElementById("autoKat"); if (b) b.addEventListener("click", () => { if (confirm("Tüm ürünler otomatik kategorilere dağıtılsın mı?")) otomatikKategorile(); }); } },
+  "urun-gruplari": { render: () => crudPage({ title: "Ürün Grupları", key: "groups", newLabel: "Yeni Grup", columns: ["Sıra", "Grup Adı"], row: (g, i) => [i + 1, esc(g.ad)], fields: [{ key: "ad", label: "Grup Adı", req: true }] }) + `<div class="card" style="margin-top:12px"><button class="btn green lg" id="autoKat" type="button">${ikon("etiket")} Ürünleri Otomatik Kategorile</button><p class="hint" style="margin-top:8px">Tüm ürünlerini Sıcak/Soğuk İçecekler, Temizlik, Servis vb. temiz kategorilere dağıtır. Zaten kategorili ürünlere ve elle seçtiklerine dokunmaz.</p></div>`, mount: () => { mountCrud({ key: "groups", fields: [{ key: "ad", label: "Grup Adı", req: true }] }); const b = document.getElementById("autoKat"); if (b) b.addEventListener("click", () => { if (confirm("Tüm ürünler otomatik kategorilere dağıtılsın mı?")) otomatikKategorile(); }); } },
   "urun-transfer": { render: () => pageHead("Ürün Transferleri", "Tek şube — transfer yerine stok düzeltmesi için Stok Hareket Rapor'daki 'Stok Düzeltme' aracını kullanın.") + `<div class="card"><p class="sub">Şubeler arası transfer bu sürümde kapalı (tek işletme). Stok düzeltme: <button class="link-btn" data-goto="rapor-stokhareket">Stok Hareket Rapor</button>.</p></div>` },
   "alt-urun": { render: () => crudPage({ title: "Alt Ürün Tanımları", sub: "Reçete: bir ürün satılınca elle takip", key: "altUrunler", newLabel: "Yeni Alt Ürün", columns: ["Sıra", "Ana Ürün", "Alt Ürün", "Oran"], row: (a, i) => [i + 1, esc(a.ana), esc(a.alt), esc(a.oran)], fields: [{ key: "ana", label: "Ana Ürün" }, { key: "alt", label: "Alt Ürün" }, { key: "oran", label: "Oran", type: "number", step: "0.01", def: 1 }] }), mount: () => mountCrud({ key: "altUrunler", fields: [{ key: "ana", label: "Ana Ürün" }, { key: "alt", label: "Alt Ürün" }, { key: "oran", label: "Oran", type: "number", step: "0.01", def: 1 }] }) },
   "urun-varyantlari": { render: () => crudPage({ title: "Ürün Varyantları", key: "varyantlar", newLabel: "Yeni Varyant", columns: ["Sıra", "Varyant Adı", "Değerler"], row: (v, i) => [i + 1, esc(v.ad), esc(v.degerler)], fields: [{ key: "ad", label: "Varyant Adı", req: true, ph: "örn. Beden" }, { key: "degerler", label: "Değerler (virgülle)", ph: "S, M, L" }] }), mount: () => mountCrud({ key: "varyantlar", fields: [{ key: "ad", label: "Varyant Adı", req: true }, { key: "degerler", label: "Değerler" }] }) },
@@ -5185,7 +5223,7 @@ const PAGES = {
   firmalar: { render: renderFirmalar, mount: mountFirmalar },
 
   "efatura-olustur": { render: renderEFaturaOlustur, mount: mountEFaturaOlustur },
-  "efatura-giden": { render: () => pageHead("Giden E-Faturalar", store.efaturalar.filter((e) => e.yon === "giden").length + " fatura", [{ label: "＋ Yeni E-Fatura", route: "efatura-olustur" }]) + tableCard(["Fatura No", "Müşteri", "Tutar", "Durum", "Tarih"], store.efaturalar.filter((e) => e.yon === "giden").reverse().map((e) => `<tr><td>${esc(e.no)}</td><td>${esc(e.musteri || "-")}</td><td>${money.format(e.toplam)}</td><td><span class="badge">${esc(e.durum || "Taslak")}</span></td><td>${fmtDate(e.tarih)}</td></tr>`).join(""), infoLine(store.efaturalar.filter((e) => e.yon === "giden").length)) },
+  "efatura-giden": { render: () => pageHead("Giden E-Faturalar", store.efaturalar.filter((e) => e.yon === "giden").length + " fatura", [{ label: `${ikon("arti")} Yeni E-Fatura`, route: "efatura-olustur" }]) + tableCard(["Fatura No", "Müşteri", "Tutar", "Durum", "Tarih"], store.efaturalar.filter((e) => e.yon === "giden").reverse().map((e) => `<tr><td>${esc(e.no)}</td><td>${esc(e.musteri || "-")}</td><td>${money.format(e.toplam)}</td><td><span class="badge">${esc(e.durum || "Taslak")}</span></td><td>${fmtDate(e.tarih)}</td></tr>`).join(""), infoLine(store.efaturalar.filter((e) => e.yon === "giden").length)) },
   "efatura-gelen": { render: () => pageHead("Gelen E-Faturalar", "0 fatura") + `<div class="card"><p class="sub">Gelen e-fatura entegrasyonu (GİB) bu sürümde yok. Manuel gelen fatura için Alış Faturaları kullanın.</p></div>` },
   "efatura-ayarlar": { render: renderEFaturaAyarlar, mount: mountEFaturaAyarlar },
 
@@ -5208,8 +5246,8 @@ const PAGES = {
 
 /* ============ GÖREVLER ============ */
 function renderGorevler() {
-  const rows = store.gorevler.map((g, i) => `<tr><td>${i + 1}</td><td style="${g.durum === "bitti" ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(g.ad)}</td><td>${g.durum === "bitti" ? '<span style="color:var(--green-d)">✔ Bitti</span>' : '<span class="badge">Bekliyor</span>'}</td><td>${fmtDateShort(g.tarih)}</td><td><div class="act-btns"><button class="edit" data-tog="${g.id}">${g.durum === "bitti" ? "Geri Al" : "Bitir"}</button><button class="del" data-delg="${g.id}">Sil</button></div></td></tr>`).join("");
-  return pageHead("Görevler", store.gorevler.length + " görev", [{ label: "＋ Yeni Görev", act: "yenig" }]) + tableCard(["Sıra", "Görev", "Durum", "Tarih", "İşlem"], rows, infoLine(store.gorevler.length));
+  const rows = store.gorevler.map((g, i) => `<tr><td>${i + 1}</td><td style="${g.durum === "bitti" ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(g.ad)}</td><td>${g.durum === "bitti" ? '<span style="color:var(--green-d)">' + ikon("tik", 16) + ' Bitti</span>' : '<span class="badge">Bekliyor</span>'}</td><td>${fmtDateShort(g.tarih)}</td><td><div class="act-btns"><button class="edit" data-tog="${g.id}">${g.durum === "bitti" ? "Geri Al" : "Bitir"}</button><button class="del" data-delg="${g.id}">Sil</button></div></td></tr>`).join("");
+  return pageHead("Görevler", store.gorevler.length + " görev", [{ label: `${ikon("arti")} Yeni Görev`, act: "yenig" }]) + tableCard(["Sıra", "Görev", "Durum", "Tarih", "İşlem"], rows, infoLine(store.gorevler.length));
 }
 function mountGorevler() {
   const y = document.querySelector('[data-act="yenig"]'); if (y) y.addEventListener("click", () => formModal("Yeni Görev", [{ key: "ad", label: "Görev", req: true }], null, (d) => { store.gorevler.push({ id: genId(), ad: d.ad, durum: "bekliyor", tarih: new Date().toISOString() }); saveStore(); render(); }));
@@ -5229,7 +5267,7 @@ function renderDuyurular() {
     ? store.duyurular.map((d) => `<div class="card duyuru-item"><div class="duyuru-ust"><span class="badge">${esc(d.tarih)}</span><button class="del" data-deldy="${d.id}">Sil</button></div><div class="duyuru-metin">${esc(d.metin)}</div></div>`).join("")
     : `<div class="card"><p class="sub">Henüz duyuru yok.</p></div>`;
   return pageHead("Duyurular", store.duyurular.length + " duyuru · çay ocağı uygulamasına yayınlanır")
-    + `<div class="card"><div class="field"><label>Yeni Duyuru</label><textarea class="duyuru-input" rows="3" placeholder="Duyuru metni…"></textarea></div><div class="actions"><button class="btn" type="button" data-act="duyuruYayinla">📢 Yayınla</button></div></div>`
+    + `<div class="card"><div class="field"><label>Yeni Duyuru</label><textarea class="duyuru-input" rows="3" placeholder="Duyuru metni…"></textarea></div><div class="actions"><button class="btn" type="button" data-act="duyuruYayinla">${ikon("duyuru")} Yayınla</button></div></div>`
     + list;
 }
 function mountDuyurular() {
@@ -5260,13 +5298,13 @@ function renderEFaturaOlustur() {
     </div></div>
     <div class="card">
       <table class="line-table"><thead><tr><th style="width:40%">Ürün/Hizmet</th><th>Miktar</th><th>Birim Fiyat</th><th>KDV %</th><th>Tutar</th><th></th></tr></thead><tbody id="efBody"></tbody></table>
-      <div style="margin-top:10px"><button class="btn soft" id="efAdd" type="button">＋ Satır ekle</button></div>
+      <div style="margin-top:10px"><button class="btn soft" id="efAdd" type="button">${ikon("arti")} Satır ekle</button></div>
       <div class="totbox" style="margin-top:10px">Ara Toplam: <span id="efAra">₺0,00</span> · KDV: <span id="efKdv">₺0,00</span> · <strong>Genel Toplam: <span id="efTot">₺0,00</span></strong></div>
-      <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="efSave" type="button">💾 E-Faturayı Kaydet</button></div>
+      <div style="text-align:right;margin-top:10px"><button class="btn green lg" id="efSave" type="button">${ikon("tik")} E-Faturayı Kaydet</button></div>
       <p class="hint">Not: Gerçek GİB gönderimi yok; fatura kayıt + yazdırma yapılır.</p>
     </div>`;
 }
-function efRowHTML(r, i) { return `<tr><td><input data-ef="${i}" data-f="ad" value="${esc(r.ad)}" placeholder="Ürün/hizmet" /></td><td><input data-ef="${i}" data-f="adet" type="number" step="0.01" value="${r.adet}" /></td><td><input data-ef="${i}" data-f="fiyat" type="number" step="0.01" value="${r.fiyat}" /></td><td><input data-ef="${i}" data-f="kdv" type="number" value="${r.kdv}" /></td><td>${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</td><td><button class="rm" data-efmv="${i}" type="button">✕</button></td></tr>`; }
+function efRowHTML(r, i) { return `<tr><td><input data-ef="${i}" data-f="ad" value="${esc(r.ad)}" placeholder="Ürün/hizmet" /></td><td><input data-ef="${i}" data-f="adet" type="number" step="0.01" value="${r.adet}" /></td><td><input data-ef="${i}" data-f="fiyat" type="number" step="0.01" value="${r.fiyat}" /></td><td><input data-ef="${i}" data-f="kdv" type="number" value="${r.kdv}" /></td><td>${money.format((Number(r.adet) || 0) * (Number(r.fiyat) || 0))}</td><td><button class="rm" data-efmv="${i}" type="button">${ikon("kapat")}</button></td></tr>`; }
 function efRefresh() {
   document.getElementById("efBody").innerHTML = efItems.map(efRowHTML).join("");
   const ara = efItems.reduce((s, r) => s + (Number(r.adet) || 0) * (Number(r.fiyat) || 0), 0);
@@ -5291,8 +5329,8 @@ function mountEFaturaOlustur() {
   });
 }
 function printEFatura(ef) {
-  const rows = ef.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${money.format(it.adet * it.fiyat)}</td></tr>`).join("");
-  openPrint("E-Fatura " + ef.no, `<h2>${esc(store.settings.firmaAdi)}</h2><div class="c">E-FATURA</div><hr><div>No: ${ef.no}</div><div>Tarih: ${fmtDate(ef.tarih)}</div><div>Müşteri: ${esc(ef.musteri || "-")}</div>${ef.vno ? `<div>VKN/TCKN: ${esc(ef.vno)}</div>` : ""}<hr><table>${rows}</table><hr><table><tr><td><b>TOPLAM</b></td><td class="r"><b>${money.format(ef.toplam)}</b></td></tr></table>`);
+  const rows = ef.items.map((it) => `<tr><td>${esc(it.ad)}</td><td class="c">${num2.format(it.adet)}</td><td class="r">${paraBelge.format(it.adet * it.fiyat)}</td></tr>`).join("");
+  openPrint("E-Fatura " + ef.no, `<h2>${esc(store.settings.firmaAdi)}</h2><div class="c">E-FATURA</div><hr><div>No: ${ef.no}</div><div>Tarih: ${fmtDate(ef.tarih)}</div><div>Müşteri: ${esc(ef.musteri || "-")}</div>${ef.vno ? `<div>VKN/TCKN: ${esc(ef.vno)}</div>` : ""}<hr><table>${rows}</table><hr><table><tr><td><b>TOPLAM</b></td><td class="r"><b>${paraBelge.format(ef.toplam)}</b></td></tr></table>`);
 }
 function renderEFaturaAyarlar() {
   const s = store.settings;
@@ -5301,7 +5339,7 @@ function renderEFaturaAyarlar() {
     <div class="field"><label>Vergi/Firma No</label><input name="firmaNo" value="${esc(s.firmaNo || "")}" /></div>
     <div class="field"><label>E-posta</label><input name="eposta" value="${esc(s.eposta || "")}" /></div>
     <div class="field"><label>GİB Kullanıcı (bilgi)</label><input name="gib" value="${esc(s.gib || "")}" placeholder="opsiyonel" /></div>
-  </div><div style="margin-top:14px"><button class="btn green lg" type="submit">💾 Kaydet</button></div></form>`;
+  </div><div style="margin-top:14px"><button class="btn green lg" type="submit">${ikon("tik")} Kaydet</button></div></form>`;
 }
 function mountEFaturaAyarlar() { document.getElementById("efAyarForm").addEventListener("submit", (e) => { e.preventDefault(); const f = new FormData(e.target); ["firmaAdi", "firmaNo", "eposta", "gib"].forEach((k) => store.settings[k] = f.get(k)); saveStore(); alert("Kaydedildi ✔"); }); }
 
@@ -5392,7 +5430,7 @@ function mountServisRaporlari() {
 }
 function renderTalepler() {
   const acik = (store.talepler || []).filter((t) => t.durum !== "kapali").slice().reverse();
-  const rows = acik.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<tr><td>${fmtDate(t.tarih)}</td><td>${c ? esc(c.ad) : "-"}</td><td>${esc(t.metin)}</td><td><div class="act-btns"><button class="edit" data-talepok="${t.id}">✓ Karşılandı</button><button class="del" data-talepsil="${t.id}">Sil</button></div></td></tr>`; }).join("");
+  const rows = acik.map((t) => { const c = t.musteriId && findCustomer(t.musteriId); return `<tr><td>${fmtDate(t.tarih)}</td><td>${c ? esc(c.ad) : "-"}</td><td>${esc(t.metin)}</td><td><div class="act-btns"><button class="edit" data-talepok="${t.id}">${ikon("tik")} Karşılandı</button><button class="del" data-talepsil="${t.id}">Sil</button></div></td></tr>`; }).join("");
   return pageHead("İstenen Ürünler (Talepler)", acik.length + " açık talep — sahada müşterinin istediği ama verilemeyenler") +
     tableCard(["Tarih", "Müşteri", "İstenen ürün", "İşlem"], rows, infoLine(acik.length));
 }
@@ -5492,7 +5530,7 @@ function servisKonumIzle() {
       .map((c) => ({ c, d: haversine(rota.konum.lat, rota.konum.lng, c.lat, c.lng) }))
       .filter((x) => x.d <= 100).sort((a, b) => a.d - b.d);
     if (!yakin.length) { banner.innerHTML = ""; return; }
-    banner.innerHTML = `<div class="servis-uyari"><b>📍 Yakındasın:</b> ${yakin.map((x) => `${esc(x.c.ad)} (${mesafeMetin(x.d)})`).join(" · ")}. Vardığın müşteride <b>Vardım</b>'a bas.</div>`;
+    banner.innerHTML = `<div class="servis-uyari"><b>${ikon("konum")} Yakındasın:</b> ${yakin.map((x) => `${esc(x.c.ad)} (${mesafeMetin(x.d)})`).join(" · ")}. Vardığın müşteride <b>Vardım</b>'a bas.</div>`;
   }, () => {}, { enableHighAccuracy: true, maximumAge: 8000, timeout: 15000 });
 }
 
@@ -5539,23 +5577,23 @@ function saleIrsaliyeMetni(s, opts) {
   const kalem = s.items.map((it) => {
     const bk = it.barkod ? " - " + it.barkod : "";
     const tutar = (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
-    return "• " + it.ad + bk + "\n   " + num2.format(it.adet) + " x " + money.format(it.fiyat) + " = " + money.format(tutar);
+    return "• " + it.ad + bk + "\n   " + num2.format(it.adet) + " x " + paraBelge.format(it.fiyat) + " = " + paraBelge.format(tutar);
   }).join("\n");
   let bak = "";
   const b = bakiyeHesap(s, opts);
   if (b) {
     bak = "\n————————————\n" +
-      "Önceki Bakiye: " + money.format(b.onceki) + "\n" +
-      "Bu Alışveriş: +" + money.format(b.T) + "\n" +
-      (b.pesin > 0.005 ? "Peşin Ödeme: -" + money.format(b.pesin) + "\n" : "") +
-      (b.tah > 0.005 ? "Tahsilat: -" + money.format(b.tah) + "\n" : "") +
-      (b.iade > 0.005 ? "İade: -" + money.format(b.iade) + "\n" : "") +
-      "KALAN BAKİYE: " + money.format(b.kalan) + b.etiket + "\n";
+      "Önceki Bakiye: " + paraBelge.format(b.onceki) + "\n" +
+      "Bu Alışveriş: +" + paraBelge.format(b.T) + "\n" +
+      (b.pesin > 0.005 ? "Peşin Ödeme: -" + paraBelge.format(b.pesin) + "\n" : "") +
+      (b.tah > 0.005 ? "Tahsilat: -" + paraBelge.format(b.tah) + "\n" : "") +
+      (b.iade > 0.005 ? "İade: -" + paraBelge.format(b.iade) + "\n" : "") +
+      "KALAN BAKİYE: " + paraBelge.format(b.kalan) + b.etiket + "\n";
   }
   return (st.fisBaslik || st.firmaAdi || "") + "\nİRSALİYE / SATIŞ FİŞİ\nBelge: " + s.belgeNo + "\nTarih: " + fmtDate(s.tarih) +
     (c ? "\nMüşteri: " + c.ad : "") + "\n\n" + kalem + "\n" +
-    (s.iskonto ? "İskonto: -" + money.format(s.iskonto) + "\n" : "") +
-    "TOPLAM: " + money.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + (s.komisyon ? "\nPOS Komisyonu (%2): -" + money.format(s.komisyon) : "") + bak + "\n" + (st.fisAltbilgi || "Teşekkür ederiz");
+    (s.iskonto ? "İskonto: -" + paraBelge.format(s.iskonto) + "\n" : "") +
+    "TOPLAM: " + paraBelge.format(s.toplam) + "\nÖdeme: " + saleOdeme(s) + (s.komisyon ? "\nPOS Komisyonu (%2): -" + paraBelge.format(s.komisyon) : "") + bak + "\n" + (st.fisAltbilgi || "Teşekkür ederiz");
 }
 function irsaliyeWa(sale, opts) {
   if (!sale) { alert("Bu müşteride gönderilecek satış yok."); return; }
@@ -5576,21 +5614,21 @@ function irsaliyeGorsel(s, opts) {
   rows.push({ t: "Tarih: " + fmtDate(s.tarih) });
   if (c) rows.push({ t: "Müşteri: " + c.ad });
   rows.push({ sep: 1 });
-  s.items.forEach((it) => rows.push({ t: it.ad, r: money.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0)), sub: (it.barkod ? it.barkod + "  ·  " : "") + num2.format(it.adet) + " × " + money.format(it.fiyat) }));
+  s.items.forEach((it) => rows.push({ t: it.ad, r: paraBelge.format((Number(it.fiyat) || 0) * (Number(it.adet) || 0)), sub: (it.barkod ? it.barkod + "  ·  " : "") + num2.format(it.adet) + " × " + paraBelge.format(it.fiyat) }));
   rows.push({ sep: 1 });
-  if (s.iskonto) rows.push({ t: "İskonto", r: "-" + money.format(s.iskonto) });
-  rows.push({ t: "TOPLAM", r: money.format(s.toplam), bold: true, size: 20 });
+  if (s.iskonto) rows.push({ t: "İskonto", r: "-" + paraBelge.format(s.iskonto) });
+  rows.push({ t: "TOPLAM", r: paraBelge.format(s.toplam), bold: true, size: 20 });
   rows.push({ t: "Ödeme: " + saleOdeme(s), color: "#555" });
-  if (s.komisyon) rows.push({ t: "POS Komisyonu (%2)", r: "-" + money.format(s.komisyon), color: "#555" });
+  if (s.komisyon) rows.push({ t: "POS Komisyonu (%2)", r: "-" + paraBelge.format(s.komisyon), color: "#555" });
   const b = bakiyeHesap(s, opts);
   if (b) {
     rows.push({ sep: 1 });
-    rows.push({ t: "Önceki Bakiye", r: money.format(b.onceki), color: "#555" });
-    rows.push({ t: "Bu Alışveriş", r: "+" + money.format(b.T), color: "#555" });
-    if (b.pesin > 0.005) rows.push({ t: "Peşin Ödeme", r: "-" + money.format(b.pesin), color: "#555" });
-    if (b.tah > 0.005) rows.push({ t: "Tahsilat", r: "-" + money.format(b.tah), color: "#555" });
-    if (b.iade > 0.005) rows.push({ t: "İade", r: "-" + money.format(b.iade), color: "#555" });
-    rows.push({ t: "KALAN BAKİYE" + b.etiket, r: money.format(b.kalan), bold: true, size: 18, color: b.kalan > 0.005 ? "#c0392b" : "#1e824c" });
+    rows.push({ t: "Önceki Bakiye", r: paraBelge.format(b.onceki), color: "#555" });
+    rows.push({ t: "Bu Alışveriş", r: "+" + paraBelge.format(b.T), color: "#555" });
+    if (b.pesin > 0.005) rows.push({ t: "Peşin Ödeme", r: "-" + paraBelge.format(b.pesin), color: "#555" });
+    if (b.tah > 0.005) rows.push({ t: "Tahsilat", r: "-" + paraBelge.format(b.tah), color: "#555" });
+    if (b.iade > 0.005) rows.push({ t: "İade", r: "-" + paraBelge.format(b.iade), color: "#555" });
+    rows.push({ t: "KALAN BAKİYE" + b.etiket, r: paraBelge.format(b.kalan), bold: true, size: 18, color: b.kalan > 0.005 ? "#c0392b" : "#1e824c" });
   }
   rows.push({ sep: 1 });
   rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
@@ -5630,7 +5668,7 @@ function irsaliyeAciklama(s, opts) {
   const c = s.musteriId && findCustomer(s.musteriId);
   const b = bakiyeHesap(s, opts);
   return "İrsaliye " + s.belgeNo + (c ? " · " + c.ad : "") +
-    (b ? " · Kalan Bakiye: " + money.format(b.kalan) + b.etiket : "");
+    (b ? " · Kalan Bakiye: " + paraBelge.format(b.kalan) + b.etiket : "");
 }
 async function irsaliyePaylas(s, opts) {
   if (!s) { alert("Gönderilecek satış yok."); return; }
@@ -5669,8 +5707,8 @@ function fisGonderModal(s, opts) {
   let d = ((c && c.telefon) || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
   const body = `<img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="fiş" />
     <div class="fg-actions">
-      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">📲 ${esc(c ? c.ad : "Numaraya")} — Fiş Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
-      <button class="btn primary lg" id="fgResim" type="button">🖼 Fiş Görselini Paylaş</button>
+      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">${ikon("paylas")} ${esc(c ? c.ad : "Numaraya")} — Fiş Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
+      <button class="btn primary lg" id="fgResim" type="button">${ikon("paylas")} Fiş Görselini Paylaş</button>
     </div>
     <p class="hint" style="margin-top:6px">Metin doğrudan bağlı numaraya gider (tek dokunuş gönder). Görsel için Paylaş → WhatsApp → kişi seç.</p>`;
   const m = openModal("Fiş / İrsaliye " + s.belgeNo, body, { noFoot: true, onMount: (ov) => { const r = ov.querySelector("#fgResim"); if (r) r.onclick = () => irsaliyePaylas(s, opts); } });
@@ -5725,27 +5763,27 @@ function ekstreSatirlari(id, mod) {
   rows.push({ t: "Tarih: " + fmtDateShort(new Date().toISOString()) });
   rows.push({ t: "Dönem: " + (hs.length ? fmtDateShort(hs[0].t) : "—") + " – " + fmtDateShort(new Date().toISOString()) });
   rows.push({ sep: 1 });
-  if (Math.abs(donemBasi) > 0.005) rows.push({ t: "Dönem Başı Bakiye", r: money.format(donemBasi), color: "#555" });
+  if (Math.abs(donemBasi) > 0.005) rows.push({ t: "Dönem Başı Bakiye", r: paraBelge.format(donemBasi), color: "#555" });
   let alis = 0, ode = 0;
   hs.forEach((x) => {
     if (x.tip === "satis") {
       alis += x.tutar;
-      rows.push({ t: fmtDateShort(x.t) + " — Teslimat", r: money.format(x.tutar), sub: ekstreKalemOzet(x.items) });
-      if (x.pesin > 0.005) { ode += x.pesin; rows.push({ t: fmtDateShort(x.t) + " — Ödeme (peşin)", r: "-" + money.format(x.pesin), color: "#1e824c" }); }
+      rows.push({ t: fmtDateShort(x.t) + " — Teslimat", r: paraBelge.format(x.tutar), sub: ekstreKalemOzet(x.items) });
+      if (x.pesin > 0.005) { ode += x.pesin; rows.push({ t: fmtDateShort(x.t) + " — Ödeme (peşin)", r: "-" + paraBelge.format(x.pesin), color: "#1e824c" }); }
     } else {
       ode += x.tutar;
       // Not YAZILMAZ: tahsilat notları iç kayıt ("bakiye düzeltmesi", "sisteme girilmemişti"
       // gibi) ve müşteriye gösterilecek şeyler değil. Sadece iade bilgisi anlamlı.
       const iade = /iade/i.test(x.not || "") ? x.not : "";
-      rows.push({ t: fmtDateShort(x.t) + " — " + (iade ? "İADE" : "ÖDEME"), r: "-" + money.format(x.tutar), color: "#1e824c", sub: iade });
+      rows.push({ t: fmtDateShort(x.t) + " — " + (iade ? "İADE" : "ÖDEME"), r: "-" + paraBelge.format(x.tutar), color: "#1e824c", sub: iade });
     }
   });
   rows.push({ sep: 1 });
-  rows.push({ t: "TOPLAM TESLİMAT", r: money.format(alis), bold: true, size: 18 });
-  rows.push({ t: "TOPLAM ÖDEME", r: "-" + money.format(ode), bold: true, size: 18, color: "#1e824c" });
+  rows.push({ t: "TOPLAM TESLİMAT", r: paraBelge.format(alis), bold: true, size: 18 });
+  rows.push({ t: "TOPLAM ÖDEME", r: "-" + paraBelge.format(ode), bold: true, size: 18, color: "#1e824c" });
   const kalan = customerBorc(id);
   rows.push({ sep: 1 });
-  rows.push({ t: kalan > 0.005 ? "KALAN BAKİYE (BORÇ)" : "KALAN BAKİYE", r: money.format(kalan), bold: true, size: 20, color: kalan > 0.005 ? "#c0392b" : "#1e824c" });
+  rows.push({ t: kalan > 0.005 ? "KALAN BAKİYE (BORÇ)" : "KALAN BAKİYE", r: paraBelge.format(kalan), bold: true, size: 20, color: kalan > 0.005 ? "#c0392b" : "#1e824c" });
   rows.push({ sep: 1 });
   rows.push({ t: st.fisAltbilgi || "Teşekkür ederiz", center: true, color: "#555" });
   return rows;
@@ -5755,12 +5793,12 @@ function ekstreMetni(id, mod) {
   const c = findCustomer(id);
   return (store.settings.fisBaslik || store.settings.firmaAdi || "") + "\nHESAP ÖZETİ\n" + c.ad +
     "\nTarih: " + fmtDateShort(new Date().toISOString()) +
-    "\nKalan bakiye: " + money.format(customerBorc(id));
+    "\nKalan bakiye: " + paraBelge.format(customerBorc(id));
 }
 async function ekstrePaylas(id, mod) {
   const c = findCustomer(id); if (!c) { alert("Müşteri bulunamadı."); return; }
   const url = ekstreGorsel(id, mod);
-  const cap = "Hesap Özeti · " + c.ad + " · Kalan Bakiye: " + money.format(customerBorc(id));
+  const cap = "Hesap Özeti · " + c.ad + " · Kalan Bakiye: " + paraBelge.format(customerBorc(id));
   let d = (c.telefon || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "9" + d; else if (d.length === 10) d = "90" + d;
   if (d && window.AndroidWa && window.AndroidWa.sendImage) {
     try { window.AndroidWa.sendImage(url.split(",")[1], d, cap); return; } catch (e) {}
@@ -5793,8 +5831,8 @@ function ekstreModal(id, mod) {
     </div>
     <img src="${url}" style="width:100%;border:1px solid var(--line);border-radius:8px" alt="hesap özeti" />
     <div class="fg-actions">
-      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">📲 ${esc(c.ad)} — Özet Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
-      <button class="btn primary lg" id="ekResim" type="button">🖼 Hesap Özetini Paylaş (görsel)</button>
+      ${d ? `<a class="btn green lg" href="https://wa.me/${d}?text=${encodeURIComponent(metin)}" target="_blank" rel="noopener">${ikon("paylas")} ${esc(c.ad)} — Özet Metnini Gönder</a>` : `<p class="hint">Müşteri telefonu kayıtlı değil — metin numaraya gönderilemez.</p>`}
+      <button class="btn primary lg" id="ekResim" type="button">${ikon("paylas")} Hesap Özetini Paylaş (görsel)</button>
     </div>
     <p class="hint" style="margin-top:6px">Görsel için Paylaş → WhatsApp → kişi seç. Dönemi yukarıdan değiştirebilirsin.</p>`;
   const m = openModal("Hesap Özeti · " + c.ad, body, { noFoot: true, onMount: (ov) => {
@@ -5871,7 +5909,7 @@ function ziyaretKartiHTML(id) {
   const konumVar = c.lat != null && c.lng != null;
   return `<div class="ziyaret-kart">
     <div class="zk-head"><div><h2>${esc(c.ad)}</h2>${c.telefon ? `<span class="hint">${esc(c.telefon)}</span>` : ""}</div>
-      <button class="btn soft sm" data-zkapat type="button">✕</button></div>
+      <button class="btn soft sm" data-zkapat type="button">${ikon("kapat")}</button></div>
     <div class="zk-metrik">
       <div class="zkm"><span>Bakiye</span><b class="${borc > 0 ? "borc-red" : ""}">${money.format(borc)}</b></div>
       <div class="zkm"><span>Bu ay ciro</span><b>${money.format(ay)}</b></div>
@@ -5884,12 +5922,12 @@ function ziyaretKartiHTML(id) {
       <p class="hint" id="zkHizliDurum">Yaz → ürünler sepete dolar, satış ekranına geçer. (Boş bırakıp "Satış Yap" ile de girebilirsin.)</p>
     </div>` : ""}
     <div class="zk-aksiyon">
-      <button class="btn green lg" data-zksatis="${id}" type="button">🖊 Satış Yap</button>
-      <button class="btn soft" data-zkkonum="${id}" type="button">📍 ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
-      <button class="btn soft" data-zkwa="${id}" type="button">📲 Son İrsaliyeyi Paylaş (görsel)</button>
-      <button class="btn soft" data-zkekstre="${id}" type="button">🧾 Hesap Özeti Çıkar</button>
-      ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">✓ Ziyareti Tamamla → Sonraki</button>
-      <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
+      <button class="btn green lg" data-zksatis="${id}" type="button">${ikon("kalem")} Satış Yap</button>
+      <button class="btn soft" data-zkkonum="${id}" type="button">${ikon("konum")} ${konumVar ? "Konumu Güncelle" : "Konumu Kaydet"}</button>
+      <button class="btn soft" data-zkwa="${id}" type="button">${ikon("paylas")} Son İrsaliyeyi Paylaş (görsel)</button>
+      <button class="btn soft" data-zkekstre="${id}" type="button">${ikon("fis")} Hesap Özeti Çıkar</button>
+      ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">${ikon("tik")} Ziyareti Tamamla → Sonraki</button>
+      <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
     </div>
     </div>
   </div>`;
@@ -5939,15 +5977,15 @@ function aracAlimModal(baslangic) {
   const liste = () => {
     let list = store.products.filter((p) => p.gorunur !== false);
     if (q) { const n = ocrNorm(q); list = list.filter((p) => ocrNorm(p.ad).includes(n)); }
-    return list.slice(0, 300).map((p) => `<div class="aa-row"><div class="aa-ad">${esc(p.ad)}<span class="hint" data-aastok="${p.id}"> · araç ${num2.format(Number(p.aracStok) || 0)}${mod === "yukle" ? " · dükkan " + num2.format(Number(p.stok) || 0) : ""}</span></div><input class="aa-in" data-aa="${p.id}" type="number" inputmode="numeric" placeholder="adet" />${mod === "satin" ? `<input class="aa-in aa-al" data-aaal="${p.id}" type="number" inputmode="decimal" placeholder="₺alış" value="${Number(p.alis) || ""}" title="birim alış" />` : ""}<button class="btn ok aa-btn" data-aaadd="${p.id}" type="button">＋</button></div>`).join("") || `<p class="hint" style="padding:8px">Ürün yok.</p>`;
+    return list.slice(0, 300).map((p) => `<div class="aa-row"><div class="aa-ad">${esc(p.ad)}<span class="hint" data-aastok="${p.id}"> · araç ${num2.format(Number(p.aracStok) || 0)}${mod === "yukle" ? " · dükkan " + num2.format(Number(p.stok) || 0) : ""}</span></div><input class="aa-in" data-aa="${p.id}" type="number" inputmode="numeric" placeholder="adet" />${mod === "satin" ? `<input class="aa-in aa-al" data-aaal="${p.id}" type="number" inputmode="decimal" placeholder="₺alış" value="${Number(p.alis) || ""}" title="birim alış" />` : ""}<button class="btn ok aa-btn" data-aaadd="${p.id}" type="button">${ikon("arti")}</button></div>`).join("") || `<p class="hint" style="padding:8px">Ürün yok.</p>`;
   };
   const aciklama = () => mod === "satin"
-    ? `Adet + birim alış (₺) yaz → ＋. Araca eklenir ve <b>alış faturası</b> olarak kaydedilir.`
-    : `Adet yaz → ＋. <b>Dükkan stoğundan düşer</b>, araca eklenir.`;
-  const body = `${stkSecim("aaMod", [["satin", "🧾 Satın aldım"], ["yukle", "🏪 Dükkandan yükledim"]], mod)}
+    ? `Adet + birim alış (₺) yaz → ${ikon("arti")}. Araca eklenir ve <b>alış faturası</b> olarak kaydedilir.`
+    : `Adet yaz → ${ikon("arti")}. <b>Dükkan stoğundan düşer</b>, araca eklenir.`;
+  const body = `${stkSecim("aaMod", [["satin", ikon("fis") + " Satın aldım"], ["yukle", ikon("dukkan") + " Dükkandan yükledim"]], mod)}
     <div class="field" id="aaTurKutu" style="margin:8px 0 0"><label>Nasıl ödedin?</label>${stkSecim("aaTur", [["nakit", "Nakit"], ["kart", "Kart"], ["havale", "Havale"]], "nakit")}</div>
     <input id="aaAra" placeholder="Ürün ara..." style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:11px;margin-top:8px" /><p class="hint" id="aaAciklama" style="margin:8px 0 4px">${aciklama()}</p><div id="aaList" style="max-height:48vh;overflow:auto">${liste()}</div>`;
-  const m = openModal("🛒 Araca Mal Girişi", body, {
+  const m = openModal(`${ikon("sepet")} Araca Mal Girişi`, body, {
     noFoot: true,
     onMount: (ov) => {
       const l = ov.querySelector("#aaList"), ara = ov.querySelector("#aaAra");
@@ -5969,7 +6007,7 @@ function aracAlimModal(baslangic) {
         saveStore(); if (typeof bulutaYaz === "function") bulutaYaz();
         if (inp) inp.value = "";
         const st = l.querySelector(`[data-aastok="${p.id}"]`); if (st) st.textContent = " · araç " + num2.format(Number(p.aracStok) || 0) + (mod === "yukle" ? " · dükkan " + num2.format(Number(p.stok) || 0) : "");
-        b.textContent = "✓"; setTimeout(() => { b.textContent = "＋"; }, 700);
+        b.innerHTML = ikon("tik"); setTimeout(() => { b.innerHTML = ikon("arti"); }, 700);
       });
       wire();
       const modGuncelle = () => { ov.querySelector("#aaTurKutu").style.display = mod === "satin" ? "" : "none"; ov.querySelector("#aaAciklama").innerHTML = aciklama(); l.innerHTML = liste(); wire(); };
@@ -5987,13 +6025,13 @@ function rotaIncele(rotaId) {
   const inSet = new Set(r.musteriIds);
   const uyeler = r.musteriIds.map((id) => findCustomer(id)).filter(Boolean);
   const disinda = store.customers.filter((c) => !inSet.has(c.id) && !c.bayi);
-  const uyeRows = uyeler.map((c, i) => `<div class="ri-row"><span class="ri-no">${i + 1}</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}${c.servisGunu ? " · " + esc(c.servisGunu) : ""} · Bakiye ${money.format(customerBorc(c.id))}</span></div>${(c.telefon || "").replace(/\D/g, "") ? `<button class="btn soft sm" data-onsip="${c.id}" type="button" title="Ön sipariş mesajı">📲</button>` : ""}<button class="rm" data-rcikar="${c.id}" type="button" title="Rotadan çıkar">✕</button></div>`).join("") || `<p class="hint" style="padding:8px">Bu rotada müşteri yok.</p>`;
-  const disRows = disinda.map((c) => `<div class="ri-row"><span class="ri-no">＋</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}</span></div><button class="btn green sm" data-rekle="${c.id}" type="button">Ekle</button></div>`).join("") || `<p class="hint" style="padding:8px">Tüm müşteriler bu rotada.</p>`;
+  const uyeRows = uyeler.map((c, i) => `<div class="ri-row"><span class="ri-no">${i + 1}</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}${c.servisGunu ? " · " + esc(c.servisGunu) : ""} · Bakiye ${money.format(customerBorc(c.id))}</span></div>${(c.telefon || "").replace(/\D/g, "") ? `<button class="btn soft sm" data-onsip="${c.id}" type="button" title="Ön sipariş mesajı">${ikon("paylas")}</button>` : ""}<button class="rm" data-rcikar="${c.id}" type="button" title="Rotadan çıkar">${ikon("kapat")}</button></div>`).join("") || `<p class="hint" style="padding:8px">Bu rotada müşteri yok.</p>`;
+  const disRows = disinda.map((c) => `<div class="ri-row"><span class="ri-no">${ikon("arti")}</span><div class="ri-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "")}</span></div><button class="btn green sm" data-rekle="${c.id}" type="button">Ekle</button></div>`).join("") || `<p class="hint" style="padding:8px">Tüm müşteriler bu rotada.</p>`;
   const telli = uyeler.filter((c) => (c.telefon || "").replace(/\D/g, "")).length;
-  const body = `<div class="ri-bas">Rotadaki müşteriler (${uyeler.length}) <span class="hint">📲 = ön sipariş mesajı</span></div><div class="ri-list">${uyeRows}</div>
+  const body = `<div class="ri-bas">Rotadaki müşteriler (${uyeler.length}) <span class="hint">${ikon("paylas")} = ön sipariş mesajı</span></div><div class="ri-list">${uyeRows}</div>
     <details style="margin-top:12px"><summary>Rotada olmayanlar (${disinda.length}) — eklemek için</summary><div class="ri-list">${disRows}</div></details>
-    <button class="btn softred" id="rotaSilBtn" type="button" style="width:100%;margin-top:14px">🗑 Rotayı Sil</button>`;
-  const m = openModal("👁 " + esc(r.ad) + " — Rota İçeriği", body, {
+    <button class="btn softred" id="rotaSilBtn" type="button" style="width:100%;margin-top:14px">${ikon("cop")} Rotayı Sil</button>`;
+  const m = openModal(`${ikon("goz")} ` + esc(r.ad) + " — Rota İçeriği", body, {
     noFoot: true,
     onMount: (ov) => {
       ov.querySelectorAll("[data-rcikar]").forEach((b) => b.onclick = () => { r.musteriIds = r.musteriIds.filter((x) => x !== b.dataset.rcikar); saveStore(); if (typeof bulutaYaz === "function") bulutaYaz(); m.close(); rotaIncele(rotaId); });
@@ -6026,14 +6064,14 @@ function aracDusukListe() {
 }
 function aracStokAjaniHTML() {
   const list = aracDusukListe();
-  if (!list.length) return `<div class="ajan ok"><span class="ajan-ic">🤖</span><div class="ajan-txt"><b>Araç Stok Ajanı</b><span class="hint">Azalan/biten ürün yok — araç dolu 👍</span></div></div>`;
+  if (!list.length) return `<div class="ajan ok"><span class="ajan-ic"></span><div class="ajan-txt"><b>Araç Stok Ajanı</b><span class="hint">Azalan/biten ürün yok — araç dolu </span></div></div>`;
   const bitti = list.filter((x) => x.arac <= 0).length;
   const chips = list.map(({ p, arac }) => `<span class="ajan-chip ${arac <= 0 ? "bitti" : "az"}">${esc(p.ad)}: <b>${num2.format(arac)}</b></span>`).join("");
-  return `<details class="ajan uyari"><summary class="ajan-bas"><span class="ajan-ic">🤖</span><b>Araç Stok Ajanı — ${list.length} azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><span class="ajan-ok">▾</span></summary><div class="ajan-body"><div class="ajan-chips">${chips}</div><button class="ajan-al btn ok sm" data-act="aracalim" type="button">🛒 Araca Al</button></div></details>`;
+  return `<details class="ajan uyari"><summary class="ajan-bas"><span class="ajan-ic"></span><b>Araç Stok Ajanı — ${list.length} azaldı${bitti ? " · " + bitti + " bitti" : ""}</b><span class="ajan-ok">${ikon("asagi")}</span></summary><div class="ajan-body"><div class="ajan-chips">${chips}</div><button class="ajan-al btn ok sm" data-act="aracalim" type="button">${ikon("sepet")} Araca Al</button></div></details>`;
 }
 // Yemek/mola gideri — servis sırasında hızlı gider girişi
 function yemekModal() {
-  const m = openModal("🍽️ Yemek / Mola Gideri", `<div class="field"><label>Tutar (₺)</label><input id="ymTutar" type="number" inputmode="decimal" placeholder="0" /></div><div class="field"><label>Not (opsiyonel)</label><input id="ymNot" placeholder="ör. öğle yemeği" /></div><button class="btn ok" id="ymKaydet" type="button" style="width:100%;min-height:46px;justify-content:center">Gider Ekle</button>`, {
+  const m = openModal(`${ikon("bardak")} Yemek / Mola Gideri`, `<div class="field"><label>Tutar (₺)</label><input id="ymTutar" type="number" inputmode="decimal" placeholder="0" /></div><div class="field"><label>Not (opsiyonel)</label><input id="ymNot" placeholder="ör. öğle yemeği" /></div><button class="btn ok" id="ymKaydet" type="button" style="width:100%;min-height:46px;justify-content:center">Gider Ekle</button>`, {
     noFoot: true,
     onMount: (ov) => {
       const t = ov.querySelector("#ymTutar"); t.focus();
@@ -6052,11 +6090,11 @@ function renderRota() {
 function renderServisBaslat() {
   const rotalar = store.rotalar || [];
   const rlist = rotalar.length
-    ? rotalar.map((r) => `<div class="rota-kayit-satir" data-rincele="${r.id}" role="button" tabindex="0"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri · dokun → incele/düzenle/sil</span></div><button class="btn green sm" data-rbaslat="${r.id}" type="button">▶ Başlat</button></div>`).join("")
+    ? rotalar.map((r) => `<div class="rota-kayit-satir" data-rincele="${r.id}" role="button" tabindex="0"><div class="rk-mid"><b>${esc(r.ad)}</b><span class="hint">${r.musteriIds.length} müşteri · dokun → incele/düzenle/sil</span></div><button class="btn green sm" data-rbaslat="${r.id}" type="button">${ikon("sag")} Başlat</button></div>`).join("")
     : `<p class="hint" style="padding:6px">Kayıtlı rota yok. "Yeni Rota Oluştur" ile başla.</p>`;
-  return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }]) +
+  return pageHead("Rota / Saha Satış", "Servisi başlat — uygulama seni müşteri müşteri yönlendirir", [{ label: `${ikon("sepet")} Araca Al`, cls: "soft", act: "aracalim" }]) +
     aracStokAjaniHTML() +
-    `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">＋ Yeni Rota Oluştur & Servisi Başlat</button></div>
+    `<div class="card"><button class="btn primary lg" id="rotaOlustur" type="button" style="width:100%">${ikon("arti")} Yeni Rota Oluştur & Servisi Başlat</button></div>
     <div class="section-title" style="margin-top:14px">Kayıtlı Rotalar</div>
     <div class="card">${rlist}</div>`;
 }
@@ -6065,8 +6103,8 @@ function servisStepperHTML() {
     const c = findCustomer(id); if (!c) return "";
     const edildi = servis.edilen.includes(id), pasli = servis.paslar.includes(id), bu = servis.acik === id;
     const durum = edildi ? "edildi" : pasli ? "pas" : bu ? "acik" : "";
-    const sag = edildi ? `<span class="sd-tag ok">✓</span>` : pasli ? `<span class="sd-tag pas">pas</span>` : bu ? `<span class="sd-tag now">şimdi</span>` : `<button class="btn soft sm" data-durakac="${id}" type="button">Aç</button>`;
-    return `<div class="servis-durak ${durum}"><span class="sd-no">${edildi ? "✓" : pasli ? "–" : (i + 1)}</span><div class="sd-mid"><b>${esc(c.ad)}</b></div>${sag}</div>`;
+    const sag = edildi ? `<span class="sd-tag ok">${ikon("tik")}</span>` : pasli ? `<span class="sd-tag pas">pas</span>` : bu ? `<span class="sd-tag now">şimdi</span>` : `<button class="btn soft sm" data-durakac="${id}" type="button">Aç</button>`;
+    return `<div class="servis-durak ${durum}"><span class="sd-no">${edildi ? ikon("tik", 16, 2.6) : pasli ? "–" : (i + 1)}</span><div class="sd-mid"><b>${esc(c.ad)}</b></div>${sag}</div>`;
   }).join("");
 }
 function servisSepetHTML() {
@@ -6087,7 +6125,7 @@ function servisSepetHTML() {
 function sCatTabsHTML() {
   const used = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
   const cats = ["ANA"].concat(allGroupNames().filter((g) => used.has(g)));
-  return cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-scat="${c}">${c === "ANA" ? "☰ Kategoriler" : esc(c)}</span>`).join("");
+  return cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-scat="${c}">${c === "ANA" ? ikon("izgara", 16) + " Kategoriler" : esc(c)}</span>`).join("");
 }
 function servisSihirbaz(id) {
   const c = findCustomer(id); if (!c) return "";
@@ -6103,26 +6141,26 @@ function servisSihirbaz(id) {
         <div class="zkm"><span>Puan</span><b id="zkPuan">…</b></div>
       </div>
       ${son ? `<p class="hint">Son satış: ${fmtDate(son.tarih)} · ${money.format(son.toplam)}</p>` : ""}
-      ${(() => { const notlar = (store.ziyaretler || []).filter((z) => z.musteriId === id && (z.not || "").trim()).slice(-3).reverse(); return notlar.length ? `<div class="zn-kutu"><div class="zn-bas">📝 Önceki ziyaret notları</div>${notlar.map((z) => `<div class="zn-not"><span class="hint">${fmtDate(z.tarih)}</span> ${esc(z.not)}</div>`).join("")}</div>` : ""; })()}
-      ${(() => { const o = musteriOneri(id); return o.length ? `<div class="oner-kutu"><div class="oner-bas">🎯 Öner (geçen aldı, bu ay almadı)</div><div class="oner-cip">${o.map((p) => `<button class="oner-c" data-oner="${p.id}" type="button">${esc(p.ad)}</button>`).join("")}</div></div>` : ""; })()}
-      <button class="btn soft" data-skonum="${id}" type="button" style="width:100%;margin:10px 0 0">📍 ${(c.lat != null && c.lng != null) ? "Konumu Güncelle" : "Bu Müşterinin Konumunu Kaydet"}</button>
+      ${(() => { const notlar = (store.ziyaretler || []).filter((z) => z.musteriId === id && (z.not || "").trim()).slice(-3).reverse(); return notlar.length ? `<div class="zn-kutu"><div class="zn-bas">${ikon("kalem")} Önceki ziyaret notları</div>${notlar.map((z) => `<div class="zn-not"><span class="hint">${fmtDate(z.tarih)}</span> ${esc(z.not)}</div>`).join("")}</div>` : ""; })()}
+      ${(() => { const o = musteriOneri(id); return o.length ? `<div class="oner-kutu"><div class="oner-bas">Öner (geçen aldı, bu ay almadı)</div><div class="oner-cip">${o.map((p) => `<button class="oner-c" data-oner="${p.id}" type="button">${esc(p.ad)}</button>`).join("")}</div></div>` : ""; })()}
+      <button class="btn soft" data-skonum="${id}" type="button" style="width:100%;margin:10px 0 0">${ikon("konum")} ${(c.lat != null && c.lng != null) ? "Konumu Güncelle" : "Bu Müşterinin Konumunu Kaydet"}</button>
       <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
       <div class="sihir-btn">
-        <button class="btn green lg" data-sonay="${id}" type="button">✓ Evet — Devam</button>
-        <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">⏭ Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Sona At</button></div>
+        <button class="btn green lg" data-sonay="${id}" type="button">${ikon("tik")} Evet — Devam</button>
+        <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Sona At</button></div>
       </div>
     </div>`;
   }
   if (adim === "satisMi") {
     return `<div class="card sihir"><div class="sihir-adim">Satış · 2/4</div><h2>${esc(c.ad)}</h2>
       <p class="sihir-soru">Satış var mı?</p>
-      <div class="sihir-btn"><button class="btn green lg" data-satvar="${id}" type="button">✅ Evet, ürün seç</button><button class="btn soft lg" data-satyok="${id}" type="button">🚫 Satış yok — sadece ziyaret</button></div>
+      <div class="sihir-btn"><button class="btn green lg" data-satvar="${id}" type="button">${ikon("tik")} Evet, ürün seç</button><button class="btn soft lg" data-satyok="${id}" type="button">${ikon("kapat")} Satış yok — sadece ziyaret</button></div>
     </div>`;
   }
   if (adim === "urun") {
     return `<div class="card sihir"><div class="sihir-adim">Ürünler · 3/4</div><h2>${esc(c.ad)}</h2>
       <div class="sip-bar">
-        <input id="zkHizli" class="sip-in" placeholder="Sipariş yaz veya 🎤 söyle: 7 soda 2 gazoz 5 su" />
+        <input id="zkHizli" class="sip-in" placeholder="Sipariş yaz veya söyle: 7 soda 2 gazoz 5 su" />
         <div class="sip-btns">
           <button class="btn soft" id="zkSes" type="button">&#127908; Sesli</button>
           <button class="btn green" id="zkHizliBtn" type="button">&#10003; Doldur</button>
@@ -6141,13 +6179,13 @@ function servisSihirbaz(id) {
     const sale = satildi ? store.sales.find((s) => s.id === servis.sonSatisId) : null;
     const urunOpts = `<option value="">— iade ürünü —</option>` + store.products.map((p) => `<option value="${p.id}">${esc(p.ad)}</option>`).join("");
     return `<div class="card sihir"><div class="sihir-adim">Kapanış</div><h2>${esc(c.ad)}</h2>
-      ${satildi ? `<div class="kp-ok">✓ Satış yapıldı · ${money.format(sale ? sale.toplam : 0)}</div>` : `<div class="kp-blok"><label>Satış yok — sebep?</label><div class="kp-sebep">${["Stok dolu", "Borç fazla", "Kapalı", "Küs", "Fiyat", "Diğer"].map((s) => `<button class="kp-sb" data-sebep="${s}" type="button">${s}</button>`).join("")}</div></div>`}
-      ${borc > 0 ? `<div class="kp-blok"><label>💰 Tahsilat — bakiye ${money.format(borc)}</label><div class="zk-hizli-row"><input id="kpTahsil" type="number" inputmode="decimal" placeholder="0" /><select id="kpTahsilTip"><option value="nakit">Nakit</option><option value="pos">Kart (POS)</option><option value="havale">Havale</option></select></div></div>` : ""}
-      <div class="kp-blok"><label>↩ İade (varsa)</label><div class="zk-hizli-row"><select id="kpIadeUrun">${urunOpts}</select><input id="kpIadeAdet" type="number" inputmode="decimal" placeholder="adet" style="max-width:78px" /></div></div>
-      <div class="kp-blok"><label>📋 İstediği ama veremediğin ürün</label><input id="kpTalep" placeholder="ör. 5 koli X marka ayran" /></div>
-      <div class="kp-blok"><label>📝 Not</label><input id="kpNot" placeholder="ziyaret notu / şikayet" /></div>
-      <div class="kp-blok"><label>📅 Sonraki ziyaret</label><input id="kpSonraki" type="date" /></div>
-      <button class="btn primary lg" id="kpBitir" type="button" style="width:100%;margin-top:10px">✓ Ziyareti Bitir → Sonraki</button>
+      ${satildi ? `<div class="kp-ok">${ikon("tik")} Satış yapıldı · ${money.format(sale ? sale.toplam : 0)}</div>` : `<div class="kp-blok"><label>Satış yok — sebep?</label><div class="kp-sebep">${["Stok dolu", "Borç fazla", "Kapalı", "Küs", "Fiyat", "Diğer"].map((s) => `<button class="kp-sb" data-sebep="${s}" type="button">${s}</button>`).join("")}</div></div>`}
+      ${borc > 0 ? `<div class="kp-blok"><label>${ikon("para")} Tahsilat — bakiye ${money.format(borc)}</label><div class="zk-hizli-row"><input id="kpTahsil" type="number" inputmode="decimal" placeholder="0" /><select id="kpTahsilTip"><option value="nakit">Nakit</option><option value="pos">Kart (POS)</option><option value="havale">Havale</option></select></div></div>` : ""}
+      <div class="kp-blok"><label>${ikon("geri")} İade (varsa)</label><div class="zk-hizli-row"><select id="kpIadeUrun">${urunOpts}</select><input id="kpIadeAdet" type="number" inputmode="decimal" placeholder="adet" style="max-width:78px" /></div></div>
+      <div class="kp-blok"><label>${ikon("liste")} İstediği ama veremediğin ürün</label><input id="kpTalep" placeholder="ör. 5 koli X marka ayran" /></div>
+      <div class="kp-blok"><label>${ikon("kalem")} Not</label><input id="kpNot" placeholder="ziyaret notu / şikayet" /></div>
+      <div class="kp-blok"><label>${ikon("takvim")} Sonraki ziyaret</label><input id="kpSonraki" type="date" /></div>
+      <button class="btn primary lg" id="kpBitir" type="button" style="width:100%;margin-top:10px">${ikon("tik")} Ziyareti Bitir → Sonraki</button>
     </div>`;
   }
   const t = cartTotals();
@@ -6156,9 +6194,9 @@ function servisSihirbaz(id) {
     <p class="sihir-soru">Nasıl ödendi?</p>
     <div class="sihir-odeme">
       <button class="btn green lg" data-sode="nakit" type="button">₺ Nakit</button>
-      <button class="btn lg" data-sode="pos" type="button">▤ POS</button>
-      <button class="btn soft lg" data-sode="acik" type="button">📖 Açık Hesap</button>
-      <button class="btn soft lg" data-sode="parcali" type="button">⇄ Parçalı</button>
+      <button class="btn lg" data-sode="pos" type="button">${ikon("liste")} POS</button>
+      <button class="btn soft lg" data-sode="acik" type="button">${ikon("defter")} Açık Hesap</button>
+      <button class="btn soft lg" data-sode="parcali" type="button">${ikon("yenile")} Parçalı</button>
     </div>
     <button class="btn soft sm" data-sgeri="urun" type="button" style="margin-top:10px">← Ürünlere Dön</button>
   </div>`;
@@ -6168,26 +6206,26 @@ function aracStokKontrolHTML() {
   let src = store.products.filter((p) => p.gorunur !== false && p.aractaBulunsun !== false && (Number(p.aracStok) > 0 || Number(p.aracStandart) > 0 || (store.aracHareket || []).some((h) => h.urunId === p.id)));
   if (!src.length) src = store.products.filter((p) => p.gorunur !== false && p.aractaBulunsun !== false);
   src = src.slice().sort((a, b) => (a.grup || "").localeCompare(b.grup || "", "tr") || (a.ad || "").localeCompare(b.ad || "", "tr"));
-  const rows = src.map((p) => `<label class="sk-row"><input type="checkbox" class="sk-chk" data-skchk="${p.id}" /><span class="sk-ad">${esc(p.ad)}<span class="hint"> · ${esc(p.grup || "")}</span></span><input class="sk-adet" data-skadet="${p.id}" type="number" inputmode="numeric" value="${Number(p.aracStok) || 0}" /></label>`).join("") || `<p class="hint" style="padding:10px">Araçta ürün yok. Önce "🛒 Araca Al" ile yükle.</p>`;
-  return pageHead("🚚 Araç Stok Kontrol", "Her ürünü say, doğrula, işaretle → sonra rota başlar", [{ label: "🛒 Araca Al", cls: "soft", act: "aracalim" }, { label: "⏹ İptal", cls: "softred", act: "servisbitir" }]) +
-    `<div class="sk-tools"><button class="btn soft sm" id="skHepsi" type="button">✓ Hepsini işaretle</button><span class="hint" id="skDurum">0 / ${src.length} işaretlendi</span></div>
+  const rows = src.map((p) => `<label class="sk-row"><input type="checkbox" class="sk-chk" data-skchk="${p.id}" /><span class="sk-ad">${esc(p.ad)}<span class="hint"> · ${esc(p.grup || "")}</span></span><input class="sk-adet" data-skadet="${p.id}" type="number" inputmode="numeric" value="${Number(p.aracStok) || 0}" /></label>`).join("") || `<p class="hint" style="padding:10px">Araçta ürün yok. Önce "${ikon("sepet")} Araca Al" ile yükle.</p>`;
+  return pageHead(`${ikon("kamyon")} Araç Stok Kontrol`, "Her ürünü say, doğrula, işaretle → sonra rota başlar", [{ label: `${ikon("sepet")} Araca Al`, cls: "soft", act: "aracalim" }, { label: `${ikon("kapat")} İptal`, cls: "softred", act: "servisbitir" }]) +
+    `<div class="sk-tools"><button class="btn soft sm" id="skHepsi" type="button">${ikon("tik")} Hepsini işaretle</button><span class="hint" id="skDurum">0 / ${src.length} işaretlendi</span></div>
      <div class="card sk-list">${rows}</div>
-     <button class="btn primary lg" id="skBitir" type="button" style="width:100%;margin-top:12px">✓ Stok Tamam → Rotayı Başlat</button>`;
+     <button class="btn primary lg" id="skBitir" type="button" style="width:100%;margin-top:12px">${ikon("tik")} Stok Tamam → Rotayı Başlat</button>`;
 }
 function renderServisAktif() {
   if (!servis.stokBitti) return aracStokKontrolHTML();
   const total = servis.musteriIds.length, done = servis.edilen.length, pas = servis.paslar.length;
   const o = servisGunOzet();
-  const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>📋 ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
+  const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>${ikon("liste")} ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
-    : `<div class="card" style="text-align:center;padding:24px"><h2 style="margin:0 0 6px">Rota tamam 🎉</h2><p class="hint" style="margin-bottom:14px">${done} satış · ${pas} pas</p><button class="btn softred lg" data-act="servisbitir" type="button" style="width:100%;justify-content:center">⏹ Servisi Bitir → Gün Sonu Raporu</button></div>`;
-  return pageHead("🚗 Servis", done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : "")) +
+    : `<div class="card" style="text-align:center;padding:24px"><h2 style="margin:0 0 6px">Rota tamam </h2><p class="hint" style="margin-bottom:14px">${done} satış · ${pas} pas</p><button class="btn softred lg" data-act="servisbitir" type="button" style="width:100%;justify-content:center">${ikon("kapat")} Servisi Bitir → Gün Sonu Raporu</button></div>`;
+  return pageHead(`${ikon("araba")} Servis`, done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : "")) +
     `<div class="rota-tiles">
-       <button class="rt rt-satis" data-act="ekstrasatis" type="button"><span class="rt-ic">➕</span><span>+Satış</span></button>
-       <button class="rt rt-stok" data-act="aracalim" type="button"><span class="rt-ic">📦</span><span>+Stok</span></button>
-       <button class="rt rt-yemek" data-act="yemek" type="button"><span class="rt-ic">🍽️</span><span>Yemek</span></button>
-       <button class="rt rt-kmb" data-act="km" type="button"><span class="rt-ic">🚗</span><span id="rtKm">${((servis.km || 0) / 1000).toFixed(1)} km</span></button>
+       <button class="rt rt-satis" data-act="ekstrasatis" type="button"><span class="rt-ic">${ikon("arti")}</span><span>+Satış</span></button>
+       <button class="rt rt-stok" data-act="aracalim" type="button"><span class="rt-ic">${ikon("kutu")}</span><span>+Stok</span></button>
+       <button class="rt rt-yemek" data-act="yemek" type="button"><span class="rt-ic">${ikon("bardak")}</span><span>Yemek</span></button>
+       <button class="rt rt-kmb" data-act="km" type="button"><span class="rt-ic">${ikon("araba")}</span><span id="rtKm">${((servis.km || 0) / 1000).toFixed(1)} km</span></button>
      </div>` +
     fab + aracStokAjaniHTML() + `<div id="servisBanner"></div>` + govde +
     `<details class="servis-tumu"><summary>Tüm duraklar (${done}/${total})</summary><div class="card">${servisStepperHTML() || `<p class="hint">Rotada müşteri yok.</p>`}</div></details>`;
@@ -6239,14 +6277,14 @@ function renderRotaOlustur() {
       <div id="rySira" class="ry-sira"></div>
       <div style="margin-top:12px"><button class="btn green lg" id="rySave" type="button" style="width:100%">Kaydet & Servisi Başlat</button></div>
     </div>
-    <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;gap:10px"><div class="section-title" style="margin:0">Müşteriler (dokun → ekle)</div><div class="row" style="gap:6px"><button class="btn soft sm" id="ryYeniMus" type="button">＋ Yeni</button><button class="btn soft sm" id="ryRehber" type="button">📇 Rehberden</button></div></div>
+    <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;gap:10px"><div class="section-title" style="margin:0">Müşteriler (dokun → ekle)</div><div class="row" style="gap:6px"><button class="btn soft sm" id="ryYeniMus" type="button">${ikon("arti")} Yeni</button><button class="btn soft sm" id="ryRehber" type="button">${ikon("kisiler")} Rehberden</button></div></div>
     <div id="ryHavuz" class="ry-havuz" style="margin-top:8px"></div>`;
 }
 function ryCiz() {
   const sira = document.getElementById("rySira"), hav = document.getElementById("ryHavuz");
   if (!sira || !hav) return;
   sira.innerHTML = rotaYapim.sira.length
-    ? rotaYapim.sira.map((id, i) => { const c = findCustomer(id); return `<div class="ry-item" data-ryid="${id}"><span class="ry-tut" data-ryhandle="${id}">≡</span><span class="ry-no">${i + 1}</span><b>${c ? esc(c.ad) : "?"}</b><button class="rm" data-rycik="${id}" type="button">✕</button></div>`; }).join("")
+    ? rotaYapim.sira.map((id, i) => { const c = findCustomer(id); return `<div class="ry-item" data-ryid="${id}"><span class="ry-tut" data-ryhandle="${id}">≡</span><span class="ry-no">${i + 1}</span><b>${c ? esc(c.ad) : "?"}</b><button class="rm" data-rycik="${id}" type="button">${ikon("kapat")}</button></div>`; }).join("")
     : `<p class="hint" style="padding:8px">Aşağıdan müşteri ekle. Eklenenler burada sıralanır.</p>`;
   const kalan = store.customers.filter((c) => !rotaYapim.sira.includes(c.id));
   hav.innerHTML = kalan.length
@@ -6396,12 +6434,12 @@ function hrOlcumCiz() {
   const o = hrOlcum();
   const yakit = hrYakitAyar();
   const sonrakiMetin = o.sonraki
-    ? `${o.sonraki.no}. ${esc(o.sonraki.c.ad)}${o.sonraki.d != null ? ` · <b>${mesafeMetin(o.sonraki.d)}</b>${o.sonraki.kesin ? "" : "*"}` : ` · <span class="hint">📍 Konumum'a bas</span>`}`
+    ? `${o.sonraki.no}. ${esc(o.sonraki.c.ad)}${o.sonraki.d != null ? ` · <b>${mesafeMetin(o.sonraki.d)}</b>${o.sonraki.kesin ? "" : "*"}` : ` · <span class="hint">${ikon("konum")} Konumum'a bas</span>`}`
     : `<span class="hint">durak yok</span>`;
   const rozet = {
-    yol: `<span class="hr-rozet ok">🛣 yol üzerinden</span>`,
-    yukleniyor: `<span class="hr-rozet">⏳ yol hesaplanıyor…</span>`,
-    hata: `<span class="hr-rozet uyari">⚠ yol servisi yok — kuş uçuşu ×${HR_YOL_KAT} tahmini</span>`,
+    yol: `<span class="hr-rozet ok">${ikon("harita")} yol üzerinden</span>`,
+    yukleniyor: `<span class="hr-rozet">${ikon("saat")} yol hesaplanıyor…</span>`,
+    hata: `<span class="hr-rozet uyari">${ikon("dikkat")} yol servisi yok — kuş uçuşu ×${HR_YOL_KAT} tahmini</span>`,
     tahmin: `<span class="hr-rozet">kuş uçuşu ×${HR_YOL_KAT} tahmini</span>`,
   }[o.yolDurum];
   const sure = o.sure ? `${Math.round(o.sure / 60)} dk` : "—";
@@ -6416,8 +6454,8 @@ function hrOlcumCiz() {
       <label>₺/lt <input id="hrFiyat" type="number" inputmode="decimal" step="0.01" value="${yakit.fiyat}" /></label>
       <label>lt/100km <input id="hrTuketim" type="number" inputmode="decimal" step="0.1" value="${yakit.tuketim}" /></label>
       ${rozet}
-      <button class="btn soft sm" id="hrYolYenile" type="button">🔄 Yolu Yenile</button>
-      <span class="hint">${rota.konum ? "" : "İlk bacak için 📍 Konumum"}${o.sonraki && !o.sonraki.kesin && o.sonraki.d != null ? " · * sıradaki durak kuş uçuşu tahmini" : ""}</span>
+      <button class="btn soft sm" id="hrYolYenile" type="button">${ikon("yenile")} Yolu Yenile</button>
+      <span class="hint">${rota.konum ? "" : `İlk bacak için ${ikon("konum")} Konumum`}${o.sonraki && !o.sonraki.kesin && o.sonraki.d != null ? " · * sıradaki durak kuş uçuşu tahmini" : ""}</span>
     </div>`;
   const kaydet = (k, el) => el.addEventListener("change", () => {
     const v = Number(el.value);
@@ -6451,27 +6489,27 @@ function renderHarita() {
   const konumlu = haritaKonumlu(), konumsuz = store.customers.filter((c) => !c.bayi && (c.lat == null || c.lng == null));
   const rotaOpts = [`<option value="">— Rota seçilmedi (rota sırasına göre) —</option>`]
     .concat((store.rotalar || []).map((r) => `<option value="${r.id}" ${r.id === harita.rotaId ? "selected" : ""}>${esc(r.ad)} (${r.musteriIds.length})</option>`)).join("");
-  return pageHead("Harita / Rota Planı", `${konumlu.length} konumlu müşteri${konumsuz.length ? " · " + konumsuz.length + " konumsuz" : ""}`, [{ label: "🚗 Rota Sayfası", cls: "soft", route: "rota" }]) +
+  return pageHead("Harita / Rota Planı", `${konumlu.length} konumlu müşteri${konumsuz.length ? " · " + konumsuz.length + " konumsuz" : ""}`, [{ label: `${ikon("araba")} Rota Sayfası`, cls: "soft", route: "rota" }]) +
     `<div class="card hr-card">
       <div class="hr-ust">
         <select id="hrRota" class="hr-sel">${rotaOpts}</select>
-        <button class="btn soft sm" id="hrKonum" type="button">📍 Konumum</button>
-        <button class="btn soft sm" id="hrYakin" type="button" title="Konumundan başlayarak en yakın duraklara göre sırala">⚡ En Yakından Sırala</button>
-        <button class="btn soft sm" id="hrHepsi" type="button">➕ Tüm Konumluları Ekle</button>
+        <button class="btn soft sm" id="hrKonum" type="button">${ikon("konum")} Konumum</button>
+        <button class="btn soft sm" id="hrYakin" type="button" title="Konumundan başlayarak en yakın duraklara göre sırala">En Yakından Sırala</button>
+        <button class="btn soft sm" id="hrHepsi" type="button">${ikon("arti")} Tüm Konumluları Ekle</button>
       </div>
       <div id="hrMap" class="hr-map"></div>
       <div id="hrOlcum" class="hr-olcum"></div>
-      <p class="hint hr-ipucu">Gri pin = rotada değil (dokun → ekle) · Numaralı pin = rota sırası · Yeşil ✓ = ziyaret edildi</p>
+      <p class="hint hr-ipucu">Gri pin = rotada değil (dokun → ekle) · Numaralı pin = rota sırası · Yeşil ${ikon("tik")} = ziyaret edildi</p>
     </div>
     <div class="section-title" style="margin-top:14px">Rota Sırası (<span id="hrSayi">0</span> durak)</div>
     <div class="card"><div id="hrListe" class="hr-liste"></div>
       <div class="hr-alt">
-        <button class="btn primary" id="hrNav" type="button">🧭 Google Maps'te Navigasyon</button>
-        <button class="btn ok" id="hrKaydet" type="button">💾 Rotayı Kaydet</button>
-        <button class="btn green" id="hrBaslat" type="button">▶ Servisi Başlat</button>
+        <button class="btn primary" id="hrNav" type="button">${ikon("harita")} Google Maps'te Navigasyon</button>
+        <button class="btn ok" id="hrKaydet" type="button">${ikon("tik")} Rotayı Kaydet</button>
+        <button class="btn green" id="hrBaslat" type="button">${ikon("sag")} Servisi Başlat</button>
       </div>
     </div>` +
-    (konumsuz.length ? `<details class="card" style="margin-top:12px"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length}) — haritada gösterilemez</summary><div class="hr-liste">${konumsuz.map((c) => `<div class="hr-item"><span class="hr-no gri">—</span><div class="hr-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.telefon || "telefon yok")}</span></div></div>`).join("")}</div><p class="hint" style="margin-top:8px">Sahada uğrayınca müşteri kartından <b>📍 Konumu Kaydet</b>.</p></details>` : "");
+    (konumsuz.length ? `<details class="card" style="margin-top:12px"><summary>Konumu kayıtlı olmayanlar (${konumsuz.length}) — haritada gösterilemez</summary><div class="hr-liste">${konumsuz.map((c) => `<div class="hr-item"><span class="hr-no gri">—</span><div class="hr-mid"><b>${esc(c.ad)}</b><span class="hint">${esc(c.telefon || "telefon yok")}</span></div></div>`).join("")}</div><p class="hint" style="margin-top:8px">Sahada uğrayınca müşteri kartından <b>${ikon("konum")} Konumu Kaydet</b>.</p></details>` : "");
 }
 
 /** Numaralı / durum renkli pin (görsel dosya yok — CSS ile çizilir). */
@@ -6487,14 +6525,14 @@ function haritaCiz() {
   for (const c of haritaKonumlu()) {
     const no = siraSet.get(c.id);
     const edildi = servis.aktif && servis.edilen.includes(c.id);
-    const m = L.marker([c.lat, c.lng], { icon: hrIkon(no ? (edildi ? "✓" : no) : "•", no ? (edildi ? "bitti" : "rota") : "dis") });
+    const m = L.marker([c.lat, c.lng], { icon: hrIkon(no ? (edildi ? ikon("tik", 14, 3) : no) : "•", no ? (edildi ? "bitti" : "rota") : "dis") });
     const borc = customerBorc(c.id);
     m.bindPopup(`<div class="hr-pop"><b>${esc(c.ad)}</b>
       <span class="hint">${esc(c.mahalle || c.bolge || "")}${no ? " · " + no + ". durak" : ""}</span>
       <span class="hint">Bakiye: ${money.format(borc)}</span>
       <div class="hr-pop-btn">
-        ${no ? `<button class="btn softred sm" data-hrcik="${c.id}" type="button">✕ Rotadan çıkar</button>` : `<button class="btn green sm" data-hrekle="${c.id}" type="button">＋ Rotaya ekle</button>`}
-        <a class="btn soft sm" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">🧭 Buraya git</a>
+        ${no ? `<button class="btn softred sm" data-hrcik="${c.id}" type="button">${ikon("kapat")} Rotadan çıkar</button>` : `<button class="btn green sm" data-hrekle="${c.id}" type="button">${ikon("arti")} Rotaya ekle</button>`}
+        <a class="btn soft sm" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">${ikon("harita")} Buraya git</a>
       </div></div>`);
     m.addTo(harita.katman);
     if (no) noktalar[no - 1] = [c.lat, c.lng];
@@ -6527,9 +6565,9 @@ function hrListeCiz() {
         const bacak = bacakMap.get(id);
         const mes = bacak != null ? `<span class="hr-mes">${i === 0 ? "senden" : "önceki duraktan"} ${mesafeMetin(bacak * HR_YOL_KAT)}</span>` : "";
         return `<div class="hr-item ${edildi ? "bitti" : ""} ${id === sonrakiId ? "sonraki" : ""}">
-          <span class="hr-no ${edildi ? "yesil" : ""}">${edildi ? "✓" : i + 1}</span>
+          <span class="hr-no ${edildi ? "yesil" : ""}">${edildi ? `${ikon("tik")}` : i + 1}</span>
           <div class="hr-mid" data-hrgit="${id}" role="button" tabindex="0"><b>${esc(c.ad)}</b><span class="hint">${esc(c.mahalle || c.bolge || "—")} · ${money.format(customerBorc(id))}${mes ? " · " : ""}${mes}</span></div>
-          <div class="hr-ok"><button class="hr-mini" data-hryukari="${id}" type="button" title="Yukarı">▲</button><button class="hr-mini" data-hrasagi="${id}" type="button" title="Aşağı">▼</button><button class="hr-mini rm" data-hrcik="${id}" type="button" title="Çıkar">✕</button></div>
+          <div class="hr-ok"><button class="hr-mini" data-hryukari="${id}" type="button" title="Yukarı">▲</button><button class="hr-mini" data-hrasagi="${id}" type="button" title="Aşağı">▼</button><button class="hr-mini rm" data-hrcik="${id}" type="button" title="Çıkar">${ikon("kapat")}</button></div>
         </div>`;
       }).join("")
     : `<p class="hint" style="padding:8px">Rotada durak yok. Haritadaki gri pinlere dokunup ekle ya da "Tüm Konumluları Ekle".</p>`;
@@ -6577,7 +6615,7 @@ function hrNavigasyon() {
     const g = noktalar.slice(i, i + HR_MAX_DURAK);
     parcalar.push({ ad: `${g[0].et} → ${g[g.length - 1].et}`, url: link(g) });
   }
-  openModal("🧭 Navigasyon — " + duraklar.length + " durak", `<p class="hint">Google Maps tek yol tarifinde en fazla ${HR_MAX_DURAK} nokta taşır. Rota ${parcalar.length} bölüme ayrıldı — bölüm bitince sonrakini aç (bölümler uç uca ekli).</p>
+  openModal(`${ikon("harita")} Navigasyon — ` + duraklar.length + " durak", `<p class="hint">Google Maps tek yol tarifinde en fazla ${HR_MAX_DURAK} nokta taşır. Rota ${parcalar.length} bölüme ayrıldı — bölüm bitince sonrakini aç (bölümler uç uca ekli).</p>
     <div class="hr-parca">${parcalar.map((p, i) => `<a class="btn ${i === 0 ? "primary" : "soft"}" href="${p.url}" target="_blank" rel="noopener">Bölüm ${i + 1} · ${esc(p.ad)}</a>`).join("")}</div>`, { noFoot: true });
 }
 
@@ -6604,7 +6642,7 @@ function hrKonumTakip() {
       rota.konum = { lat: p.coords.latitude, lng: p.coords.longitude };
       if (!harita.map) return;
       if (harita.benim) harita.map.removeLayer(harita.benim);
-      harita.benim = L.marker([rota.konum.lat, rota.konum.lng], { icon: hrIkon("🚚", "ben"), zIndexOffset: 1000 }).addTo(harita.map).bindPopup("Buradasın");
+      harita.benim = L.marker([rota.konum.lat, rota.konum.lng], { icon: hrIkon(ikon("kamyon", 18), "ben"), zIndexOffset: 1000 }).addTo(harita.map).bindPopup("Buradasın");
       harita.map.setView([rota.konum.lat, rota.konum.lng], 15);
       hrListeCiz(); // ilk bacak + sonraki durak mesafesi artık hesaplanabilir
     },
@@ -6774,7 +6812,7 @@ function renderProfilim() {
           <div class="field"><label>Firma Adı (Panelde)</label><input name="firmaAdi" value="${esc(s.firmaAdi || "")}" /></div>
           <div class="field"><label>İlçe</label><input name="ilce" value="${esc(s.ilce || "")}" /></div>
         </div>
-        <div style="margin-top:16px"><button class="btn lg" type="submit">💾 Güncelle & Kaydet</button></div>
+        <div style="margin-top:16px"><button class="btn lg" type="submit">${ikon("tik")} Güncelle & Kaydet</button></div>
       </form>
       <form id="fisForm" class="ptab" data-ptab="1" style="display:none">
         <h1 style="font-size:15px;margin:0 0 14px">Fiş / İrsaliye Şablonu</h1>
@@ -6784,7 +6822,7 @@ function renderProfilim() {
           <div class="field" style="grid-column:1/-1"><label>Adres</label><input name="fisAdres" value="${esc(s.fisAdres || "")}" placeholder="Fişte görünecek adres" /></div>
           <div class="field" style="grid-column:1/-1"><label>Alt Bilgi (teşekkür mesajı)</label><input name="fisAltbilgi" value="${esc(s.fisAltbilgi || "Teşekkür ederiz")}" /></div>
         </div>
-        <div style="margin-top:16px"><button class="btn green lg" type="submit">💾 Kaydet</button></div>
+        <div style="margin-top:16px"><button class="btn green lg" type="submit">${ikon("tik")} Kaydet</button></div>
         <p class="hint">Bu bilgiler satış/irsaliye fişinin başına ve altına basılır.</p>
       </form>
       <div class="ptab" data-ptab="2" style="display:none">
@@ -6796,8 +6834,8 @@ function renderProfilim() {
         <h1 style="font-size:15px;margin:22px 0 8px">Dosyaya yedekle</h1>
         <p class="sub">Tüm verini (ürün, müşteri, satış, ayar) tek dosyaya indir; başka cihaza taşı veya sonra geri yükle.</p>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn green lg" id="backupBtn" type="button">⇩ Yedek Al (JSON indir)</button>
-          <button class="btn soft lg" id="restoreBtn" type="button">⇧ Yedekten Geri Yükle</button>
+          <button class="btn green lg" id="backupBtn" type="button">${ikon("indir")} Yedek Al (JSON indir)</button>
+          <button class="btn soft lg" id="restoreBtn" type="button">${ikon("yukle")} Yedekten Geri Yükle</button>
         </div>
         <p class="hint">Geri yükleme mevcut tüm veriyi seçtiğin yedekle değiştirir. Önce şimdiki hâlin yedeği alınır.</p>
       </div>
@@ -6805,7 +6843,7 @@ function renderProfilim() {
         <h1 style="font-size:15px;margin:0 0 14px">Verilerimi Sil</h1>
         <p class="sub">Tüm ürün, müşteri, satış ve ayarları kalıcı olarak siler. Bu işlem geri alınamaz.</p>
         <p class="sub">Yanlışlıkla silinmesin diye şifren sorulur ve silmeden önce buluta yedek alınır.</p>
-        <div style="margin-top:14px"><button class="btn softred lg" id="wipeBtn" type="button">🗑 Tüm Verileri Sil…</button></div>
+        <div style="margin-top:14px"><button class="btn softred lg" id="wipeBtn" type="button">${ikon("cop")} Tüm Verileri Sil…</button></div>
       </div>
     </div>
   </div></div>`;
@@ -6828,12 +6866,16 @@ function mountProfilim() {
 function buildMenu() {
   const menuEl = document.getElementById("menu");
   menuEl.innerHTML = MENU.map((item, i) => {
-    const ico = `<span class="m-ico">${item.ico}</span>`;
-    if (item.children) return `<li class="menu-item has-sub" data-idx="${i}"><a class="parent">${ico}<span class="m-text">${item.label}</span><span class="m-caret">▶</span></a><ul class="submenu">${item.children.map((c) => `<li><a data-route="${c.route}" class="sublink">${c.label}</a></li>`).join("")}</ul></li>`;
+    const ico = `<span class="m-ico">${ikon(item.ico, 22)}</span>`;
+    if (item.children) return `<li class="menu-item has-sub" data-idx="${i}"><a class="parent" role="button" aria-expanded="false">${ico}<span class="m-text">${item.label}</span><span class="m-caret">${ikon("sag", 18)}</span></a><ul class="submenu">${item.children.map((c) => `<li><a data-route="${c.route}" class="sublink">${c.label}</a></li>`).join("")}</ul></li>`;
     return `<li class="menu-item" data-idx="${i}"><a data-route="${item.route}">${ico}<span class="m-text">${item.label}</span></a></li>`;
   }).join("");
-  menuEl.querySelectorAll(".parent").forEach((p) => p.addEventListener("click", () => p.closest(".menu-item").classList.toggle("open")));
-  menuEl.querySelectorAll("[data-route]").forEach((a) => a.addEventListener("click", () => navigate(a.dataset.route)));
+  // Aynı anda tek grup açık: menü hep kısa kalır.
+  menuEl.querySelectorAll(".parent").forEach((p) => p.addEventListener("click", () => {
+    const li = p.closest(".menu-item"), ac = !li.classList.contains("open");
+    menuEl.querySelectorAll(".menu-item.has-sub").forEach((x) => { x.classList.toggle("open", x === li && ac); x.querySelector(".parent").setAttribute("aria-expanded", x === li && ac ? "true" : "false"); });
+  }));
+  menuEl.querySelectorAll("[data-route]").forEach((a) => a.addEventListener("click", () => { if (currentRoute() === a.dataset.route) document.body.classList.remove("nav-open"); navigate(a.dataset.route); }));
 }
 function findMenuIndexByRoute(route) {
   for (let i = 0; i < MENU.length; i++) { const m = MENU[i]; if (m.route === route) return { idx: i }; if (m.children && m.children.some((c) => c.route === route)) return { idx: i, sub: true }; }
@@ -6843,11 +6885,11 @@ function findMenuIndexByRoute(route) {
 }
 function setActiveMenu(route) {
   const menuEl = document.getElementById("menu");
-  menuEl.querySelectorAll(".menu-item").forEach((li) => li.classList.remove("active"));
+  menuEl.querySelectorAll(".menu-item").forEach((li) => { li.classList.remove("active"); li.classList.remove("open"); const p = li.querySelector(".parent"); if (p) p.setAttribute("aria-expanded", "false"); });
   menuEl.querySelectorAll(".submenu a").forEach((a) => a.classList.remove("active"));
   const found = findMenuIndexByRoute(route); if (!found || found.idx < 0) return;
   const li = menuEl.querySelector(`.menu-item[data-idx="${found.idx}"]`);
-  if (li) { li.classList.add("active"); if (li.classList.contains("has-sub")) li.classList.add("open"); }
+  if (li) { li.classList.add("active"); if (li.classList.contains("has-sub")) { li.classList.add("open"); li.querySelector(".parent").setAttribute("aria-expanded", "true"); } }
   const subA = menuEl.querySelector(`.submenu a[data-route="${route}"]`); if (subA) subA.classList.add("active");
 }
 
@@ -6899,19 +6941,19 @@ function mobilTabloEtiketle() {
 
 /* ---- Mobil alt sekme çubuğu ---- */
 const MOBILBAR = [
-  { ico: "🚗", label: "Rota", route: "rota" },
+  { ico: "araba", label: "Rota", route: "rota" },
   // Satış Yap en çok kullanılan ekran; eskiden yalnız çekmeceden (51 hedef
   // arasından) ya da Dükkan > +Satış ile iki dokunuşta gidiliyordu.
-  { ico: "🖊", label: "Satış", route: "satis" },
-  { ico: "🏪", label: "Dükkan", route: "dukkan" },
-  { ico: "📈", label: "Rapor", route: "rapor-gunluk" },
-  { ico: "☰", label: "Menü", act: "menu" },
+  { ico: "sepet", label: "Satış", route: "satis" },
+  { ico: "dukkan", label: "Dükkan", route: "dukkan" },
+  { ico: "grafik", label: "Rapor", route: "rapor-gunluk" },
+  { ico: "menu", label: "Menü", act: "menu" },
 ];
 function mobilBarKur() {
   if (document.querySelector(".mobilbar")) return;
   const nav = document.createElement("nav");
   nav.className = "mobilbar";
-  nav.innerHTML = MOBILBAR.map((m) => `<button type="button" data-mroute="${m.route || ""}" data-mact="${m.act || ""}"><span class="mb-ico">${m.ico}</span><span class="mb-lbl">${m.label}</span></button>`).join("");
+  nav.innerHTML = MOBILBAR.map((m) => `<button type="button" data-mroute="${m.route || ""}" data-mact="${m.act || ""}"><span class="mb-ico">${ikon(m.ico, 24)}</span><span class="mb-lbl">${m.label}</span></button>`).join("");
   document.body.appendChild(nav);
   nav.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     if (b.dataset.mact === "menu") { document.body.classList.toggle("nav-open"); return; }
@@ -6922,7 +6964,7 @@ function mobilBarAktif(route) {
   const nav = document.querySelector(".mobilbar"); if (!nav) return;
   // Alt sayfaları üst sekmeye eşle (raporlar → Rapor, satış detay → Satış).
   const r = /^rapor-/.test(route) ? "rapor-gunluk" : route === "satis-detay" ? "satis" : route;
-  nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.mroute === r));
+  nav.querySelectorAll("button").forEach((b) => { const on = !!b.dataset.mroute && b.dataset.mroute === r; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
 }
 
 /* Tablo sayfalama (DOM üstü) — .table-tools içeren tablolar */
@@ -6968,13 +7010,13 @@ function updateBell() {
   if (badge) { const n = crit.length + bekleyen.length; badge.textContent = n; badge.classList.toggle("show", n > 0); badge.classList.toggle("siparis", bekleyen.length > 0); }
   const dd = document.getElementById("bellDropdown");
   if (dd) {
-    const izin = (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") ? `<a data-bellizin class="stk-dd-izin">🔔 Yeni siparişte bildirim gönder (izin ver)</a>` : "";
+    const izin = (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") ? `<a data-bellizin class="stk-dd-izin">${ikon("zil")} Yeni siparişte bildirim gönder (izin ver)</a>` : "";
     dd.innerHTML =
       (bekleyen.length ? `<div class="dd-head">Bekleyen Sipariş (${bekleyen.length})</div>` + bekleyen.slice(0, 8).map((o) => `<a data-bellsip="${o.id}">${esc(o.dealer)}<small class="${stkSiparisYasSaat(o) >= 24 ? "borc-red" : ""}">${stkYasMetin(stkSiparisYasSaat(o))}</small></a>`).join("") : "") +
       `<div class="dd-head">Azalan Ürünler (${crit.length})</div>` +
-      (crit.length ? crit.slice(0, 20).map((p) => `<a data-critp="${p.id}">${esc(p.ad)}<small class="borc-red">${num2.format(stkToplamStok(p))} kaldı</small></a>`).join("") : `<div class="dd-empty">Azalan ürün yok 👍</div>`) +
-      `<a data-bellgit="alinacaklar">🛒 Alınacaklar listesi</a>` +
-      (eksi ? `<a data-bellgit="stok-sayimi" class="stk-dd-uyari">⚠ ${eksi} üründe stok eksi — sayım yapın</a>` : "") + izin;
+      (crit.length ? crit.slice(0, 20).map((p) => `<a data-critp="${p.id}">${esc(p.ad)}<small class="borc-red">${num2.format(stkToplamStok(p))} kaldı</small></a>`).join("") : `<div class="dd-empty">Azalan ürün yok </div>`) +
+      `<a data-bellgit="alinacaklar">${ikon("sepet")} Alınacaklar listesi</a>` +
+      (eksi ? `<a data-bellgit="stok-sayimi" class="stk-dd-uyari">${ikon("dikkat")} ${eksi} üründe stok eksi — sayım yapın</a>` : "") + izin;
     dd.querySelectorAll("[data-critp]").forEach((a) => a.addEventListener("click", () => { dd.classList.remove("open"); openProductEdit(a.dataset.critp); }));
     dd.querySelectorAll("[data-bellsip]").forEach((a) => a.addEventListener("click", () => { dd.classList.remove("open"); navigate("cay-ocagi"); }));
     dd.querySelectorAll("[data-bellgit]").forEach((a) => a.addEventListener("click", () => { dd.classList.remove("open"); navigate(a.dataset.bellgit); }));
@@ -7004,7 +7046,12 @@ function initTopbar() {
   };
   window.addEventListener("resize", syncNav);
   syncNav();
+  // Üst çubuk ikonları (çizgi): menü, zil, kullanıcı. Zilin sayı rozeti (#bellBadge) yerinde kalır.
+  document.getElementById("hamburger").innerHTML = ikon("menu", 26, 2);
+  const zil = document.getElementById("bellBtn"); if (zil && !zil.querySelector(".ikon")) zil.insertAdjacentHTML("afterbegin", ikon("zil", 24));
   const userBtn = document.getElementById("userBtn"), dd = document.getElementById("userDropdown");
+  userBtn.innerHTML = ikon("kisi", 24) + `<span class="ub-ad">ANA HESAP</span>`;
+  dd.querySelectorAll("a[data-ikon]").forEach((a) => { if (!a.querySelector(".ikon")) a.insertAdjacentHTML("afterbegin", ikon(a.dataset.ikon, 20)); });
   userBtn.addEventListener("click", (e) => { e.stopPropagation(); dd.classList.toggle("open"); });
   document.addEventListener("click", () => dd.classList.remove("open"));
   dd.querySelectorAll("[data-route]").forEach((a) => a.addEventListener("click", () => navigate(a.dataset.route)));
