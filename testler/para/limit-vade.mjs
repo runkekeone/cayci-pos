@@ -119,10 +119,10 @@ try {
   await page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()));
 
   await git(page, "musteriler");
-  const satir = await page.evaluate(() => [...document.querySelectorAll("tbody tr")].map((tr) => tr.children[1].innerText.replace(/\s+/g, " ").trim()));
+  const satir = await page.evaluate(() => [...document.querySelectorAll("#glMusKart .gl-satir")].map((r) => r.querySelector(".gl-sol").innerText.replace(/\s+/g, " ").trim()));
   d.dogru(satir.some((x) => /Örnek Çay Ocağı.*20 gün gecikmiş/.test(x)) && satir.some((x) => /Kısa Vadeli.*3 gün gecikmiş/.test(x)) && !satir.some((x) => /Sınama Derneği.*gecikmiş/.test(x)), "Müşteri listesi: gecikenler işaretli, gecikmeyen işaretsiz");
   await page.evaluate(() => { selectedCustomerId = "m2"; }); await git(page, "musteri-detay");
-  const durum = await page.evaluate(() => (document.querySelector(".pd-kart") || {}).innerText || "");
+  const durum = await page.evaluate(() => (document.querySelector(".gl-ozet") || {}).innerText || "");
   d.dogru(/Borç limiti/.test(durum) && /kalan/.test(durum) && /15 gün/.test(durum) && /20 gündür gecikmiş/.test(durum) && /Nazik Hatırlatma/.test(durum), "Müşteri detayı: limit, kalan, vade, gecikme ve hatırlatma düğmesi");
 
   /* ---- Satış ekranı + limit onayı ---- */
@@ -167,7 +167,7 @@ try {
   d.dogru(!mesajlar.some((x) => /LİMİT/.test(x)) && (await page.evaluate(() => window.app.customerBorc("m1"))) === 2000, "limiti yazılmamış müşteride soru yok");
   await page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()));
   await git(page, "musteriler");
-  d.dogru((await page.evaluate(() => document.querySelector("tbody").innerText)).includes("limit aşıldı"), "Müşteri listesi: limiti aşan işaretli");
+  d.dogru((await page.evaluate(() => document.querySelector("#glMusKart").innerText)).includes("limit aşıldı"), "Müşteri listesi: limiti aşan işaretli");
   d.esit(o.p.hatalar, [], "sayfada betik hatası yok");
 } finally { await o.kapat(); }
 

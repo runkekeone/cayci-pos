@@ -67,7 +67,7 @@ try {
   d.esit(ana["Kasadaki nakit"], tl(340 + 200), "nakit kasa yalnız nakdi sayıyor: 340 satış + 200 nakit tahsilat (kart, havale, iade, borç ekleme hariç)");
   d.esit(ana["Kart / Havale ile Gelen"], tl(300 + 150 + 100), "kart + havale ayrı satırda: 550");
   await page.evaluate(() => { selectedCustomerId = "m2"; }); await git(page, "musteri-detay");
-  const turSutun = await page.evaluate(() => [...document.querySelectorAll("table")][1].innerText);
+  const turSutun = await page.evaluate(() => document.querySelector("#glTahsilatlar").innerText);
   d.dogru(/Tahsilat · Kart/.test(turSutun) && /Tahsilat · Havale/.test(turSutun) && /Borç Ekleme/.test(turSutun), "Müşteri detayı: tahsilatın türü listede yazıyor");
   d.esit(o.p.hatalar, [], "sayfada betik hatası yok");
 } finally { await o.kapat(); }

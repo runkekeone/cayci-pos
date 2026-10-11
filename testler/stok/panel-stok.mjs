@@ -172,7 +172,7 @@ function veri() {
   await t.page.click("#bellBtn"); await bekle(150);
   d.dogru(/Örnek Küp Şeker/.test(await t.page.textContent("#bellDropdown")) && /stok eksi — sayım yapın/.test(await t.page.textContent("#bellDropdown")), "zil listesi azalan ürünü ve eksi stok uyarısını gösteriyor");
   await t.git("urunler");
-  d.dogru(await t.page.evaluate(() => [...document.querySelectorAll("#content tbody tr")].some((tr) => /Örnek Kola/.test(tr.textContent) && tr.querySelector(".arac-stok.stok-low"))), "ürün listesinde eksi araç stoğu kırmızı");
+  d.dogru(await t.page.evaluate(() => [...document.querySelectorAll("#content .gl-satir")].some((tr) => /Örnek Kola/.test(tr.textContent) && tr.querySelector(".arac-stok.stok-low"))), "ürün listesinde eksi araç stoğu işaretli");
   d.esit(t.p.hatalar, [], "sayfada betik hatası yok (alınacaklar)");
   await t.kapat();
 }
