@@ -179,14 +179,15 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-urun .ozel-tag, .gs-kalem .ozel-tag { font-size: 13px; font-weight: 700; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); letter-spacing: 0; vertical-align: baseline; }
 
 /* ---- rota sihirbazındaki sepet (işaretlemesi aynı): iki satır — ad / − adet + · birim fiyat · tutar ---- */
-.sihir-sepet .ss-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ad ad ad" "adet fiyat tut"; align-items: center; gap: 6px 10px; padding: 10px 2px; }
-.sihir-sepet .ss-ad { grid-area: ad; font-size: 15.5px; font-weight: 700; line-height: 1.25; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
-.sihir-sepet .ss-adet { grid-area: adet; gap: 0; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
-.sihir-sepet .ss-adet b { min-width: 44px; font-family: inherit; font-size: 18px; font-weight: 700; }
-.sihir-sepet .ss-b { width: 46px; height: 44px; border: 0; border-radius: 0; background: var(--brand-soft); color: var(--brand-dark); font-size: 24px; font-weight: 600; }
+.sihir-sepet .ss-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 2px; }
+.sihir-sepet .ss-ad { flex: 1 1 100%; font-size: 15.5px; font-weight: 700; line-height: 1.25; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.sihir-sepet .ss-adet { flex: 0 0 auto; gap: 0; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+.sihir-sepet .ss-adet b { min-width: 38px; font-family: inherit; font-size: 18px; font-weight: 700; }
+.sihir-sepet .ss-b { width: 44px; height: 44px; border: 0; border-radius: 0; background: var(--brand-soft); color: var(--brand-dark); font-size: 24px; font-weight: 600; }
 .sihir-sepet .ss-b:active { background: var(--brand); color: #fff; }
-.sihir-sepet .ss-fin { grid-area: fiyat; justify-self: end; width: 88px; min-height: 44px; font-family: inherit; font-size: 16px; border-radius: 10px; }
-.sihir-sepet .ss-tut { grid-area: tut; min-width: 0; font-family: inherit; font-size: 15.5px; font-weight: 700; color: var(--text); white-space: nowrap; }
+/* fiyat kutusu dar ekranda daralır; tutar sığmazsa alt satıra iner (kesilmez, taşmaz) */
+.sihir-sepet .ss-fin { flex: 1 1 60px; width: auto; min-width: 60px; max-width: 88px; min-height: 44px; font-family: inherit; font-size: 16px; border-radius: 10px; }
+.sihir-sepet .ss-tut { flex: 1 1 auto; min-width: 0; margin-left: auto; text-align: right; font-family: inherit; font-size: 15.5px; font-weight: 700; color: var(--text); white-space: nowrap; }
 .sihir-sepet .ss-tot { font-family: inherit; font-size: 17px; padding-top: 10px; }
 .sihir-sepet .ss-tot .ss-toplam { font-size: 20px; }
 

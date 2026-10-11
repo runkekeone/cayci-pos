@@ -79,10 +79,9 @@ async function tur(etiket) {
   });
 }
 
-try {
-  await tur("sonra");
-  // rota sihirbazı: satış adımı
-  K = "sonra";
+// rota sihirbazı: satış adımı (aynı ürün kartları + sihirbazın kendi sepeti)
+async function rota(etiket) {
+  K = etiket;
   await page.evaluate(() => { pos.carts.forEach((c, n) => { pos.carts[n] = newCart(); }); pos.active = 0; servisBaslat(["m1", "m2"]); }); await bekle(400);
   await page.evaluate(() => { servis.stokBitti = true; servis.adim = "urun"; pos.cat = "ANA"; pos.q = ""; activeCart().musteriId = servis.acik; render(); }); await bekle(300);
   await cek("20-rota-urun-adimi", true);
@@ -92,8 +91,12 @@ try {
   await page.evaluate(() => document.getElementById("sihirSepet").scrollIntoView({ block: "center" })); await cek("20e-rota-sepet");
   await page.click("#odemeGec"); await bekle(300); await cek("20c-rota-odeme-adimi");
   await page.evaluate(() => { servisBitir(); }); await bekle(300); await page.evaluate(() => { document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()); stokModuAyarla("dukkan"); });
+}
+
+try {
+  await tur("sonra"); await rota("sonra");
   await page.setViewportSize({ width: 360, height: 780 });
-  await tur("sonra-360");
+  await tur("sonra-360"); await rota("sonra-360");
   // masaüstü (kullanılmıyor; bozuk olmadığına bakmak için)
   K = "sonra"; await page.setViewportSize({ width: 1280, height: 800 }); await sepet("m5", ["u1", "u3"]); await cek("30-masaustu"); await sepetAc(); await cek("30b-masaustu-sepet"); await kapat();
   console.log("yatay taşma:", tasmalar.length ? tasmalar.join(" | ") : "yok");
