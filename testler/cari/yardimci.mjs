@@ -100,11 +100,12 @@ export const yerelLink = (s, link) => s.url + link.slice(link.indexOf("#"));
 /** Hesap ekranı açılana kadar bekler; ekrandaki ad, bakiye metni ve fiş numaralarını döndürür. */
 export async function hesapOku(page, ms = 15000) {
   await page.waitForSelector("#bakiyeTutar", { timeout: ms });
-  return page.evaluate(() => ({
+  // Satırlar kapalı gelir (gün başına tek satır); içlerini de okuyabilmek için hepsini aç.
+  return page.evaluate(() => (document.querySelectorAll("details.sv").forEach((x) => { x.open = true; }), {
     ad: (document.getElementById("musteriAd") || {}).textContent || "",
     etiket: document.querySelector(".bakiye .etiket").textContent.trim(),
     bakiye: document.getElementById("bakiyeTutar").textContent.trim(),
-    fisler: Array.from(document.querySelectorAll("details.fis"), (d) => d.dataset.no),
+    fisler: Array.from(document.querySelectorAll(".fisb"), (d) => d.dataset.no),
     metin: document.getElementById("kok").innerText,
   }));
 }

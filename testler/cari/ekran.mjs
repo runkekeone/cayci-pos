@@ -50,7 +50,7 @@ try {
     await telefonlaGir(s.page, "05550000002");
     await hesapOku(s.page);
     await bak(s.page, "04-hesap-borclu-iadeli");
-    await s.page.evaluate(() => document.querySelectorAll("details.fis").forEach((x, i) => { if (i < 3) x.open = true; }));
+    await s.page.evaluate(() => document.querySelectorAll("details.sv").forEach((x, i) => { if (i < 3) x.open = true; }));
     await bak(s.page, "05-acik-fis-iade-iskonto");
     await s.kapat();
 
@@ -62,7 +62,7 @@ try {
     s = await ac({ hash: await hash("m3") });
     await hesapOku(s.page);
     await bak(s.page, "07-hesap-cok-fisli-uzun-ad");
-    await s.page.evaluate(() => { document.querySelector("details.fis").open = true; });
+    await s.page.evaluate(() => { document.querySelector("details.sv").open = true; });
     await bak(s.page, "08-acik-fis-buyuk-tutar", false);
     await s.kapat();
 

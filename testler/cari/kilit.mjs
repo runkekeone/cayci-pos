@@ -94,7 +94,7 @@ try {
   // müşterinin kendi gördüğüyle aynı mı
   const m = await sayfaAc({ bulutUrl: bulut.url, hash: link.slice(link.indexOf("#")), browser: p.browser, sunucu: p.sunucu });
   const musteriHesap = await hesapOku(m.page);
-  const govde = (page) => page.evaluate(() => Array.from(document.querySelectorAll(".bakiye, .gun"), (x) => x.innerText).join("\n"));
+  const govde = (page) => page.evaluate(() => (document.querySelectorAll("details.sv").forEach((x) => { x.open = true; }), Array.from(document.querySelectorAll("#bakiyeTutar, .tablo"), (x) => x.innerText).join("\n")));
   d.dogru(patronHesap.bakiye === musteriHesap.bakiye && patronHesap.ad === musteriHesap.ad && (await govde(p.page)) === (await govde(m.page)) && (await govde(m.page)).length > 200, "patronun gördüğü hesap, müşterinin gördüğünün aynısı (bakiye + bütün hareketler)");
   await m.kapat();
   await p.page.click("#geri");

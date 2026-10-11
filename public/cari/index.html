@@ -14,6 +14,7 @@
   telefon numarası). Sayfa hiçbir şey YAZMAZ. Yayını araç (tools/babuco-cari.cjs) ve panel (app.js) yapar.
   İki işaretli bölüm başka dosyalardan kopyadır, elle değiştirme:  node testler/cari/ortak-blok.mjs --yaz
 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
 <style>
   :root { color-scheme: light; --bg:#fff; --fg:#1a1f24; --soluk:#5d6871; --cizgi:#e1e5e8; --zemin2:#f4f6f8;
     --murekkep:#1d5a7a; --borc:#b0392a; --odeme:#23704b; --f:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
@@ -92,6 +93,43 @@
   .musteri b { flex:none; font-variant-numeric:tabular-nums; white-space:nowrap }
   .musteri b.sifir { color:var(--soluk); font-weight:400 }
   @media (prefers-reduced-motion: reduce) { .s-ad::before { transition:none } }
+
+  /* --- hesap tablosu: eski sayfanın düzeni (gün başına tek satır, dokununca açılır) --- */
+  :root { --f-rakam:"Barlow Semi Condensed","Barlow",system-ui,sans-serif; --kolon: 50px minmax(0,1fr) 52px 54px 62px; }
+  .bakiye.eski { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 26px; padding:0 0 14px; margin-bottom:16px; background:none; border-radius:0; border-left:0; border-bottom:2px solid var(--fg) }
+  .bakiye.eski .etiket { font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; margin-bottom:3px }
+  .bakiye.eski .tutar { font-family:var(--f-rakam); font-size:38px; line-height:1; font-weight:700 }
+  .bakiye.eski .kucuk { font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap }
+  .tablo { font-family:var(--f-rakam); font-size:15px }
+  .bas, .sv > summary { display:grid; grid-template-columns:var(--kolon); column-gap:6px; align-items:center; justify-content:normal }
+  .bas > *, .sv > summary > * { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0 }
+  .bas { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--soluk); font-weight:600; padding:0 2px 8px; border-bottom:1px solid var(--fg) }
+  .bas .r, .c-n { text-align:right }
+  .sv { border-bottom:1px solid var(--cizgi) }
+  .sv > summary { min-height:48px; padding:0 2px }
+  .sv[open] > summary { background:var(--zemin2) }
+  .c-t { font-variant-numeric:tabular-nums }
+  .c-t::before { content:"›"; display:inline-block; width:.7em; color:var(--soluk); transition:transform .15s }
+  .sv[open] .c-t::before { transform:rotate(90deg) }
+  .c-t b { font-weight:600; font-size:16px }
+  .c-t small { display:none; color:var(--soluk); font-size:12px; margin-left:5px }
+  .sv > summary > .c-i { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.25; font-size:14px; max-height:2.5em }
+  .c-i em { color:var(--soluk); font-style:normal }
+  .c-n { font-variant-numeric:tabular-nums }
+  .c-n.od { color:var(--odeme) }
+  .c-n.bk { font-weight:700; font-size:16px }
+  .yok { color:#c3cad0 }
+  .acik { background:var(--zemin2); padding:6px 8px 12px; display:grid; gap:8px }
+  .detay { list-style:none; margin:0; padding:0; display:grid; gap:3px; font-size:14px }
+  .detay li { display:grid; grid-template-columns:2em minmax(0,1fr) 4.4em 5em; gap:7px; font-variant-numeric:tabular-nums }
+  .detay li > * { overflow:hidden; text-overflow:ellipsis }
+  .detay li span:first-child { text-align:right; font-weight:600 }
+  .detay li span:nth-child(3), .detay li span:nth-child(4) { text-align:right; white-space:nowrap }
+  .detay li span:nth-child(3) { color:var(--soluk) }
+  .tamnot { margin:4px 0 0; font-size:13px; color:var(--soluk); font-family:var(--f) }
+  .tamnot.hareket { font-size:14px; color:var(--fg) }
+  @media (min-width:640px) { :root { --kolon: 6.4rem minmax(10rem,1fr) 5.4rem 5.4rem 6rem } .c-t small { display:inline } .bas, .sv > summary { column-gap:12px; padding-inline:10px } }
+  @media (prefers-reduced-motion: reduce) { .c-t::before { transition:none } }
 </style>
 </head>
 <body>
@@ -366,54 +404,70 @@ function hareketler(h) {
   ol.forEach((e) => { b = yuvarla(b + (e.tip === "f" ? e.x.acik : -e.x.tutar)); e.bakiye = b; e.gun = gunKodFmt.format(new Date(e.t)); });
   return ol;
 }
-function fisHTML(x, acik) {
-  const iade = !!x.iade, odenen = yuvarla(x.nakit + x.kart);
-  const adet = (n) => adetFmt.format(iade ? Math.abs(n) : n);
-  const ozet = x.k.map((k) => adet(k[1]) + " × " + k[0]).join(", ");
-  const satirlar = x.k.map((k) => `<tr><td>${esc(k[0])}<small>${adet(k[1])} × ${para.format(k[2])}</small></td><td>${iade ? eksi(k[1] * k[2]) : para.format(k[1] * k[2])}</td></tr>`).join("");
-  let alt = "";
-  if (x.isk) alt += `<tr><td>İskonto</td><td>${eksi(x.isk)}</td></tr>`;
-  alt += `<tr class="top"><td>${iade ? "İade toplamı" : "Toplam"}</td><td>${iade ? eksi(x.top) : para.format(x.top)}</td></tr>`;
-  if (x.nakit) alt += `<tr class="odenen"><td>Ödenen (nakit)</td><td>${para.format(x.nakit)}</td></tr>`;
-  if (x.kart) alt += `<tr class="odenen"><td>Ödenen (${x.havale ? "havale" : "kart"})</td><td>${para.format(x.kart)}</td></tr>`;
-  if (iade) alt += `<tr class="odenen"><td>Borcunuzdan düşülen</td><td>${para.format(Math.abs(x.acik))}</td></tr>`;
-  else if (Math.abs(x.acik) > 0.005) alt += `<tr class="kalan"><td>Bu fişten kalan (hesabınıza yazılan)</td><td>${para.format(x.acik)}</td></tr>`;
-  else alt += `<tr class="odenen"><td>Bu fişten kalan</td><td>${para.format(0)} — ödendi</td></tr>`;
-  return `<details class="fis" data-no="${esc(x.no)}"${acik ? " open" : ""}>
-    <summary><span class="s-ad">${iade ? "İade (geri aldığımız ürün)" : "Bıraktığımız ürünler"}<small>${esc(ozet)}</small></span><span class="s-tutar${iade ? " eksi" : ""}">${iade ? eksi(x.top) : para.format(x.top)}</span></summary>
-    <div class="f-ic"><table>${satirlar}${alt}</table><p class="f-no">Fiş no ${esc(x.no)} · saat ${saatFmt.format(new Date(x.t))}${!iade && odenen > 0.005 && Math.abs(x.acik) > 0.005 ? " · ödenen " + para.format(odenen) : ""}</p></div>
-  </details>`;
-}
-function odemeHTML(x) {
+/* Hesap görünümü: eski sayfadaki gibi — servis günü başına TEK SATIR (tarih · içerik · tutar · ödenen · bakiye),
+   satıra dokununca o günün kalemleri, ödemeleri ve fiş bilgisi açılır. */
+const sayiFmt = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
+const kisaGunFmt = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, day: "2-digit", month: "2-digit" });
+const kisaAdFmt = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, weekday: "short" });
+function gunSatirHTML(g, acik) {
   const TUR = { nakit: "nakit", kart: "kart", havale: "havale" };
-  let ad, alt = "";
-  if (x.tur === "iade") { ad = "İade"; alt = "borcunuzdan düşüldü"; }
-  else if (x.tur === "duzeltme") { ad = "Hesap düzeltmesi"; alt = x.tutar < 0 ? "borcunuza eklendi" : "borcunuzdan düşüldü"; }
-  else { ad = "Ödeme alındı"; alt = (TUR[x.tur] || "") + (x.fis ? " · fazlası eski borcunuza sayıldı" : ""); }
-  return `<div class="odeme"><span class="s-ad">${ad}<small>${esc(alt)}</small></span><span class="s-tutar ${x.tutar < 0 ? "arti" : "eksi"}">${x.tutar < 0 ? "+" + para.format(-x.tutar) : eksi(x.tutar)}</span></div>`;
+  const sayi = (n) => (Math.abs(n) < 0.005 ? '<span class="yok">—</span>' : (n < 0 ? "−" : "") + sayiFmt.format(Math.abs(n)));
+  let tutar = 0, odenen = 0; const icerik = [], detay = [];
+  g.liste.forEach((e) => {
+    const x = e.x;
+    if (e.tip === "f") {
+      const iade = !!x.iade, fisOdenen = yuvarla(x.nakit + x.kart);
+      tutar += x.top; if (!iade) odenen += fisOdenen;
+      x.k.forEach((k) => icerik.push((iade ? "iade " : "") + adetFmt.format(Math.abs(k[1])) + " " + k[0]));
+      const kalemler = x.k.map((k) => `<li><span>${adetFmt.format(Math.abs(k[1]))}</span><span>${esc(k[0])}</span><span>${sayiFmt.format(k[2])}</span><span>${iade ? "−" : ""}${sayiFmt.format(Math.abs(k[1] * k[2]))}</span></li>`).join("");
+      const alt = [];
+      alt.push(iade ? "İade (geri aldığımız ürün) toplamı " + eksi(x.top) : "Toplam " + para.format(x.top));
+      if (x.isk) alt.push("iskonto " + eksi(x.isk));
+      if (x.nakit) alt.push("ödenen (nakit) " + para.format(x.nakit));
+      if (x.kart) alt.push("ödenen (" + (x.havale ? "havale" : "kart") + ") " + para.format(x.kart));
+      if (iade) alt.push("borcunuzdan düşülen " + para.format(Math.abs(x.acik)));
+      else alt.push(Math.abs(x.acik) > 0.005 ? "bu fişten kalan " + para.format(x.acik) : "bu fiş ödendi");
+      detay.push(`<div class="fisb" data-no="${esc(x.no)}"><ul class="detay">${kalemler}</ul><p class="tamnot">${esc(alt.join(" · "))}<br>Fiş no ${esc(x.no)} · saat ${saatFmt.format(new Date(x.t))}</p></div>`);
+    } else {
+      let ad, alt = "";
+      if (x.tur === "iade") { ad = "İade"; alt = "borcunuzdan düşüldü"; }
+      else if (x.tur === "duzeltme") { ad = "Hesap düzeltmesi"; alt = x.tutar < 0 ? "borcunuza eklendi" : "borcunuzdan düşüldü"; }
+      else { ad = "Ödeme alındı"; alt = (TUR[x.tur] || "") + (x.fis ? " · fazlası eski borcunuza sayıldı" : ""); if (x.tutar > 0) odenen += x.tutar; }
+      if (ad !== "Ödeme alındı") icerik.push(ad);
+      detay.push(`<p class="tamnot hareket"><b>${ad}</b>${alt ? " (" + esc(alt) + ")" : ""}: <span class="${x.tutar < 0 ? "arti" : "eksi"}">${x.tutar < 0 ? "+" + para.format(-x.tutar) : eksi(x.tutar)}</span></p>`);
+    }
+  });
+  const ic = icerik.join(", ");
+  const d = new Date(g.t);
+  return `<details class="sv" data-gun="${g.gun}"${acik ? " open" : ""}><summary>
+      <span class="c-t"><b>${kisaGunFmt.format(d).replace("/", ".")}</b><small>${kisaAdFmt.format(d)}</small></span>
+      <span class="c-i">${ic ? esc(ic) : "<em>Ödeme</em>"}</span>
+      <span class="c-n">${sayi(tutar)}</span>
+      <span class="c-n od">${sayi(odenen)}</span>
+      <span class="c-n bk">${sayiFmt.format(g.bakiye)}</span>
+    </summary><div class="acik">${detay.join("")}</div></details>`;
 }
-/** Hesabın HTML'i. acikFisler: açık tutulacak fiş numaraları (yenilemede kapanmasın). */
-function hesapHTML(h, guncel, acikFisler) {
+/** Hesabın HTML'i. acikGunler: açık tutulacak günler (yenilemede kapanmasın). */
+function hesapHTML(h, guncel, acikGunler) {
   const ol = hareketler(h), bakiye = yuvarla(h.bakiye);
   const gunler = []; let son = null;
   ol.forEach((e) => { if (!son || son.gun !== e.gun) { son = { gun: e.gun, t: e.t, liste: [] }; gunler.push(son); } son.liste.push(e); son.bakiye = e.bakiye; });
   const odemeler = ol.filter((e) => (e.tip === "o" && e.x.tutar > 0 && (e.x.tur === "nakit" || e.x.tur === "kart" || e.x.tur === "havale")) || (e.tip === "f" && !e.x.iade && e.x.nakit + e.x.kart > 0.005));
   const so = odemeler[odemeler.length - 1];
-  const sonOdeme = so ? gunFmt.format(new Date(so.t)) + " · " + para.format(so.tip === "o" ? so.x.tutar : so.x.nakit + so.x.kart) : "henüz ödeme yok";
+  const sonOdeme = so ? gunFmt.format(new Date(so.t)) + " · " + para.format(so.tip === "o" ? so.x.tutar : so.x.nakit + so.x.kart) : "—";
   const borclu = bakiye > 0.005, alacakli = bakiye < -0.005;
-  const gunHTML = gunler.reverse().map((g) => `<section class="gun">
-      <header><div><b>${gunFmt.format(new Date(g.t))}</b> <span>${gunAdFmt.format(new Date(g.t))}</span></div><div class="gb">Bakiye<b>${para.format(g.bakiye)}</b></div></header>
-      ${g.liste.map((e) => (e.tip === "f" ? fisHTML(e.x, acikFisler && acikFisler.indexOf(e.x.no) >= 0) : odemeHTML(e.x))).join("")}
-    </section>`).join("");
-  return `<section class="bakiye${borclu ? "" : " temiz"}" aria-label="Güncel bakiye">
-      <span class="etiket">${borclu ? "Kalan borcunuz" : alacakli ? "Alacağınız (fazla ödemeniz)" : "Borcunuz yok"}</span>
-      <b class="tutar" id="bakiyeTutar">${para.format(Math.abs(bakiye))}</b>
-      <span class="son">Son ödeme: ${sonOdeme}</span>
+  const satirlar = gunler.reverse().map((g) => gunSatirHTML(g, acikGunler && acikGunler.indexOf(g.gun) >= 0)).join("");
+  return `<section class="bakiye eski${borclu ? "" : " temiz"}" aria-label="Güncel bakiye">
+      <div><span class="etiket">${borclu ? "Kalan borcunuz" : alacakli ? "Alacağınız (fazla ödemeniz)" : "Borcunuz yok"}</span><b class="tutar" id="bakiyeTutar">${para.format(Math.abs(bakiye))}</b></div>
+      <div class="kucuk"><span class="etiket">Son ödeme</span>${sonOdeme}</div>
+      ${guncel ? `<div class="kucuk"><span class="etiket">Güncelleme</span>${gunFmt.format(new Date(guncel))} ${saatFmt.format(new Date(guncel))}</div>` : ""}
     </section>
-    <h2>Hesap hareketleri</h2>
-    ${gunHTML || `<div class="bos">Henüz alışveriş ya da ödeme kaydı yok.</div>`}
-    ${Math.abs(h.acilis) > 0.005 ? `<p class="not">Hesap açılışında devreden bakiye: ${para.format(h.acilis)}</p>` : ""}
-    <p class="not">Ürünleri ve fiyatları görmek için satıra dokunun. Tutarlar Türk lirasıdır. Bir hata görürseniz lütfen bize bildirin.${guncel ? "<br>Son güncelleme: " + gunFmt.format(new Date(guncel)) + " " + saatFmt.format(new Date(guncel)) : ""}</p>`;
+    <div class="tablo">
+      <div class="bas"><span>Tarih</span><span>İçerik</span><span class="r">Tutar</span><span class="r">Ödenen</span><span class="r">Bakiye</span></div>
+      ${satirlar || `<div class="bos">Henüz alışveriş ya da ödeme kaydı yok.</div>`}
+    </div>
+    ${Math.abs(h.acilis) > 0.005 ? `<p class="not">Hesap açılış bakiyesi: ${para.format(h.acilis)}</p>` : ""}
+    <p class="not">Tutarlar Türk lirasıdır. Ürünleri görmek için satıra dokunun. Bir hata görürseniz lütfen bize bildirin.</p>`;
 }
 function baslikHTML(h, dugme) {
   return `<div class="ust"><div><div class="firma">${esc(h.firma || "Özgür Ticaret")} · Cari hesap</div><h1 id="musteriAd">${esc(h.ad)}</h1></div>${dugme || ""}</div>`;
@@ -447,7 +501,7 @@ function agHatasiCiz(tekrar) {
   document.getElementById("tekrar").addEventListener("click", tekrar);
 }
 function hesapCiz(h, guncel, kod) {
-  const acik = Array.from(kok.querySelectorAll("details.fis[open]"), (d) => d.dataset.no);
+  const acik = Array.from(kok.querySelectorAll("details.sv[open]"), (d) => d.dataset.gun);
   acikKod = kod; sonOkuma = Date.now();
   kok.innerHTML = baslikHTML(h, `<button class="kucuk-btn" id="cikis" type="button">Çıkış</button>`) + hesapHTML(h, guncel, acik);
   document.getElementById("cikis").addEventListener("click", () => { sakliYaz(""); if (location.hash) history.replaceState(null, "", location.pathname); girisCiz(""); });

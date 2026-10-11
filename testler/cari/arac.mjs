@@ -67,10 +67,10 @@ try {
   let e = await hesapOku(s.page);
   d.esit([e.ad, e.etiket, e.bakiye], ["Deneme Kıraathanesi", "Kalan borcunuz", para(beklenen)], "telefonla: ad ve bakiye doğru (" + para(beklenen) + ")");
   d.dogru(e.fisler.includes(yeniFis) && e.fisler.length === 2, "telefonla: yeni fiş listede (" + yeniFis + ")");
-  await s.page.click(`details.fis[data-no="${yeniFis}"] summary`);
-  const fisMetni = await s.page.locator(`details.fis[data-no="${yeniFis}"]`).innerText();
-  d.dogru(/Örnek Bardak Su 200 ml/.test(fisMetni) && /10 × ₺90,00/.test(fisMetni) && /₺900,00/.test(fisMetni) && /2 × ₺640,00/.test(fisMetni) && /Toplam\s+₺2\.180,00/.test(fisMetni), "fiş açılınca kalemler, adet, fiyat (müşterinin özel fiyatı 90), tutar ve toplam görünüyor");
-  d.dogru(/Ödenen \(nakit\)\s+₺1\.000,00/.test(fisMetni) && /Bu fişten kalan[^\n]*\s+₺1\.180,00/.test(fisMetni), "fişte ödenen ve kalan görünüyor");
+  await s.page.evaluate((no) => { document.querySelector(`.fisb[data-no="${no}"]`).closest("details").open = true; }, yeniFis);
+  const fisMetni = await s.page.locator(`.fisb[data-no="${yeniFis}"]`).innerText();
+  d.dogru(/10\s+Örnek Bardak Su 200 ml\s+90\s+900/.test(fisMetni) && /2\s+Örnek Kola 250 ml\s+640\s+1\.280/.test(fisMetni) && /Toplam ₺2\.180,00/.test(fisMetni), "fiş açılınca kalemler, adet, fiyat (müşterinin özel fiyatı 90), tutar ve toplam görünüyor");
+  d.dogru(/ödenen \(nakit\) ₺1\.000,00/.test(fisMetni) && /bu fişten kalan ₺1\.180,00/.test(fisMetni), "fişte ödenen ve kalan görünüyor");
   d.dogru(s.istekler.every((x) => x.yontem === "GET" && x.yol === "/rest/v1/kv" && x.sorgu.includes(ONEK)) && s.istekler.length === 2, "müşteri sayfası yalnız 2 okuma yaptı (telefon kaydı + hesap), ikisi de babuco:cari:*");
   await s.kapat();
 
