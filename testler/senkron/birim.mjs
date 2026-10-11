@@ -201,6 +201,9 @@ console.log("— yerinde güncelleme (açık pencerenin elindeki nesne geçerli 
   d.dogru(S.esEsit(canli, hedef), "sonuç hedefle aynı");
   d.dogru(bul(canli.customers, "m1") === m1 && m1.telefon === "YENİ" && bul(canli.products, "u2") === u2 && u2.stok === 1, "var olan kayıt nesneleri AYNI nesne, içerikleri güncel");
   d.dogru(canli.sales === dizi && dizi.length === 4, "dizi de aynı dizi; silinen kayıt çıktı");
+  const hedefMetni = JSON.stringify(hedef);
+  bul(canli.customers, "m9").ad = "değişti"; canli.yeni.push(3); canli.sales[0].items[0].adet = 99; canli.settings.fisTel = "x"; bul(canli.customers, "m1").ozelFiyatlar.u9 = 1;
+  d.dogru(JSON.stringify(hedef) === hedefMetni, "canlı store ile hedef arasında ortak nesne kalmadı (birini değiştirmek diğerini etkilemiyor)");
 }
 
 console.log("— geri yükleme önizlemesi");

@@ -2619,6 +2619,7 @@ let _esTekrar = false;        // eşitleme sürerken yeni yazma istendi
 let _esIlk = true;            // bu oturumda bulut kaydı henüz tam okunmadı
 let _esCizBekliyor = false;   // ekranı yenileme ertelendi (kullanıcı yazıyor / pencere açık)
 let _esCikis = false;         // çıkış yapıldı: yeniden giriş olana kadar telefona da buluta da hiçbir şey yazılmaz
+let _esNesil = 0;             // her çıkışta artar: çıkıştan önce başlamış eşitleme sonradan hiçbir şeye dokunmaz
 const _esDurum = { cevrimdisi: false, hata: "", hataSayisi: 0, sonraki: 0, depoDolu: false, yedekHata: "" };
 let _esCihaz = esCihazKimligi();
 let _esGunluk = esGunlukOku();
@@ -2816,18 +2817,20 @@ function esitle() {
   return p;
 }
 async function esitleIc() {
-  const g = _esGunluk;
+  const g = _esGunluk, nesil = _esNesil;
+  const birakildi = () => !_esKapi || nesil !== _esNesil;   // bu arada çıkış yapıldı
   for (let deneme = 0; deneme < 5; deneme++) {
     // Gönderilecek bir şey yoksa koca kaydı indirmeden önce yalnız zamanına bak.
     if (!_esIlk && !esBekleyenVar()) {
       const z = await kvOku(BULUT_KEY, "updated_at", 12000);
+      if (birakildi()) return false;
       if (z.durum === "hata") return esHata(z.hata);
       if (z.durum === "var" && z.updatedAt === g.tabanTs && !esBekleyenVar()) { esTamam(); return true; }
     }
     const b = await kvOku(BULUT_KEY);
     if (b.durum === "hata") return esHata(b.hata);       // OKUNAMADI ≠ BOŞ: buluta hiçbir şey itilmez
     if (!(await esYetkili())) return esHata("yetki-yok"); // YETKİSİZ boş yanıt da "boş" değildir
-    if (!_esKapi) return false;                          // bu arada çıkış yapıldı
+    if (birakildi()) return false;
 
     /* --- buradan bir sonraki await'e kadar tek solukta: yerel hâl tutarlı bir anda dondurulur --- */
     const yerel = esKlon(store);
@@ -2844,7 +2847,7 @@ async function esitleIc() {
       ilk.esitleme = Object.assign({}, ilk.esitleme, { [_esCihaz]: g.n });
       const tsIlk = esSonrakiZaman("");
       const ri = await kvEkle(BULUT_KEY, ilk, tsIlk);
-      if (!_esKapi) return false;
+      if (birakildi()) return false;
       if (ri.durum === "cakisma") continue;
       if (ri.durum === "hata") return esHata(ri.hata);
       g.y = []; g.gecis = false; g.onay = g.n;
@@ -2888,10 +2891,10 @@ async function esitleIc() {
     /* --- tek soluk bitti --- */
 
     await gunlukYedekSagla(b);                           // günün ilk yazmasından ÖNCE buluttaki hâlin kopyası
-    if (!_esKapi) return false;
+    if (birakildi()) return false;
     const ts = esSonrakiZaman(b.updatedAt);
     const r = await kvKosulluYaz(BULUT_KEY, m, ts, b.updatedAt);
-    if (!_esKapi) return false;                          // yazma sürerken çıkış yapıldı: telefona bir şey alma
+    if (birakildi()) return false;                       // yazma sürerken çıkış yapıldı: telefona bir şey alma
     if (r.durum === "hata") return esHata(r.hata);       // ulaştı mı bilinmez: yamalar günlükte, numaralı; sonra bakılır
     if (r.durum === "cakisma") {                         // araya başkası yazdı: hiçbir şey yazılmadı → baştan
       await new Promise((c) => setTimeout(c, 120 + Math.random() * 380));
@@ -2913,7 +2916,9 @@ function esBenimse(m, ts, notlar) {
   const simdi = esKlon(store);
   const acik = esFark(_esTaban, simdi, null, null, 0);
   const taban = bulutStoreBirlestir(esKlon(m));
-  const hedef = acik ? bulutStoreBirlestir(esBirlestir(taban, [acik]).store) : esKlon(taban);
+  const br = acik ? esBirlestir(taban, [acik]) : null;      // esYerinde hedefi kopyalayarak alır; ayrı kopya gerekmez
+  const hedef = br ? bulutStoreBirlestir(br.store) : taban;
+  if (br) notlar = (notlar || []).concat(br.notlar);
   // Ekranların tembel oluşturduğu boş koleksiyonlar (store.x = store.x || []) yerinde kalsın.
   Object.keys(store).forEach((k) => { if (hedef[k] === undefined && esBos(store[k])) { hedef[k] = esKlon(store[k]); taban[k] = esKlon(store[k]); } });
   const degisti = !esEsit(simdi, hedef);
@@ -3207,7 +3212,7 @@ function esKabukKur() {
     store boşaltılsa bile "her şey silindi" yaması ÜRETİLMEZ ve telefona hiçbir kopya yazılmaz.
     Yerel anahtarların hepsi "babuco:" ile başlar; giriş bölümü çıkışta onları topluca siler. */
 function esCikisYapildi() {
-  _esCikis = true; _esKapi = false; _bulutHazir = false; _esIlk = true;
+  _esCikis = true; _esKapi = false; _bulutHazir = false; _esIlk = true; _esNesil += 1;
   clearTimeout(_yazZamanlayici); _yazZamanlayici = null;
   _esGunluk = { v: 1, n: 0, y: [], acik: null, tabanTs: "", ilkBekleyen: 0, sonBasari: 0, gecis: true };
   try { localStorage.removeItem(ES_GUNLUK_KEY); localStorage.removeItem(YEDEK_ONEK + "son"); } catch (e) {}
