@@ -18,12 +18,17 @@
  *   node babuco.js musteritablo [YYYY-AA-GG] [--tutar]  Günün satış şablonu (uğrama sırasına göre)
  *   node babuco.js kasa [YYYY-AA-GG] [--hesaba=ad,ad]  Gün sonu: para tipi, gider, maliyet, kâr, ciro
  *   node babuco.js urun [arama]                Ürün ara (satış/alış fiyatı, stok)
- *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet)
+ *   node babuco.js haftalik [YYYY-AA]                                hafta hafta toplanan / babaya / cepte kalan
+ *   node babuco.js iade <musteri> <urun> <adet> [fiyat] [--dukkan]       (--kaydet)
+ *   node babuco.js urun-ekle <ad> <alis> <satis> [grup]               (--kaydet)
+ *   node babuco.js urun-fiyat <urun> <alis|satis> <fiyat>            (--kaydet)
+ *   node babuco.js musteri-ekle <ad> [telefon]                        (--kaydet)
+ *   node babuco.js ozel-fiyat <musteri> <urun> <fiyat|sil>          (--kaydet; bütün aileye, --tek sadece o ürün)
  *   node babuco.js satis <dosya.json|json>     Satış gir            (--kaydet)
  *                                              Önce Markdown FİŞ basar (kullanıcı onaylasın diye);
  *                                              eski düz metin özet için --duz.
  *   node babuco.js alim <dosya.json|json>      Mal girişi: stok ekle (--kaydet)
- *   node babuco.js tahsilat <musteri> <tutar> [not]                 (--kaydet)
+ *   node babuco.js tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG]                 (--kaydet)
  *   node babuco.js gider <tutar> <aciklama> [kategori]              (--kaydet)
  *   node babuco.js gelir <tutar> <aciklama> [tur]                   (--kaydet)
  *   node babuco.js sil-satis <belgeNo>         Satışı geri al       (--kaydet)
@@ -147,7 +152,7 @@ function raporMd(store, gun, updatedAt) {
   const ciro = sum((s) => s.toplam), mal = sum((s) => s.maliyet);
   const gider = store.expenses.filter((e) => inR(e.tarih)).reduce((a, e) => a + (Number(e.tutar) || 0), 0);
   const gelir = store.incomes.filter((e) => inR(e.tarih)).reduce((a, e) => a + (Number(e.tutar) || 0), 0);
-  const tahsilat = store.payments.filter((p) => inR(p.tarih)).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
+  const tahsilat = store.payments.filter((p) => inR(p.tarih) && !/düzeltme/i.test(p.not || "")).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
   const firmaOde = (store.firmaPayments || []).filter((p) => inR(p.tarih)).reduce((a, p) => a + (Number(p.tutar) || 0), 0);
   const nakitKasa = nakit + tahsilat + gelir - gider - firmaOde;
 
@@ -207,17 +212,59 @@ function raporMd(store, gun, updatedAt) {
   return L.join("\n");
 }
 
+/* ---------- fiyat ailesi ----------
+   Kullanıcının kuralı: bir müşteride bir ailenin TEK fiyatı olur — toz içeceklerin
+   hepsi 75 ise kuşburnu da 75, nane limon da 75; vişneyi 600'den verdiyse şeftali de 600.
+   Aile = aynı altKategori (panelin varyant gruplaması) + aynı liste fiyatı. Liste fiyatı
+   şartı, markası farklı olup ayrı fiyatlanan ürünleri (Beypazarı 315 / Kızılay 285 sade
+   soda, Kola 625 / Sarıyer 700) birbirine bağlamamak için. */
+function aile(store, p) {
+  const alt = (p.altKategori || "").trim();
+  if (!alt) return [p];
+  return store.products.filter((x) => (x.altKategori || "").trim() === alt && Number(x.satis) === Number(p.satis));
+}
+function ozelOku(c, id) {
+  const oz = (c && c.ozelFiyatlar) || {};
+  return (oz[id] != null && oz[id] !== "") ? Number(oz[id]) : null;
+}
+/* Bu müşteriye bu aileden en son hangi fiyattan satıldı (fişteki kontrol notu için). */
+function aileSonSatis(store, c, p) {
+  if (!c) return null;
+  const ids = aile(store, p).map((x) => x.id);
+  let son = null;
+  store.sales.forEach((s) => {
+    if (s.musteriId !== c.id) return;
+    s.items.forEach((it) => { if (ids.includes(it.urunId) && (!son || s.tarih > son.tarih)) son = { fiyat: Number(it.fiyat), tarih: s.tarih }; });
+  });
+  return son;
+}
+/* Müşterinin bu ürün için geçerli özel fiyatı: ürünün kendi özel fiyatı, yoksa aile
+   kardeşlerinden biri. Kardeşler çelişirse aileden en son satılan fiyata uyan kazanır. */
+function aileOzelFiyat(store, c, p) {
+  const kendi = ozelOku(c, p.id);
+  if (kendi != null) return kendi;
+  const fiyatlar = [...new Set(aile(store, p).map((x) => ozelOku(c, x.id)).filter((v) => v != null))];
+  if (!fiyatlar.length) return null;
+  if (fiyatlar.length === 1) return fiyatlar[0];
+  const son = aileSonSatis(store, c, p);
+  return (son && fiyatlar.includes(son.fiyat)) ? son.fiyat : fiyatlar[0];
+}
+
 /* ---------- satış: panelin kaydetSatis() mantığı ---------- */
 function satisHazirla(store, girdi) {
   const c = girdi.musteri ? musteriBul(store, girdi.musteri) : null;
-  const ozel = (c && c.ozelFiyatlar) || {};
-  const kalemler = (girdi.kalemler || []).map((k) => {
-    const p = urunBul(store, k.urun);
-    const varsayilan = (ozel[p.id] != null && ozel[p.id] !== "") ? Number(ozel[p.id]) : (Number(p.satis) || 0);
+  const ham = (girdi.kalemler || []).map((k) => ({ k: k, p: urunBul(store, k.urun) }));
+  /* Fişte ailenin bir üyesine elle fiyat verildiyse, fiyatı yazılmayan kardeşleri de onu alır
+     ("toz içecekler 75" dendiğinde her çeşide tek tek fiyat yazmaya gerek kalmasın). */
+  const elleAile = {};
+  ham.forEach(({ k, p }) => { if (k.fiyat != null && k.fiyat !== "") aile(store, p).forEach((x) => { if (elleAile[x.id] == null) elleAile[x.id] = Number(k.fiyat); }); });
+  const kalemler = ham.map(({ k, p }) => {
+    const ozelFiyat = aileOzelFiyat(store, c, p);
+    const varsayilan = elleAile[p.id] != null ? elleAile[p.id] : (ozelFiyat != null ? ozelFiyat : (Number(p.satis) || 0));
     const fiyat = (k.fiyat != null && k.fiyat !== "") ? Number(k.fiyat) : varsayilan;
     const adet = Number(k.adet) || 0;
     if (adet <= 0) throw new Error('"' + p.ad + '" icin adet gecersiz.');
-    return { p: p, ad: p.ad, urunId: p.id, adet: adet, fiyat: fiyat, alis: Number(p.alis) || 0, listeFiyat: Number(p.satis) || 0, ozelFiyat: ozel[p.id] != null ? Number(ozel[p.id]) : null };
+    return { p: p, ad: p.ad, urunId: p.id, adet: adet, fiyat: fiyat, alis: Number(p.alis) || 0, listeFiyat: Number(p.satis) || 0, ozelFiyat: ozelFiyat, sonSatis: aileSonSatis(store, c, p) };
   });
   if (!kalemler.length) throw new Error("Satista kalem yok.");
   const brut = kurus(kalemler.reduce((a, k) => a + k.adet * k.fiyat, 0));
@@ -322,6 +369,19 @@ function satisFis(store, h, kaydedildi, belgeNo) {
   }
   L.push("| Kâr | " + q(h.toplam - h.maliyet) + " ₺ · " + karOrani(h.toplam, h.maliyet) + " |");
   L.push("");
+  /* Aile kontrolü: aynı ailede farklı fiyat, ya da bu müşteriye aileden en son başka
+     fiyattan satılmış olması — ikisi de genelde eski/yanlış özel fiyat demek. */
+  const gorulen = {};
+  h.kalemler.forEach((k) => {
+    const anahtar = aile(store, k.p).map((x) => x.id).sort().join(",");
+    (gorulen[anahtar] = gorulen[anahtar] || []).push(k);
+  });
+  Object.values(gorulen).forEach((ks) => {
+    const fiyatlar = [...new Set(ks.map((k) => k.fiyat))];
+    if (fiyatlar.length > 1) L.push("⚠ **Aynı ailede farklı fiyat:** " + ks.map((k) => k.ad + " " + q(k.fiyat)).join(" · "));
+    const son = ks[0].sonSatis;
+    if (son && fiyatlar.length === 1 && son.fiyat !== fiyatlar[0]) L.push("ℹ Bu müşteriye bu aileden en son **" + q(son.fiyat) + "** ile satıldı (" + new Date(son.tarih).toLocaleDateString("tr-TR") + ")");
+  });
   const im = [];
   if (elle) im.push("⚠ = elle fiyat (listeden farklı)");
   if (ozelV) im.push("⭐ = müşterinin özel fiyatı");
@@ -623,12 +683,21 @@ function provaUyari(ornek) {
   if (komut === "tahsilat") {
     const c = musteriBul(store, pos[1]);
     const tutar = kurus(String(pos[2]).replace(",", "."));
-    if (!(tutar > 0)) throw new Error("Tutar gecersiz.");
-    const not = pos.slice(3).join(" ") || "Saha tahsilat";
+    /* --duzeltme: bakiyeyi elle düzeltir (eksi tutar = borcu artırır). Notu "Bakiye düzeltme"
+       ile başlar; haftalik/kasa raporları "düzeltme" notlu kayıtları toplanan paraya saymaz. */
+    const duzeltme = args.indexOf("--duzeltme") >= 0;
+    if (duzeltme ? !tutar || isNaN(tutar) : !(tutar > 0)) throw new Error("Tutar gecersiz.");
+    const not = duzeltme ? "Bakiye düzeltme" + (pos.slice(3).length ? ": " + pos.slice(3).join(" ") : "")
+                         : (pos.slice(3).join(" ") || "Saha tahsilat");
+    /* --tarih=YYYY-AA-GG: geçmiş bir günde alınmış ödeme bugünün kasasına düşmesin
+       (panelin "Ödeme Al" tarih alanıyla aynı: o günün öğlesi). */
+    const tArg = args.find((a) => a.indexOf("--tarih=") === 0);
+    const tarih = tArg ? new Date(tArg.slice(8) + "T12:00:00") : new Date();
+    if (isNaN(tarih)) throw new Error("Tarih gecersiz: " + tArg + " (ornek --tarih=2026-09-24)");
     const eski = customerBorc(store, c.id);
-    console.log(c.ad + " — tahsilat " + money(tutar) + "\nBakiye: " + money(eski) + " -> " + money(kurus(eski - tutar)) + "\nNot: " + not);
-    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar); return; }
-    store.payments.push({ id: genId(store), musteriId: c.id, tutar: tutar, not: not, tarih: new Date().toISOString() });
+    console.log(c.ad + " — tahsilat " + money(tutar) + "\nTarih : " + tarih.toLocaleDateString("tr-TR") + "\nBakiye: " + money(eski) + " -> " + money(kurus(eski - tutar)) + "\nNot: " + not);
+    if (!kaydet) { provaUyari('tahsilat "' + c.ad + '" ' + tutar + (tArg ? " " + tArg : "") + (duzeltme ? " --duzeltme" : "")); return; }
+    store.payments.push({ id: genId(store), musteriId: c.id, tutar: tutar, not: not, tarih: tarih.toISOString() });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;
@@ -748,24 +817,141 @@ function provaUyari(ornek) {
     const adet = Number(pos[3]) || 0;
     if (adet <= 0) throw new Error("Adet gecersiz.");
     const c = store.customers.find((x) => x.id === s.musteriId);
-    const ozel = (c && c.ozelFiyatlar && c.ozelFiyatlar[p.id] != null && c.ozelFiyatlar[p.id] !== "") ? Number(c.ozelFiyatlar[p.id]) : null;
+    /* Fişte aynı aileden kalem varsa onun fiyatı, yoksa müşterinin aile özel fiyatı. */
+    const aileIds = aile(store, p).map((x) => x.id);
+    const fisteki = s.items.find((it) => aileIds.includes(it.urunId));
+    const ozel = fisteki ? Number(fisteki.fiyat) : aileOzelFiyat(store, c, p);
     const fiyat = pos[4] != null ? Number(String(pos[4]).replace(",", ".")) : (ozel != null ? ozel : Number(p.satis) || 0);
     const ekTutar = kurus(adet * fiyat), ekMaliyet = kurus(adet * (Number(p.alis) || 0));
     console.log("Belge " + s.belgeNo + " · " + (c ? c.ad : "(perakende)") + " · " + new Date(s.tarih).toLocaleString("tr-TR"));
     s.items.forEach((it) => console.log("   " + it.adet + " x " + it.ad + " @ " + money(it.fiyat)));
     console.log("  + EKLENECEK: " + adet + " x " + p.ad + " @ " + money(fiyat) + (ozel != null && fiyat === ozel ? " (özel fiyat)" : "") + " = " + money(ekTutar));
-    console.log("  Toplam : " + money(s.toplam) + " -> " + money(kurus(s.toplam + ekTutar)));
-    console.log("  Açık   : " + money(s.odeme.acik) + " -> " + money(kurus((Number(s.odeme.acik) || 0) + ekTutar)));
-    if (c) { const eski = customerBorc(store, c.id); console.log("  Bakiye : " + money(eski) + " -> " + money(kurus(eski + ekTutar))); }
-    if (!kaydet) { provaUyari("kalem-ekle " + s.belgeNo + ' "' + p.ad + '" ' + adet); return; }
+    /* --odeme=nakit|pos: eklenen kalemin parası o an alındıysa açık hesaba değil oraya yazılır
+       (varsayılan açık hesap). Saf pos satışta %2 komisyon yeni toplamdan yeniden hesaplanır. */
+    const oArg = args.find((a) => a.indexOf("--odeme=") === 0);
+    const odemeAlan = oArg ? ({ nakit: "nakit", pos: "pos", kart: "pos", acik: "acik" })[oArg.slice(8)] : "acik";
+    if (!odemeAlan) throw new Error("--odeme= nakit | pos | acik");
+    const yeniToplam = kurus(s.toplam + ekTutar);
+    const posSaf = odemeAlan === "pos" && !(Number(s.odeme.nakit) || 0) && !(Number(s.odeme.acik) || 0);
+    const yeniKomisyon = (posSaf && !s.odemeAdi) ? Math.round(yeniToplam * 0.02 * 100) / 100 : (Number(s.komisyon) || 0);
+    const etiket = { nakit: "Nakit ", pos: "Kart  ", acik: "Açık  " }[odemeAlan];
+    console.log("  Toplam : " + money(s.toplam) + " -> " + money(yeniToplam));
+    console.log("  " + etiket + ": " + money(s.odeme[odemeAlan]) + " -> " + money(kurus((Number(s.odeme[odemeAlan]) || 0) + ekTutar)));
+    if (yeniKomisyon !== (Number(s.komisyon) || 0)) console.log("  Pos komisyonu: " + money(s.komisyon) + " -> " + money(yeniKomisyon));
+    if (c) { const eski = customerBorc(store, c.id); console.log("  Bakiye : " + money(eski) + " -> " + money(kurus(eski + (odemeAlan === "acik" ? ekTutar : 0)))); }
+    if (!kaydet) { provaUyari("kalem-ekle " + s.belgeNo + ' "' + p.ad + '" ' + adet + (oArg ? " " + oArg : "")); return; }
     s.items.push({ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: adet, iskyuzde: 0 });
     s.brut = kurus((Number(s.brut) || 0) + ekTutar);
     s.toplam = kurus((Number(s.toplam) || 0) + ekTutar);
     s.maliyet = kurus((Number(s.maliyet) || 0) + ekMaliyet);
-    s.odeme.acik = kurus((Number(s.odeme.acik) || 0) + ekTutar);
+    s.odeme[odemeAlan] = kurus((Number(s.odeme[odemeAlan]) || 0) + ekTutar);
+    s.komisyon = yeniKomisyon;
     const pr = store.products.find((x) => x.id === p.id);
     if (s.stokKaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) - adet;
     else pr.stok = (Number(pr.stok) || 0) - adet;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- iade: müşteriden mal geri alındı ----------
+     Eksi adetli bir "iade fişi" olarak yazılır: tutar müşterinin borcundan düşer (açık hesap eksi),
+     ciro ve maliyet o gün eksiye gider (kâr ve babaya ödenecek maliyet doğru kalsın), mal araca/dükkana
+     geri girer. Tahsilat olarak YAZILMAZ — ortada para girişi yok, haftalık cep tablosunu şişirmesin.
+     Panelin "İade" listesinde de görünsün diye store.iadeler'e de kayıt düşer. */
+  if (komut === "iade") {
+    const c = musteriBul(store, pos[1]);
+    const p = urunBul(store, pos[2]);
+    const adet = Number(pos[3]) || 0;
+    if (adet <= 0) throw new Error('Adet gecersiz: iade "<musteri>" "<urun>" <adet> [fiyat]');
+    // Fiyat verilmezse müşteriye bu ürünün en son satıldığı fiyat (iade, ödediği fiyattan düşülür).
+    let fiyat = pos[4] != null ? kurus(String(pos[4]).replace(",", ".")) : null;
+    if (fiyat == null) {
+      const son = store.sales.filter((x) => x.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih))
+        .map((x) => x.items.find((it) => it.urunId === p.id && it.adet > 0)).find(Boolean);
+      fiyat = son ? Number(son.fiyat) : Number(p.satis) || 0;
+    }
+    const tutar = kurus(adet * fiyat), maliyet = kurus(adet * (Number(p.alis) || 0));
+    const kaynak = args.includes("--dukkan") ? "dukkan" : "arac";
+    const eski = customerBorc(store, c.id);
+    const q = (n) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
+    console.log("### ↩ İADE — " + c.ad + "\n**" + new Date().toLocaleDateString("tr-TR") + "** · " + (kaynak === "arac" ? "araca" : "dükkana") + " geri\n");
+    console.log("| Adet | Ürün | Fiyat | Tutar |\n|---:|---|---:|---:|");
+    console.log("| −" + adet + " | " + p.ad + " | " + q(fiyat) + " | −" + q(tutar) + " |");
+    console.log("| | | **İADE TOPLAM** | **−" + q(tutar) + " ₺** |\n");
+    console.log("| | |\n|---|---:|");
+    console.log("| **Bakiye** | " + q(eski) + " → **" + q(kurus(eski - tutar)) + " ₺** |");
+    console.log("| Bugünün cirosundan düşer | −" + q(tutar) + " ₺ |");
+    console.log("| Bugünün maliyetinden düşer (mal geri geldi) | −" + q(maliyet) + " ₺ |");
+    console.log("| Kârdan düşer | −" + q(tutar - maliyet) + " ₺ |\n");
+    if (!kaydet) { console.log("**KAYDEDİLMEDİ** — onayını bekliyorum"); provaUyari('iade "' + c.ad + '" "' + p.ad + '" ' + adet + " " + fiyat); return; }
+    const now = new Date();
+    store.counters.sale = (store.counters.sale || 0) + 1;
+    const belgeNo = now.getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
+    store.sales.push({
+      id: genId(store), belgeNo: belgeNo, musteriId: c.id, personelId: null, not: "İADE — " + adet + " x " + p.ad, odemeAdi: "İade",
+      items: [{ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: -adet, iskyuzde: 0 }],
+      brut: -tutar, iskonto: 0, toplam: -tutar, maliyet: -maliyet, komisyon: 0,
+      odeme: { nakit: 0, pos: 0, acik: -tutar }, tarih: now.toISOString(), servisGun: localDateStr(now), hafta: haftaNo(now), stokKaynak: kaynak,
+    });
+    const pr = store.products.find((x) => x.id === p.id);
+    if (kaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) + adet; else pr.stok = (Number(pr.stok) || 0) + adet;
+    store.iadeler = store.iadeler || [];
+    store.iadeler.push({ id: genId(store), urunId: p.id, ad: p.ad, adet: adet, tutar: tutar, musteriId: c.id, tarih: now.toISOString() });
+    const y = await storeYaz(store, updatedAt);
+    console.log("**KAYDEDİLDİ** — İade belgesi " + belgeNo + " · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- urun-ekle: listede olmayan ürünü aç (panelin ürün kartı alanlarıyla) ---------- */
+  if (komut === "urun-ekle") {
+    const ad = (pos[1] || "").trim();
+    const alis = kurus(String(pos[2] || "").replace(",", ".")), satis = kurus(String(pos[3] || "").replace(",", "."));
+    if (!ad || !(alis >= 0) || !(satis > 0)) throw new Error('Kullanim: urun-ekle "<ad>" <alis> <satis> [grup]');
+    const grup = (pos[4] || "").trim() || "Diğer";
+    const benzer = store.products.filter((p) => norm(p.ad).includes(norm(ad)) || norm(ad).includes(norm(p.ad)));
+    if (benzer.find((p) => norm(p.ad) === norm(ad))) throw new Error("Bu adla urun zaten var: " + ad);
+    if (benzer.length) console.log("Dikkat, benzer isimli ürün var: " + benzer.map((p) => p.ad + " (" + money(p.satis) + ")").join(" · "));
+    console.log("Yeni ürün: " + ad + " · alış " + money(alis) + " · satış " + money(satis) + " · grup " + grup);
+    if (!kaydet) { provaUyari('urun-ekle "' + ad + '" ' + alis + " " + satis + ' "' + grup + '"'); return; }
+    store.products.push({ id: genId(store), ad: ad, kdv: "0", not: "", alis: String(alis), adetAlis: alis, satis: String(satis), adetSatis: satis,
+      grup: grup, stok: 0, aracStok: 0, birim: "Adet", birimIciAdet: 1, barkod: "", kritik: "", gorunur: true, altKategori: "" });
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- urun-fiyat: ürün kartındaki alış/satış fiyatını değiştir ----------
+     Sadece bundan sonraki fişleri etkiler; geçmiş fişlerin maliyeti satış anında yazılmıştır.
+     Panel fiyatı iki alanda tutuyor (alis/adetAlis, satis/adetSatis) — ikisi birlikte güncellenir. */
+  if (komut === "urun-fiyat") {
+    const p = urunBul(store, pos[1]);
+    const tur = String(pos[2] || "").toLocaleLowerCase("tr");
+    if (tur !== "alis" && tur !== "alış" && tur !== "satis" && tur !== "satış") throw new Error('Tür: alis | satis — ornek: urun-fiyat "Kardelen Filiz" alis 1400');
+    const alan = tur.startsWith("a") ? "alis" : "satis";
+    const yeni = kurus(String(pos[3]).replace(",", "."));
+    if (!(yeni >= 0) || pos[3] == null) throw new Error("Fiyat gecersiz.");
+    console.log(p.ad + "\n  " + alan + ": " + money(p[alan]) + "  ->  " + money(yeni) +
+      "\n  (alış " + money(alan === "alis" ? yeni : p.alis) + " · satış " + money(alan === "satis" ? yeni : p.satis) + " · birim kâr " + money((alan === "satis" ? yeni : Number(p.satis)) - (alan === "alis" ? yeni : Number(p.alis))) + ")");
+    if (!kaydet) { provaUyari('urun-fiyat "' + p.ad + '" ' + alan + " " + yeni); return; }
+    const pr = store.products.find((x) => x.id === p.id);
+    pr[alan] = String(yeni);
+    pr[alan === "alis" ? "adetAlis" : "adetSatis"] = yeni;
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- musteri-ekle: yeni müşteri kartı (panelin "Yeni Müşteri" alanlarıyla) ---------- */
+  if (komut === "musteri-ekle") {
+    const ad = (pos[1] || "").trim();
+    if (!ad) throw new Error('Ad gerekli: musteri-ekle "Onur Gül" [telefon]');
+    const telefon = (pos[2] || "").trim();
+    const benzer = store.customers.filter((c) => norm(c.ad).includes(norm(ad)) || norm(ad).includes(norm(c.ad)));
+    if (benzer.length) console.log("Dikkat, benzer isimli müşteri var: " + benzer.map((c) => c.ad).join(" · "));
+    console.log("Yeni müşteri: " + ad + (telefon ? " · " + telefon : " · telefon yok"));
+    if (!kaydet) { provaUyari('musteri-ekle "' + ad + '"' + (telefon ? " " + telefon : "")); return; }
+    store.customers.push({ id: genId(store), ad: ad, telefon: telefon, acilis: 0, adres: "", vergiNo: "" });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
     return;
@@ -776,17 +962,69 @@ function provaUyari(ornek) {
     const c = musteriBul(store, pos[1]);
     const p = urunBul(store, pos[2]);
     c.ozelFiyatlar = c.ozelFiyatlar || {};
-    const eski = c.ozelFiyatlar[p.id];
     if (pos[3] == null) throw new Error('Fiyat gerekli. Silmek icin: ozel-fiyat "' + c.ad + '" "' + p.ad + '" sil');
     const sil = String(pos[3]).toLocaleLowerCase("tr") === "sil";
     const fiyat = sil ? null : kurus(String(pos[3]).replace(",", "."));
-    console.log(c.ad + " · " + p.ad);
-    console.log("  özel fiyat : " + (eski != null ? money(eski) : "(yok)") + "  ->  " + (sil ? "(silinecek)" : money(fiyat)));
+    // Aile kuralı: fiyat ailenin bütün çeşitlerine birden yazılır (--tek ile sadece bu ürün).
+    const hedef = args.includes("--tek") ? [p] : aile(store, p);
+    console.log(c.ad + (hedef.length > 1 ? " · " + (p.altKategori || "").trim() + " ailesi (" + hedef.length + " çeşit)" : ""));
+    hedef.forEach((x) => { const e = ozelOku(c, x.id); console.log("  " + x.ad.padEnd(34) + (e != null ? money(e) : "(yok)").padStart(14) + "  ->  " + (sil ? "(silinecek)" : money(fiyat))); });
     console.log("  liste fiyatı: " + money(p.satis) + " · alış " + money(p.alis));
     if (!kaydet) { provaUyari('ozel-fiyat "' + c.ad + '" "' + p.ad + '" ' + (sil ? "sil" : fiyat)); return; }
-    if (sil) delete c.ozelFiyatlar[p.id]; else c.ozelFiyatlar[p.id] = fiyat;
+    hedef.forEach((x) => { if (sil) delete c.ozelFiyatlar[x.id]; else c.ozelFiyatlar[x.id] = fiyat; });
     const y = await storeYaz(store, updatedAt);
     console.log("\nKAYDEDILDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- haftalik: cebe giren para, hafta hafta ----------
+     Kullanıcının istediği şablon: hafta (Pzt–Paz) · toplanan · babaya · cepte kalan.
+     Toplanan = fişlerde peşin alınan (nakit + kart/havale) + eski borçlardan tahsilat.
+     Babaya  = o hafta satılan malın maliyeti (babaya her gün o günün maliyeti ödeniyor).
+     Masraf  = gider + POS komisyonu − gelir.  Cepte = toplanan − babaya − masraf.
+     "Bakiye düzeltmesi" notlu tahsilatlar para girişi değil, geçmişe dönük kayıt — sayılmaz. */
+  if (komut === "haftalik") {
+    /* haftalik [YYYY-AA]: ay verilirse sadece o aya düşen kayıtlar sayılır; ayı taşan
+       haftalar ay sınırında kesilir (31.08–06.09 haftası → 01.09–06.09). */
+    const ay = /^\d{4}-\d{2}$/.test(pos[1] || "") ? pos[1] : null;
+    const ayda = (iso) => !ay || localDateStr(new Date(iso)).slice(0, 7) === ay;
+    /* --servis: hafta yerine servis günü servis günü (satış olmayan günler — sadece havale/gider — ayrı satır). */
+    const gunluk = args.includes("--servis");
+    const pzt = (iso) => { const d = new Date(iso); d.setHours(0, 0, 0, 0); if (!gunluk) d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return localDateStr(d); };
+    const hf = {};
+    const h = (iso) => { const k = pzt(iso); return (hf[k] = hf[k] || { top: 0, baba: 0, masraf: 0, gun: new Set() }); };
+    store.sales.forEach((x) => {
+      if (!ayda(x.tarih)) return;
+      const w = h(x.tarih);
+      w.top += (Number(x.odeme.nakit) || 0) + (Number(x.odeme.pos) || 0);
+      w.baba += Number(x.maliyet) || 0;
+      w.masraf += Number(x.komisyon) || 0;
+      w.gun.add(x.servisGun || String(x.tarih).slice(0, 10));
+      w.fis = (w.fis || 0) + 1;
+    });
+    store.payments.forEach((p) => {
+      if (!(Number(p.tutar) > 0) || /düzeltme/i.test(p.not || "") || !ayda(p.tarih)) return;
+      h(p.tarih).top += Number(p.tutar);
+    });
+    (store.expenses || []).forEach((e) => { if (ayda(e.tarih)) h(e.tarih).masraf += Number(e.tutar) || 0; });
+    (store.incomes || []).forEach((e) => { if (ayda(e.tarih)) h(e.tarih).masraf -= Number(e.tutar) || 0; });
+    const kisa = (ymd) => ymd.slice(8, 10) + "." + ymd.slice(5, 7);
+    const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const GUNLER = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+    const L = [(gunluk ? "# Servis servis cep" : "# Haftalık cep") + (ay ? " — " + AYLAR[Number(ay.slice(5, 7)) - 1] + " " + ay.slice(0, 4) : ""), "", gunluk ? "| Gün | Fiş | Toplanan | Babaya | Masraf | **Cepte kalan** |" : "| Hafta | Servis | Toplanan | Babaya | Masraf | **Cepte kalan** |", "|---|---:|---:|---:|---:|---:|"];
+    const T = { top: 0, baba: 0, masraf: 0 };
+    Object.keys(hf).sort().forEach((k) => {
+      const w = hf[k]; const bit = new Date(k + "T12:00:00"); bit.setDate(bit.getDate() + 6);
+      let bas = k, son = localDateStr(bit);
+      if (ay) { if (bas.slice(0, 7) < ay) bas = ay + "-01"; if (son.slice(0, 7) > ay) { const s2 = new Date(Number(ay.slice(0, 4)), Number(ay.slice(5, 7)), 0); son = localDateStr(s2); } }
+      const cep = w.top - w.baba - w.masraf;
+      T.top += w.top; T.baba += w.baba; T.masraf += w.masraf;
+      const etiket = gunluk ? GUNLER[new Date(k + "T12:00:00").getDay()] + " " + kisa(k) + (w.fis ? "" : " _(servis yok)_") : kisa(bas) + " – " + kisa(son);
+      L.push("| " + etiket + " | " + (gunluk ? (w.fis || "–") : w.gun.size) + " | " + money(w.top) + " | " + money(w.baba) + " | " + money(w.masraf) + " | **" + money(cep) + "** |");
+    });
+    L.push("| **TOPLAM** | | **" + money(T.top) + "** | **" + money(T.baba) + "** | **" + money(T.masraf) + "** | **" + money(T.top - T.baba - T.masraf) + "** |");
+    L.push("", "_Toplanan = fişte peşin alınan + eski borçtan tahsilat (nakit, kart, havale hepsi). Babaya = satılan malın maliyeti. Masraf = gider + POS komisyonu. Cepte = toplanan − babaya − masraf._");
+    console.log(L.join("\n"));
     return;
   }
 

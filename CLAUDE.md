@@ -23,18 +23,23 @@ Araç depoda: **`node tools/babuco.cjs <komut>`** (depo kökünden çalıştır)
 durum                        bulut yedeğinin son hâli, kayıt sayıları
 rapor [YYYY-AA-GG]           günlük rapor (Markdown; boş = bugün)
 musteri [arama]              müşteri + borç + telefon + özel fiyatları
+musteri-ekle <ad> [telefon]  yeni müşteri kartı aç
 ekstre <musteri>             müşterinin tüm hareketleri + bakiye seyri
 tahsilat-listesi             kim borçlu, en son ne zaman ödedi (riskli üstte)
 aylik                        aylık servis günü / ciro / kâr / sahadaki alacak
+haftalik [YYYY-AA]           hafta hafta: toplanan · babaya · masraf · cepte kalan (kullanıcının şablonu; ay verilirse sadece o ay, --servis ile servis servis)
 urun [arama]                 ürün + satış/alış fiyatı + dükkan/araç stoğu
-ozel-fiyat <musteri> <urun> <fiyat|sil>
+urun-fiyat <urun> <alis|satis> <fiyat>   ürün kartının fiyatını değiştir (geçmiş fişler değişmez)
+urun-ekle <ad> <alis> <satis> [grup]     listede olmayan ürünü aç
+ozel-fiyat <musteri> <urun> <fiyat|sil>   (bütün aileye yazar)
 siparisler                   çay ocağından gelen siparişler
 satis <dosya.json|json>      satış gir
-kalem-ekle <belgeNo> <urun> <adet> [fiyat]   var olan fişe kalem ekle
-tahsilat <musteri> <tutar> [not]
+kalem-ekle <belgeNo> <urun> <adet> [fiyat] [--odeme=nakit|pos]   var olan fişe kalem ekle (varsayılan açık hesap)
+tahsilat <musteri> <tutar> [not] [--tarih=YYYY-AA-GG] [--duzeltme]   (geçmiş güne yaz; --duzeltme: eksi tutar da olur, kasaya sayılmaz)
 gider <tutar> <aciklama> [kategori]
 gelir <tutar> <aciklama> [tur]
 sil-satis <belgeNo>          satışı geri al (stok + borç geri döner)
+iade <musteri> <urun> <adet> [fiyat]   müşteriden mal geri alındı: borçtan düşer, ciro/maliyet eksiye, stok geri (tahsilat DEĞİL)
 ```
 
 Bağlantı bilgisi `public/toptanci/app.js` içindeki `SB_URL`/`SB_KEY`'den okunur —
@@ -63,6 +68,13 @@ Satış JSON'u:
   "not": "", "stokKaynak": "arac" }
 ```
 - `fiyat` yazılmazsa müşterinin **özel fiyatı**, o da yoksa liste fiyatı uygulanır.
+- **Fiyat ailesi:** bir müşteride bir ailenin **tek fiyatı** olur (toz içeceklerin hepsi
+  75 ise kuşburnu da nane limon da 75; vişne 600 ise şeftali de 600). Aile = aynı
+  `altKategori` + aynı liste fiyatı (Beypazarı/Kızılay sade soda gibi farklı fiyatlı
+  markalar ayrı kalır). Araç bunu kendisi uygular: fişte bir çeşide fiyat yazılırsa
+  kardeşleri de o fiyatı alır, özel fiyat yoksa kardeşin özel fiyatı kullanılır,
+  `ozel-fiyat` bütün aileye yazar (`--tek` sadece o ürüne). Fişte "Aynı ailede farklı
+  fiyat" ya da "en son X ile satıldı" notu çıkarsa kaydetmeden önce kullanıcıya sor.
 - `odeme`: `"nakit"` / `"pos"` / `"acik"` kısayolu ya da `{nakit,pos,acik}`.
   Ödenen tutar satıştan **azsa** kalan açık hesaba, **fazlaysa** fazlası borca
   tahsilat olarak yazılır — panelin davranışının aynısı.
@@ -73,6 +85,15 @@ Satış JSON'u:
 teslimatı yeniden anlatıp bir kalem ekletmek ister ("bir de fanta bıraktım"). Önce o
 gün o müşteriye kesilmiş fiş var mı bak; varsa yeni satış açma, `kalem-ekle` ile
 mevcut belgeye ekle — yoksa bakiye iki katına çıkar.
+
+### Müşteri cari hesap linki
+Müşteriler tek linkten telefon numarasıyla girip kendi hesaplarını servis servis görür:
+**https://claude.ai/artifact/U9gQeM5RxPebtwk9CEAAKE** (herkese açık). Sayfa statik bir
+anlık görüntüdür; her müşterinin hesabı kendi telefonundan türetilen anahtarla şifreli
+gömülüdür (kaynakta düz veri yok). **Kullanıcının isteği: her `--kaydet`'ten sonra
+otomatik güncelle** — `sh tools/cari/guncelle.sh <scratchpad>/portal.html`, sonra o dosyayı
+Artifact ile `url` = yukarıdaki link olarak yayınla (link değişmez). Telefonu kartta
+olmayan müşteri giremez; çıktıdaki "atlanan" listesine bak.
 
 ### Çakışma
 Panel tüm veriyi tek bulut anahtarına yazar, **son yazan kazanır**. Araç bunu
