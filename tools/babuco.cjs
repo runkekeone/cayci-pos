@@ -428,11 +428,17 @@ function provaUyari(ornek) {
   const okunan = await storeOku();
   const store = okunan.store, updatedAt = okunan.updatedAt;
 
+  /* Bekleyen çay ocağı siparişi varsa komut bittikten SONRA stderr'e tek satır uyarı düşer (stdout'a dokunmaz). */
+  sipUyariKur();
+
   if (komut === "durum") {
     console.log("Bulut yedegi:", new Date(updatedAt).toLocaleString("tr-TR"));
     console.log("Satis " + store.sales.length + " · Musteri " + store.customers.length + " · Urun " + store.products.length + " · Tahsilat " + store.payments.length + " · Gider " + store.expenses.length);
     const son = store.sales[store.sales.length - 1];
     if (son) console.log("Son satis:", son.belgeNo, "·", new Date(son.tarih).toLocaleString("tr-TR"), "·", money(son.toplam));
+    const eksiD = stkEksiler(store, "dukkan"), eksiA = stkEksiler(store, "arac");
+    console.log("Stok: alis kaydi " + (store.purchases || []).length + " · eksi dukkan " + eksiD.length + " urun · eksi arac " + eksiA.length + " urun · azalan " + stkKritikler(store).length + " · bekleyen siparis " + stkSiparisBekleyen(store).length);
+    if (eksiD.length || eksiA.length) console.log("  (eksi stok gercek degildir: sayim ile duzelt — 'eksi-stok' listeler)");
     return;
   }
 
@@ -607,10 +613,36 @@ function provaUyari(ornek) {
     return;
   }
 
+  /* Çay ocağından gelen siparişler: panele düşmüş olanlar + `siparisler` tablosunda bekleyip panele henüz
+     düşmemiş olanlar (panel kapalıyken gelenler). Bekleyenler kalem kalem, yaşıyla; kapananlar tek satır. */
   if (komut === "siparisler") {
-    const list = store.gelenSiparisler || [];
-    if (!list.length) { console.log("Gelen siparis yok."); return; }
-    list.forEach((o) => console.log(new Date(o.tarih).toLocaleString("tr-TR") + " | " + o.dealer + " | " + money(o.toplam) + " | durum: " + o.durum + (o.saleId ? " (satisa islendi)" : "")));
+    const t = await sipOku();
+    const liste = t.liste;
+    if (!liste.length) { console.log("Gelen siparis yok." + (t.hata ? "\n(siparis tablosu okunamadi: " + t.hata + ")" : "")); return; }
+    const acik = liste.filter((x) => x.o.durum !== "teslim"), kapali = liste.filter((x) => x.o.durum === "teslim");
+    const yeni = acik.filter((x) => x.o.durum === "yeni").length;
+    const L = ["# Çay ocağı siparişleri — " + (acik.length ? acik.length + " açık" + (yeni ? " (" + yeni + " yeni, onay bekliyor)" : "") : "bekleyen yok"), ""];
+    if (t.hata) L.push("> Sipariş tablosu okunamadı (" + t.hata + ") — yalnız panele düşmüş siparişler gösteriliyor.", "");
+    acik.forEach((x) => {
+      const o = x.o, saat = stkSiparisYasSaat(o);
+      L.push("### [" + stkSiparisKod(o) + "] " + o.dealer + (o.dealerTel ? " · " + o.dealerTel : "") + " — " + sipDurumAd(o) + " · " + stkYasMetin(saat) + (saat >= 24 && o.durum === "yeni" ? " ⚠" : ""));
+      L.push("Sipariş: " + new Date(o.tarih).toLocaleString("tr-TR") + (x.yeniGelen ? " · panele henüz düşmemiş (tablodan okundu)" : "") + (!x.yeniGelen && x.tabloDurum && x.tabloDurum !== o.durum ? " · çay ocağı hâlâ \"" + x.tabloDurum + "\" görüyor (siparis-esitle)" : ""), "");
+      L.push("| Adet | Ürün | Fiyat | Tutar |", "|---:|---|---:|---:|");
+      (o.items || []).forEach((l) => L.push("| " + stkAdet(l.adet) + " " + (l.birim || "") + " | " + l.ad + (stkSiparisUrun(store, l.urunId, l.ad) ? "" : " ⚠ listede yok") + " | " + stkPara(l.fiyat) + " | " + stkPara(l.adet * l.fiyat) + " |"));
+      if (o.iskonto) L.push("| | | Nakit indirimi | −" + stkPara(o.iskonto) + " |");
+      L.push("| | | **TOPLAM** | **" + stkPara(o.toplam) + "** |", "");
+      L.push("Ödeme seçimi: " + sipOdemeAd(o.odemeTuru) + (o.not ? " · Not: " + o.not : "") + (o.teslimTarih ? " · Teslim: " + o.teslimTarih + " " + (o.teslimSaat || "") : ""));
+      const f = sipSonrakiFisler(o);
+      if (f.length) L.push("ℹ Bu müşteriye siparişten sonra fiş kesilmiş: " + f.map((s) => s.belgeNo + " (" + new Date(s.tarih).toLocaleDateString("tr-TR") + ", " + stkPara(s.toplam) + ")").join(" · ") + " — sipariş bu fişle teslim edildiyse `siparis-kapat " + stkSiparisKod(o) + "`");
+      L.push("");
+    });
+    if (acik.length) L.push("İşlemek için: `siparis-onayla <kod>` · `siparis-dagitim <kod> [gün] [saat]` · `siparis-teslim <kod> [--odeme=nakit|kart|bakiye]` (satış oluşturur) · `siparis-kapat <kod>` (satış zaten girildiyse)", "");
+    if (kapali.length) {
+      const hepsi = args.includes("--hepsi"), goster = hepsi ? kapali : kapali.slice(-5);
+      L.push("## Kapananlar (" + kapali.length + (hepsi ? "" : ", son " + goster.length + " — tümü için --hepsi") + ")", "");
+      goster.forEach((x) => { const o = x.o; L.push("- " + new Date(o.tarih).toLocaleString("tr-TR") + " | " + o.dealer + " | " + money(o.toplam) + " | durum: " + o.durum + (o.saleId ? " (satisa islendi)" : o.elleKapandi ? " (satış açılmadan kapatıldı: " + (o.kapanisNot || "") + ")" : "")); });
+    }
+    console.log(L.join("\n"));
     return;
   }
 
@@ -633,14 +665,15 @@ function provaUyari(ornek) {
     return;
   }
 
-  /* Mal girisi: satin alinan urunu dukkan ya da arac stoguna ekler.
+  /* Mal girisi: satin alinan urunu dukkan ya da arac stoguna ekler VE alış kaydı (purchases) açar.
      Fistaki adet urunun KENDI biriminde verilir (soda icin koli, birimIciAdet=24).
      Kalemde "alis" verilirse yeni koli maliyeti olarak yazilir (adetAlis de guncellenir);
-     verilmezse fiyatlara dokunulmaz, sadece stok artar. */
+     verilmezse fiyatlara dokunulmaz, sadece stok artar.
+     İsteğe bağlı alanlar: firma, faturaNo, tarih (YYYY-AA-GG), odeme (pesin|veresiye), odemeTuru (nakit|kart|havale),
+     toplam (FİŞTEKİ tutar — ödenen değil), odenen (veresiyede peşin verilen kısım). Hiçbiri yoksa eski biçim:
+     firmasız, peşin, nakit, toplam = kalemlerin toplamı. */
   if (komut === "alim") {
-    const ham = pos[1];
-    if (!ham) throw new Error("Alim verisi gerekli: dosya yolu ya da JSON metni.");
-    const girdi = JSON.parse(fs.existsSync(ham) ? fs.readFileSync(ham, "utf8") : ham);
+    const girdi = jsonGirdi(pos[1], "Alim");
     const hedef = girdi.hedef === "dukkan" ? "dukkan" : "arac";
     const alan = hedef === "arac" ? "aracStok" : "stok";
     const kalemler = (girdi.kalemler || []).map((k) => {
@@ -654,29 +687,909 @@ function provaUyari(ornek) {
     const L = [];
     L.push("Mal girisi -> " + (hedef === "arac" ? "ARAC" : "DUKKAN") + " stogu" + (girdi.not ? "  ·  " + girdi.not : ""), "");
     let tutar = 0;
+    const yeniAlislar = {};
     kalemler.forEach((k) => {
       const ici = Number(k.p.birimIciAdet) || 0;
       const birim = k.p.birim || "Adet";
       const maliyet = k.yeniAlis != null ? k.yeniAlis : (Number(k.p.alis) || 0);
       tutar += maliyet * k.adet;
+      if (k.yeniAlis != null && k.yeniAlis !== kurus(k.p.alis)) yeniAlislar[k.p.id] = k.yeniAlis;
       L.push("  " + String(k.adet).padStart(5) + " " + birim + " x " + String(k.p.ad).padEnd(32) +
         (ici ? " (" + k.adet * ici + " adet)" : "") +
         "  stok " + k.eski + " -> " + (k.eski + k.adet) +
         (k.yeniAlis != null ? "  ·  alis " + money(Number(k.p.alis) || 0) + " -> " + money(k.yeniAlis) : ""));
     });
     L.push("", "Toplam maliyet: " + money(tutar));
+
+    /* --- alış kaydı --- */
+    const kalemToplam = kurus(tutar);
+    const fisToplam = (girdi.toplam != null && girdi.toplam !== "") ? kurus(sayi(girdi.toplam)) : kalemToplam;
+    if (!(fisToplam >= 0) || isNaN(fisToplam)) throw new Error('"toplam" gecersiz.');
+    const oHam = norm(girdi.odeme || ""), tHam = norm(girdi.odemeTuru || "");
+    const turCoz = (x) => (/kart|pos/.test(x) ? "kart" : /havale|eft|iban/.test(x) ? "havale" : /nakit/.test(x) ? "nakit" : null);
+    const odeme = /veresiye|acik|açık|vadeli|borc|borç/.test(oHam) ? "veresiye" : "pesin";
+    if (oHam && odeme === "pesin" && !/pesin|peşin/.test(oHam) && !turCoz(oHam)) throw new Error('"odeme": "pesin" | "veresiye" olmali (odeme turu icin "odemeTuru": "nakit" | "kart" | "havale").');
+    if (tHam && !turCoz(tHam)) throw new Error('"odemeTuru": "nakit" | "kart" | "havale" olmali.');
+    const odemeTuru = turCoz(tHam) || turCoz(oHam) || "nakit";
+    const odenen = (girdi.odenen != null && girdi.odenen !== "") ? kurus(sayi(girdi.odenen)) : null;
+    if (odenen != null && (isNaN(odenen) || odenen < 0)) throw new Error('"odenen" gecersiz.');
+    const firmaAd = String(girdi.firma || "").trim();
+    let firma = null, firmaYeni = false;
+    if (firmaAd) {
+      const hepsi = store.firmalar || [];
+      const tam = hepsi.filter((f) => norm(f.ad) === norm(firmaAd)), kismi = hepsi.filter((f) => norm(f.ad).includes(norm(firmaAd)));
+      if (tam.length) firma = tam[0];
+      else if (kismi.length === 1 && !girdi.firmaYeni) firma = kismi[0];
+      else if (kismi.length > 1 && !girdi.firmaYeni) throw new Error('Firma tek degil, "' + firmaAd + '" birden cok eslesti:\n' + kismi.map((f) => "  - " + f.ad).join("\n") + '\nTam adini yaz; yeni firma acilacaksa JSON\'a "firmaYeni": true ekle.');
+      else firmaYeni = true;
+    }
+    if (odeme === "veresiye" && !firmaAd) throw new Error('Veresiye alim icin "firma" sart (borc kime yazilacak?).');
+    if (odenen != null && odenen > fisToplam + 0.001) throw new Error("Odenen (" + money(odenen) + ") fis toplamindan (" + money(fisToplam) + ") fazla olamaz.");
+    let tarihIso = null;
+    if (girdi.tarih) { const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(girdi.tarih) ? girdi.tarih + "T12:00:00" : girdi.tarih); if (isNaN(d)) throw new Error('"tarih" gecersiz (ornek 2026-10-09).'); tarihIso = d.toISOString(); }
+    const faturaNo = String(girdi.faturaNo || girdi.no || "").trim();
+    L.push("");
+    L.push("FİŞ TOPLAMI : " + money(fisToplam) + "   <- alış kaydına bu tutar yazılır (ödenen değil, fişte yazan)");
+    if (Math.abs(fisToplam - kalemToplam) > 0.005) L.push("  ! kalemlerin toplamı " + money(kalemToplam) + " · fark " + money(kurus(fisToplam - kalemToplam)) + " — KDV / iskonto olabilir; kalem fiyatlarını fişle karşılaştır");
+    L.push("Firma       : " + (firmaAd ? (firma ? firma.ad : firmaAd + "  (YENİ FİRMA açılacak)") : "(firmasız)"));
+    L.push("Fatura      : " + (faturaNo || "(no yok — otomatik verilecek)") + " · " + new Date(tarihIso || Date.now()).toLocaleDateString("tr-TR"));
+    if (odeme === "pesin") {
+      L.push("Ödeme       : PEŞİN · " + odemeTuru.toLocaleUpperCase("tr-TR") + (odemeTuru === "nakit" ? "  (nakit kasadan düşer)" : "") + (!oHam && !tHam ? "   [yazılmadı → varsayılan; farklıysa odeme / odemeTuru ekle]" : ""));
+      if (odenen != null && Math.abs(odenen - fisToplam) > 0.005) L.push("  ! ödenen " + money(odenen) + " fişteki tutardan farklı — kayıt FİŞTEKİ tutarla yapılır. Kalanı borçsa \"odeme\": \"veresiye\" yaz.");
+    } else {
+      const pesinat = odenen || 0;
+      L.push("Ödeme       : VERESİYE — firmaya borç " + money(kurus(fisToplam - pesinat)) + (pesinat ? "  (" + money(pesinat) + " " + odemeTuru + " peşin verildi)" : ""));
+    }
+    const esik = bayrak("esik") != null ? sayi(bayrak("esik")) : stkMarjEsik(store);
+    const etki = stkMarjMetin(stkMarjEtki(store, yeniAlislar, esik), esik);
+    if (etki.length) L.push("", ...etki);
     console.log(L.join("\n"));
     if (!kaydet) { provaUyari("alim <dosya.json>"); return; }
-    kalemler.forEach((k) => {
-      k.p[alan] = k.eski + k.adet;
-      if (k.yeniAlis != null) {
-        k.p.alis = k.yeniAlis;
-        const ici = Number(k.p.birimIciAdet) || 0;
-        if (ici) k.p.adetAlis = k.yeniAlis / ici;
-      }
-    });
+    if (firmaYeni) { firma = { id: genId(store), ad: firmaAd, telefon: "" }; store.firmalar = store.firmalar || []; store.firmalar.push(firma); }
+    const sonuc = stkAlimKaydet(store, {
+      hedef: hedef, odeme: odeme, odemeTuru: odemeTuru, firmaId: firma ? firma.id : null, no: faturaNo, tarih: tarihIso, not: girdi.not || "",
+      toplam: fisToplam, odenen: odeme === "veresiye" ? (odenen || 0) : 0,
+      items: kalemler.map((k) => ({ urunId: k.p.id, ad: k.p.ad, adet: k.adet, birimFiyat: k.yeniAlis != null ? k.yeniAlis : (Number(k.p.alis) || 0), fiyatYaz: k.yeniAlis != null })),
+    }, stkA());
     const y = await storeYaz(store, updatedAt);
-    console.log("\nKAYDEDILDI · " + kalemler.length + " kalem · buluta yazildi " + new Date(y.ts).toLocaleString("tr-TR") + " · yedek: " + path.basename(y.yedek));
+    console.log("\nKAYDEDILDI · " + kalemler.length + " kalem · alış kaydı " + sonuc.kayit.no + " (" + money(sonuc.kayit.toplam) + ") · buluta yazildi " + new Date(y.ts).toLocaleString("tr-TR") + " · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* =====================================================================================
+     STOK AJANI — yardımcılar ve yeni komutlar (stok düzeltme, fiyat bakımı, sipariş işleme)
+     ===================================================================================== */
+/* >>> STOK-ORTAK-BASLA
+   Bu blok tools/babuco.cjs ile public/toptanci/app.js içinde HARFİ HARFİNE aynıdır; panel ile araç aynı
+   hesabı yapsın diye. Birini değiştirince diğerine kopyala:  node testler/stok/ortak-blok.mjs --yaz
+   (araçtaki hâli panele yazar; --yaz'sız çalıştırınca yalnız aynı mı diye bakar).
+   Hepsi saf işlev: store'u ilk parametre (S) olarak alır, ekrana ve buluta dokunmaz. Sabit (const) YOK —
+   araçta bu blok komut işlevinin içinde durur, sabitler ilk komutlardan önce hazır olmazdı.
+   a = { id: () => yeni benzersiz id, tarih: ISO (boşsa şimdi) } */
+function stkAyar() { return { marjEsik: 10, hizHafta: 6, hedefHafta: 2, kritikGun: 7 }; }
+function stkN(v) { return Number(v) || 0; }
+function stkKurus(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function stkUrun(S, id) { return (S.products || []).find((p) => p.id === id); }
+function stkToplamStok(p) { return stkN(p.stok) + stkN(p.aracStok); }
+function stkKritikVar(p) { return p.kritik !== "" && p.kritik != null && !isNaN(Number(p.kritik)); }
+function stkMarjEsik(S) { const v = S.settings && S.settings.marjEsik; return (v !== "" && v != null && Number(v) >= 0) ? Number(v) : stkAyar().marjEsik; }
+/* Kâr marjı (%): satıştan kaçı kâr. Satış fiyatı yoksa null. */
+function stkMarj(satis, alis) { const s = stkN(satis); return s > 0 ? ((s - stkN(alis)) / s) * 100 : null; }
+function stkYuzde(m) { return m == null ? "—" : "%" + (Math.round(m * 10) / 10).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+function stkPara(n) { return new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0) + " ₺"; }
+function stkAdet(n) { return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(Number(n) || 0); }
+/* Fiyat ailesi = aynı altKategori + aynı liste fiyatı (bir müşteride ailenin tek fiyatı olur). */
+function stkAile(S, p) {
+  const alt = (p.altKategori || "").trim();
+  if (!alt) return [p];
+  return (S.products || []).filter((x) => (x.altKategori || "").trim() === alt && Number(x.satis) === Number(p.satis));
+}
+function stkOzel(c, id) { const oz = (c && c.ozelFiyatlar) || {}; return (oz[id] != null && oz[id] !== "") ? Number(oz[id]) : null; }
+
+/* ---- satış hızı, kritik seviye, alınacaklar ---- */
+/* urunId → son `hafta` haftanın haftalık ortalama satışı (iadeler eksi adetle düşer). */
+function stkSatisHizi(S, hafta, simdi) {
+  hafta = hafta > 0 ? hafta : stkAyar().hizHafta;
+  const bas = new Date((simdi ? new Date(simdi) : new Date()).getTime() - hafta * 7 * 86400000).toISOString();
+  const hiz = {};
+  (S.sales || []).forEach((s) => { if (!s.tarih || s.tarih < bas) return; (s.items || []).forEach((it) => { if (it.urunId) hiz[it.urunId] = (hiz[it.urunId] || 0) + stkN(it.adet); }); });
+  Object.keys(hiz).forEach((k) => { hiz[k] = Math.max(0, hiz[k]) / hafta; });
+  return hiz;
+}
+/* Kritik seviye önerisi: `gun` günlük satış kadar mal kalınca uyar (varsayılan 1 hafta). Yalnız değişecekler döner. */
+function stkKritikOneri(S, a) {
+  a = a || {};
+  const hiz = stkSatisHizi(S, a.hafta, a.simdi), gun = a.gun > 0 ? a.gun : stkAyar().kritikGun;
+  return (S.products || []).filter((p) => p.gorunur !== false).map((p) => {
+    const h = hiz[p.id] || 0;
+    return { p: p, haftalik: h, oneri: h > 0 ? Math.max(1, Math.ceil(h * gun / 7 - 1e-9)) : 0, eski: stkKritikVar(p) ? Number(p.kritik) : null };
+  }).filter((x) => x.oneri > 0 && x.eski !== x.oneri).sort((x, y) => y.haftalik - x.haftalik);
+}
+/* hepsi=false: yalnız kritik seviyesi boş olanlara yazar (elle girilmiş seviyeye dokunmaz). */
+function stkKritikUygula(liste, hepsi) { let n = 0; liste.forEach((x) => { if (!hepsi && x.eski != null) return; x.p.kritik = x.oneri; n++; }); return n; }
+/* Azalan ürünler: iki havuzun TOPLAMI kritik seviyenin altında/eşit. */
+function stkKritikler(S) { return (S.products || []).filter((p) => p.gorunur !== false && stkKritikVar(p) && stkToplamStok(p) <= Number(p.kritik)); }
+function stkEksiler(S, havuz) {
+  const L = [];
+  (S.products || []).forEach((p) => {
+    if (havuz !== "arac" && stkN(p.stok) < 0) L.push({ p: p, havuz: "dukkan", miktar: stkN(p.stok) });
+    if (havuz !== "dukkan" && stkN(p.aracStok) < 0) L.push({ p: p, havuz: "arac", miktar: stkN(p.aracStok) });
+  });
+  return L;
+}
+/* Alınacaklar: dükkan+araç toplamı `hedefHafta` haftalık satışın altına düşen (ya da kritik seviyeye inen) ürünler. */
+function stkAlinacaklar(S, a) {
+  a = a || {};
+  const hafta = a.hafta > 0 ? a.hafta : stkAyar().hizHafta, hedef = a.hedefHafta > 0 ? a.hedefHafta : stkAyar().hedefHafta;
+  const hiz = stkSatisHizi(S, hafta, a.simdi), satirlar = [];
+  (S.products || []).forEach((p) => {
+    if (p.gorunur === false) return;
+    const h = hiz[p.id] || 0, dukkan = stkN(p.stok), arac = stkN(p.aracStok), toplam = dukkan + arac;
+    const kritik = stkKritikVar(p) ? Number(p.kritik) : null, ihtiyac = h * hedef;
+    if (!((h > 0 && toplam < ihtiyac) || (kritik != null && toplam <= kritik))) return;
+    const oneri = Math.max(1, Math.ceil(Math.max(ihtiyac, kritik || 0) - Math.max(0, toplam) - 1e-9));
+    satirlar.push({ p: p, haftalik: h, dukkan: dukkan, arac: arac, toplam: toplam, ihtiyac: ihtiyac, oneri: oneri, eksi: dukkan < 0 || arac < 0, tutar: stkKurus(oneri * stkN(p.alis)) });
+  });
+  satirlar.sort((x, y) => (x.p.grup || "").localeCompare(y.p.grup || "", "tr") || y.haftalik - x.haftalik || (x.p.ad || "").localeCompare(y.p.ad || "", "tr"));
+  const eksiUrun = new Set(stkEksiler(S).map((e) => e.p.id));
+  return { satirlar: satirlar, hafta: hafta, hedefHafta: hedef, eksiSayisi: eksiUrun.size, tutar: stkKurus(satirlar.reduce((t, x) => t + x.tutar, 0)) };
+}
+/* Paylaşılacak düz metin (WhatsApp'a yapıştırılır). */
+function stkAlinacakMetin(r, baslik) {
+  const L = [(baslik || "Alınacaklar") + " — " + new Date().toLocaleDateString("tr-TR")];
+  let grup = null;
+  r.satirlar.forEach((x) => {
+    const g = x.p.grup || "Diğer";
+    if (g !== grup) { grup = g; L.push("", g.toLocaleUpperCase("tr-TR")); }
+    L.push("• " + stkAdet(x.oneri) + " " + (x.p.birim || "Adet") + " " + x.p.ad);
+  });
+  if (!r.satirlar.length) L.push("", "Alınacak ürün görünmüyor.");
+  return L.join("\n");
+}
+
+/* ---- stok yazma: sayım, eksi sıfırlama, dükkan ↔ araç aktarma ---- */
+/* degisimler: [{ urunId, havuz: "dukkan"|"arac", yeni }] — mutlak değer yazar, farkı stokHareket'e işler. */
+function stkStokYaz(S, degisimler, a) {
+  const tarih = a.tarih || new Date().toISOString(), yazilan = [];
+  S.stokHareket = S.stokHareket || [];
+  degisimler.forEach((d) => {
+    const p = stkUrun(S, d.urunId); if (!p) return;
+    const arac = d.havuz === "arac", alan = arac ? "aracStok" : "stok", eski = stkN(p[alan]), yeni = stkN(d.yeni);
+    if (eski === yeni) return;
+    p[alan] = yeni;
+    S.stokHareket.push({ id: a.id(), ad: p.ad, urunId: p.id, miktar: stkKurus(yeni - eski), tur: (a.tur || "Sayım Düzeltme") + (arac ? " (Araç)" : ""), havuz: arac ? "arac" : "dukkan", tarih: tarih });
+    if (arac) { S.aracHareket = S.aracHareket || []; S.aracHareket.push({ id: a.id(), urunId: p.id, ad: p.ad, adet: yeni, yon: "sayim", tarih: tarih }); }
+    yazilan.push({ p: p, havuz: arac ? "arac" : "dukkan", eski: eski, yeni: yeni });
+  });
+  return yazilan;
+}
+/* kalemler: [{ urunId, adet }] · yon: "araca" (dükkandan araca) | "dukkana". Bir havuzdan düşen diğerine eklenir. */
+function stkAktar(S, kalemler, yon, a) {
+  const tarih = a.tarih || new Date().toISOString(), dukkana = yon === "dukkana", yazilan = [];
+  S.aracHareket = S.aracHareket || [];
+  kalemler.forEach((k) => {
+    const p = stkUrun(S, k.urunId), adet = stkN(k.adet); if (!p || adet <= 0) return;
+    const d0 = stkN(p.stok), a0 = stkN(p.aracStok);
+    p.stok = stkKurus(d0 + (dukkana ? adet : -adet)); p.aracStok = stkKurus(a0 + (dukkana ? -adet : adet));
+    S.aracHareket.push({ id: a.id(), urunId: p.id, ad: p.ad, adet: adet, yon: dukkana ? "bosaltma" : "yukleme", tarih: tarih });
+    yazilan.push({ p: p, adet: adet, dukkan: [d0, p.stok], arac: [a0, p.aracStok] });
+  });
+  return yazilan;
+}
+
+/* ---- fiyat: geçmiş, yazma, marj uyarısı, kontrol listesi, toplu zam ---- */
+/* k: { urunId, ad, alan: "alis"|"satis"|"ozel", eski, yeni, kaynak, musteriId } */
+function stkFiyatGecmis(S, a, k) {
+  if (stkKurus(k.eski) === stkKurus(k.yeni)) return;
+  S.fiyatGecmisi = S.fiyatGecmisi || [];
+  const r = { id: a.id(), urunId: k.urunId, ad: k.ad, alan: k.alan, eski: stkKurus(k.eski), yeni: stkKurus(k.yeni), kaynak: k.kaynak || "", tarih: a.tarih || new Date().toISOString() };
+  if (k.musteriId) r.musteriId = k.musteriId;
+  S.fiyatGecmisi.push(r);
+}
+/* Ürün kartına fiyat yazar: alanın türünü (metin/sayı) korur, adet fiyatını (adetAlis/adetSatis) birlikte günceller. */
+function stkFiyatYaz(p, alan, yeni) {
+  yeni = stkKurus(yeni);
+  const ek = alan === "alis" ? "adetAlis" : "adetSatis", ici = stkN(p.birimIciAdet);
+  p[alan] = typeof p[alan] === "string" ? String(yeni) : yeni;
+  if (ici > 0) p[ek] = yeni / ici; else if (p[ek] != null) p[ek] = yeni;
+}
+/* Alış fiyatı değişince kimin kârı eşiğin altına düşüyor? yeniAlis: { urunId: alış } (kaydetmeden önce de sorulabilir). */
+function stkMarjEtki(S, yeniAlis, esik) {
+  esik = esik != null ? esik : stkMarjEsik(S);
+  const L = [];
+  Object.keys(yeniAlis || {}).forEach((id) => {
+    const p = stkUrun(S, id); if (!p) return;
+    const alis = stkN(yeniAlis[id]), satis = stkN(p.satis), m = stkMarj(satis, alis), musteriler = [];
+    (S.customers || []).forEach((c) => { const f = stkOzel(c, id); if (f == null || f <= 0) return; const mm = stkMarj(f, alis); if (mm < esik) musteriler.push({ c: c, fiyat: f, marj: mm }); });
+    const dusuk = m != null && m < esik;
+    if (dusuk || musteriler.length) L.push({ p: p, alis: alis, satis: satis, marj: m, dusuk: dusuk, zarar: satis > 0 && satis <= alis, musteriler: musteriler });
+  });
+  return L;
+}
+function stkMarjMetin(L, esik) {
+  const S = [];
+  L.forEach((x) => {
+    S.push((x.zarar ? "ZARAR " : x.dusuk ? "DUSUK " : "      ") + x.p.ad + ": alış " + stkPara(x.alis) + " · liste " + stkPara(x.satis) + " · kâr " + stkYuzde(x.marj));
+    x.musteriler.forEach((m) => S.push("        - " + m.c.ad + ": özel fiyat " + stkPara(m.fiyat) + " · kâr " + stkYuzde(m.marj) + (m.fiyat <= x.alis ? " (ZARAR)" : "")));
+  });
+  return S.length ? ["KÂR UYARISI — kârı " + stkYuzde(esik) + " altına düşenler:"].concat(S) : [];
+}
+/* Fiyat kontrol listesi. Alış fiyatı girilmemiş (0) ürünlerde kâr hesaplanamaz, onlar "alisYok"ta sayılır. */
+function stkFiyatKontrol(S, esik) {
+  esik = esik != null ? esik : stkMarjEsik(S);
+  const urunler = (S.products || []).filter((p) => p.gorunur !== false), zarar = [], dusuk = [], ozelDusuk = [], alisYok = [];
+  urunler.forEach((p) => {
+    const s = stkN(p.satis), al = stkN(p.alis); if (s <= 0) return;
+    if (al <= 0) { alisYok.push({ p: p }); return; }
+    const m = stkMarj(s, al);
+    if (s <= al) zarar.push({ p: p, marj: m }); else if (m < esik) dusuk.push({ p: p, marj: m });
+  });
+  const aileKayit = {};
+  (S.customers || []).forEach((c) => Object.keys(c.ozelFiyatlar || {}).forEach((id) => {
+    const f = stkOzel(c, id), p = urunler.find((x) => x.id === id); if (f == null || f <= 0 || !p) return;
+    const al = stkN(p.alis);
+    if (al > 0) { const m = stkMarj(f, al); if (m < esik) ozelDusuk.push({ c: c, p: p, fiyat: f, marj: m, zarar: f <= al }); }
+    const aile = stkAile(S, p), anahtar = aile.map((x) => x.id).sort().join(",");
+    const k = aileKayit[anahtar] = aileKayit[anahtar] || { urunler: aile, liste: stkN(p.satis), fiyatlar: {}, yuksek: {} };
+    (k.fiyatlar[f] = k.fiyatlar[f] || {})[c.id] = c;
+    if (f > k.liste) k.yuksek[c.id] = { c: c, fiyat: f };
+  }));
+  const ozelYuksek = [];
+  Object.keys(aileKayit).forEach((an) => {
+    const k = aileKayit[an], yuksek = Object.keys(k.yuksek).map((id) => k.yuksek[id]); if (!yuksek.length) return;
+    let oneri = null, oneriSayi = 0;
+    Object.keys(k.fiyatlar).map(Number).sort((x, y) => x - y).forEach((f) => { const n = Object.keys(k.fiyatlar[f]).length; if (f > k.liste && n > oneriSayi) { oneri = f; oneriSayi = n; } });
+    /* Öneri yalnız en az 2 müşteri aynı (liste üstü) fiyattan alıyorsa — tek müşteri "yaygın" sayılmaz. */
+    if (oneriSayi < 2) { oneri = null; }
+    ozelYuksek.push({ urunler: k.urunler, liste: k.liste, musteriler: yuksek.sort((x, y) => y.fiyat - x.fiyat), oneri: oneri, oneriSayi: oneri == null ? 0 : oneriSayi });
+  });
+  ozelYuksek.sort((x, y) => y.musteriler.length - x.musteriler.length);
+  zarar.sort((x, y) => x.marj - y.marj); dusuk.sort((x, y) => x.marj - y.marj); ozelDusuk.sort((x, y) => x.marj - y.marj);
+  return { esik: esik, zarar: zarar, dusuk: dusuk, ozelDusuk: ozelDusuk, ozelYuksek: ozelYuksek, alisYok: alisYok };
+}
+/* adim: 0 = kuruşa, 0.5 / 1 / 5 / 10 … · yon: "yakin" | "yukari" | "asagi" */
+function stkYuvarla(n, adim, yon) {
+  n = Number(n) || 0; adim = Number(adim) || 0;
+  if (adim <= 0) return stkKurus(n);
+  const k = n / adim;
+  return stkKurus((yon === "yukari" ? Math.ceil(k - 1e-9) : yon === "asagi" ? Math.floor(k + 1e-9) : Math.round(k)) * adim);
+}
+function stkZamHesap(eski, a) {
+  const e = stkN(eski);
+  const y = a.tur === "tutar" ? e + stkN(a.deger) : a.tur === "yeni" ? stkN(a.deger) : e * (1 + stkN(a.deger) / 100);
+  return Math.max(0, stkYuvarla(y, a.yuvarla, a.yon));
+}
+/* Toplu zam önizlemesi. a: { urunIdler: [..]|null, grup: "…"|null, tur: "yuzde"|"tutar"|"yeni", deger, yuvarla, yon,
+   ozel: "ayni"|"dokunma" }. Seçilen her ürünün AİLESİ de birlikte taşınır (aile bölünmesin). Hiçbir şey yazmaz. */
+function stkZamPlan(S, a) {
+  const idler = a.urunIdler ? new Set(a.urunIdler) : null;
+  const secili = (S.products || []).filter((p) => (idler ? idler.has(p.id) : p.gorunur !== false) && (a.grup ? (p.grup || "") === a.grup : true));
+  const hedef = {}, sira = [];
+  secili.forEach((p) => stkAile(S, p).forEach((x) => { if (hedef[x.id]) return; hedef[x.id] = { p: x, aileden: !secili.includes(x) }; sira.push(x.id); }));
+  const urunler = sira.map((id) => {
+    const p = hedef[id].p, eski = stkN(p.satis);
+    return { p: p, eski: eski, yeni: stkZamHesap(eski, a), aileden: hedef[id].aileden, alis: stkN(p.alis) };
+  }).filter((u) => (a.tur === "yeni" || u.eski > 0) && u.yeni !== u.eski);
+  urunler.forEach((u) => { u.marj = stkMarj(u.yeni, u.alis); u.zarar = u.alis > 0 && u.yeni <= u.alis; });
+  const ozel = [];
+  let ozelSayisi = 0;
+  (S.customers || []).forEach((c) => urunler.forEach((u) => {
+    const f = stkOzel(c, u.p.id); if (f == null) return;
+    ozelSayisi++;
+    if (a.ozel !== "ayni") return;
+    const y = a.tur === "yeni" ? Math.max(0, stkYuvarla(f + (u.yeni - u.eski), a.yuvarla, a.yon)) : stkZamHesap(f, a);
+    if (y !== f) ozel.push({ c: c, p: u.p, eski: f, yeni: y });
+  }));
+  /* Aile çakışması: önce FARKLI fiyatlı olup zamdan sonra aynı fiyata gelen aynı çeşitteki (altKategori) ürünler
+     artık tek aile sayılır — kullanıcı bilsin. */
+  const uyarilar = [], yeniFiyat = {};
+  urunler.forEach((u) => { yeniFiyat[u.p.id] = u.yeni; });
+  const altlar = {};
+  urunler.forEach((u) => { const alt = (u.p.altKategori || "").trim(); if (alt) altlar[alt] = true; });
+  Object.keys(altlar).forEach((alt) => {
+    const grup = {};
+    (S.products || []).filter((x) => (x.altKategori || "").trim() === alt).forEach((x) => {
+      const y = yeniFiyat[x.id] != null ? yeniFiyat[x.id] : stkN(x.satis);
+      (grup[y] = grup[y] || []).push(x);
+    });
+    Object.keys(grup).forEach((y) => {
+      const eskiler = {}; grup[y].forEach((x) => { eskiler[stkN(x.satis)] = true; });
+      if (Object.keys(eskiler).length > 1) uyarilar.push(alt + ": " + grup[y].map((x) => x.ad + " (" + stkPara(x.satis) + ")").join(", ") + " → hepsi " + stkPara(Number(y)) + " oluyor; bundan sonra aynı fiyat ailesi sayılırlar.");
+    });
+  });
+  return { a: a, urunler: urunler, ozel: ozel, ozelSayisi: ozelSayisi, uyarilar: uyarilar };
+}
+function stkZamUygula(S, plan, a) {
+  plan.urunler.forEach((u) => { stkFiyatGecmis(S, a, { urunId: u.p.id, ad: u.p.ad, alan: "satis", eski: u.eski, yeni: u.yeni, kaynak: a.kaynak || "Toplu zam" }); stkFiyatYaz(u.p, "satis", u.yeni); });
+  plan.ozel.forEach((o) => { o.c.ozelFiyatlar[o.p.id] = o.yeni; stkFiyatGecmis(S, a, { urunId: o.p.id, ad: o.p.ad, alan: "ozel", eski: o.eski, yeni: o.yeni, kaynak: a.kaynak || "Toplu zam", musteriId: o.c.id }); });
+  return { urun: plan.urunler.length, ozel: plan.ozel.length };
+}
+
+/* ---- mal alımı (alış kaydı) ---- */
+/* g: { hedef: "dukkan"|"arac", odeme: "pesin"|"veresiye", odemeTuru: "nakit"|"kart"|"havale", firmaId, no, tarih, not,
+        toplam (fişteki tutar; boşsa kalemlerin toplamı), odenen (veresiyede peşinat),
+        items: [{ urunId, ad, adet, birimFiyat, fiyatYaz }] }   fiyatYaz === false → ürünün alış fiyatına dokunma.
+   Stoğu `hedef` havuzuna ekler, alış kaydı (purchases) açar, değişen alış fiyatlarını geçmişe işler. */
+function stkAlimKaydet(S, g, a) {
+  const hedef = g.hedef === "arac" ? "arac" : "dukkan", alan = hedef === "arac" ? "aracStok" : "stok";
+  const tarih = g.tarih || a.tarih || new Date().toISOString();
+  const items = (g.items || []).map((it) => ({ urunId: it.urunId || null, ad: it.ad, adet: stkN(it.adet), birimFiyat: stkKurus(it.birimFiyat) }));
+  const kalemToplam = stkKurus(items.reduce((s, it) => s + it.adet * it.birimFiyat, 0));
+  const toplam = (g.toplam != null && g.toplam !== "") ? stkKurus(g.toplam) : kalemToplam;
+  const odeme = g.odeme === "veresiye" ? "veresiye" : "pesin";
+  const tur = (g.odemeTuru === "kart" || g.odemeTuru === "havale") ? g.odemeTuru : "nakit";
+  S.purchases = S.purchases || []; S.firmaPayments = S.firmaPayments || [];
+  S.counters.purchase = (S.counters.purchase || 0) + 1;
+  const kayit = { id: a.id(), no: String(g.no || "").trim() || "A" + S.counters.purchase, firmaId: g.firmaId || null, items: items, toplam: toplam, odeme: odeme, borc: odeme === "veresiye" ? toplam : 0, tarih: tarih, hedef: hedef };
+  if (odeme === "pesin") kayit.odemeTuru = tur;
+  if (toplam !== kalemToplam) kayit.kalemToplam = kalemToplam;
+  if (g.not) kayit.not = String(g.not);
+  S.purchases.push(kayit);
+  const odenen = stkKurus(g.odenen);
+  if (odeme === "veresiye" && odenen > 0) S.firmaPayments.push({ id: a.id(), firmaId: kayit.firmaId, tutar: Math.min(odenen, toplam), odemeTuru: tur, alisId: kayit.id, not: "Alış " + kayit.no + " — peşin ödenen kısım", tarih: tarih });
+  const degisen = {};
+  items.forEach((it, i) => {
+    const p = it.urunId && stkUrun(S, it.urunId); if (!p) return;
+    p[alan] = stkKurus(stkN(p[alan]) + it.adet);
+    if (g.items[i].fiyatYaz === false || !(it.birimFiyat > 0) || stkKurus(p.alis) === it.birimFiyat) return;
+    stkFiyatGecmis(S, { id: a.id, tarih: tarih }, { urunId: p.id, ad: p.ad, alan: "alis", eski: p.alis, yeni: it.birimFiyat, kaynak: "Alış " + kayit.no });
+    stkFiyatYaz(p, "alis", it.birimFiyat); degisen[p.id] = it.birimFiyat;
+  });
+  return { kayit: kayit, degisen: degisen, kalemToplam: kalemToplam };
+}
+/* Alış kaydını siler: stok, girdiği havuzdan geri alınır (eski kayıtta `hedef` yok → dükkan). Alış fiyatı geri alınmaz. */
+function stkAlimSil(S, id) {
+  const k = (S.purchases || []).find((x) => x.id === id); if (!k) return null;
+  const alan = k.hedef === "arac" ? "aracStok" : "stok";
+  (k.items || []).forEach((it) => { const p = it.urunId && stkUrun(S, it.urunId); if (p) p[alan] = stkKurus(stkN(p[alan]) - stkN(it.adet)); });
+  S.purchases = S.purchases.filter((x) => x.id !== id);
+  S.firmaPayments = (S.firmaPayments || []).filter((x) => x.alisId !== id);
+  return k;
+}
+
+/* ---- iade ---- */
+/* İade fiyatı: müşterinin bu ürünü EN SON aldığı fiyat → yoksa özel fiyatı → yoksa liste fiyatı. */
+function stkIadeFiyat(S, musteriId, p) {
+  if (musteriId) {
+    let son = null;
+    (S.sales || []).forEach((s) => { if (s.musteriId !== musteriId) return; (s.items || []).forEach((it) => { if (it.urunId === p.id && stkN(it.adet) > 0 && (!son || s.tarih > son.tarih)) son = { fiyat: stkN(it.fiyat), tarih: s.tarih }; }); });
+    if (son) return { fiyat: son.fiyat, kaynak: "son-satis", tarih: son.tarih };
+    const oz = stkOzel((S.customers || []).find((c) => c.id === musteriId), p.id);
+    if (oz != null) return { fiyat: oz, kaynak: "ozel" };
+  }
+  return { fiyat: stkN(p.satis), kaynak: "liste" };
+}
+/* İadeyi yazar (panel ve araç AYNI kaydı üretir). g: { musteriId, urunId, adet, fiyat, havuz: "arac"|"dukkan" }
+   Müşteri varsa eksi adetli bir "iade fişi" açılır: tutar borçtan düşer (açık hesap eksi), o günün cirosu ve maliyeti
+   eksiye gider (kâr doğru kalsın). Tahsilat (payments) YAZILMAZ — ortada para girişi yok. Mal `havuz`a geri girer. */
+function stkIadeKaydet(S, g, a) {
+  const p = stkUrun(S, g.urunId), adet = stkN(g.adet); if (!p || adet <= 0) return null;
+  const fiyat = stkKurus(g.fiyat), tutar = stkKurus(adet * fiyat), maliyet = stkKurus(adet * stkN(p.alis));
+  const havuz = g.havuz === "dukkan" ? "dukkan" : "arac", tarih = a.tarih || new Date().toISOString(), d = new Date(tarih);
+  let sale = null;
+  if (g.musteriId) {
+    S.counters.sale = (S.counters.sale || 0) + 1;
+    sale = {
+      id: a.id(), belgeNo: d.getFullYear() + "-" + String(S.counters.sale).padStart(6, "0"), musteriId: g.musteriId, personelId: null, not: "İADE — " + adet + " x " + p.ad, odemeAdi: "İade",
+      items: [{ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: stkN(p.kdv), fiyat: fiyat, adet: -adet, iskyuzde: 0, alis: stkN(p.alis) }],
+      brut: -tutar, iskonto: 0, toplam: -tutar, maliyet: -maliyet, komisyon: 0,
+      odeme: { nakit: 0, pos: 0, acik: -tutar }, tarih: tarih, servisGun: localDateStr(d), hafta: haftaNo(d), stokKaynak: havuz,
+    };
+    S.sales.push(sale);
+  }
+  if (havuz === "arac") p.aracStok = stkKurus(stkN(p.aracStok) + adet); else p.stok = stkKurus(stkN(p.stok) + adet);
+  S.iadeler = S.iadeler || [];
+  const kayit = { id: a.id(), urunId: p.id, ad: p.ad, adet: adet, tutar: tutar, fiyat: fiyat, havuz: havuz, musteriId: g.musteriId || null, tarih: tarih };
+  if (sale) kayit.belgeNo = sale.belgeNo;
+  S.iadeler.push(kayit);
+  return { sale: sale, tutar: tutar, maliyet: maliyet, havuz: havuz };
+}
+
+/* ---- çay ocağı siparişleri ---- */
+function stkTel(t) { return String(t || "").replace(/\D/g, "").replace(/^90/, "").replace(/^0/, ""); }
+function stkSiparisMusteri(S, o) {
+  const tel = stkTel(o.dealerTel), ad = String(o.dealer || "").trim().toLowerCase();
+  return (tel && (S.customers || []).find((c) => stkTel(c.telefon) === tel)) || (S.customers || []).find((c) => String(c.ad || "").trim().toLowerCase() === ad) || null;
+}
+function stkSiparisUrun(S, id, ad) {
+  const kimlik = String(id || ""), isim = String(ad || "").trim().toLowerCase();
+  /* Çay ocağı uygulaması katalog kimliğini "b-<ürün id>" diye gönderir. */
+  return (S.products || []).find((p) => p.id === kimlik || "b-" + p.id === kimlik) || (isim ? (S.products || []).find((p) => String(p.ad || "").trim().toLowerCase() === isim) : null) || null;
+}
+/* `siparisler` tablosunun bir satırını panelin sipariş kaydına çevirir (fiyat panelin güncel kataloğundan kurulur). */
+function stkSiparisSatirdan(S, row, a) {
+  const order = row.payload || {}, lines = Array.isArray(order.lines) ? order.lines : [];
+  const items = lines.map((l) => {
+    const pr = stkSiparisUrun(S, l.catalogItemId, l.name);
+    return { urunId: pr ? pr.id : (l.catalogItemId || ""), ad: pr ? pr.ad : l.name, birim: pr ? (pr.birim || l.birim) : l.birim, adet: stkN(l.qty), fiyat: pr ? stkN(pr.satis) : stkN(l.unitPrice) };
+  });
+  const brut = stkKurus(items.reduce((n, l) => n + l.adet * l.fiyat, 0));
+  const parcalar = Array.isArray(order.paymentParts) ? order.paymentParts : [];
+  const parca = (tur) => stkKurus(parcalar.filter((p) => p && p.payment === tur).reduce((n, p) => n + stkN(p.amount), 0));
+  const odemeTuru = parcalar.length > 1 ? "parcali" : order.paymentType === "nakit" ? "nakit" : order.paymentType === "kart" ? "kart" : "bakiye";
+  const iskonto = odemeTuru === "nakit" ? stkKurus(brut * 0.05) : 0, toplam = stkKurus(brut - iskonto);
+  const o = {
+    id: a.id(), orderId: row.id, dealer: row.cay_ocagi || (order.from && order.from.name) || "Bilinmeyen bayi",
+    dealerTel: row.cay_tel || (order.from && order.from.phone) || "", not: order.note || "",
+    tarih: order.date || row.created_at || new Date().toISOString(), alindi: a.tarih || new Date().toISOString(), durum: "yeni",
+    items: items, brut: brut, iskonto: iskonto, toplam: toplam, odemeTuru: odemeTuru,
+    pesinNakit: parca("nakit"), pesinKart: parca("kart"), bakiyeTutar: parca("bakiye"),
+    minPesinOran: 0, minPesinTutar: 0, teklifNo: "", fisNo: "", teslimTarih: "", teslimSaat: "", saleId: "",
+  };
+  const c = stkSiparisMusteri(S, o);
+  o.minPesinOran = c && c.onSiparisMinPesin ? 0.4 : 0; o.minPesinTutar = stkKurus(toplam * o.minPesinOran);
+  return o;
+}
+function stkSiparisOdeme(o, odemeTuru, toplam, minPesin) {
+  const odeme = odemeTuru === "parcali" ? { nakit: stkKurus(o.pesinNakit), pos: stkKurus(o.pesinKart), acik: stkKurus(o.bakiyeTutar) }
+    : odemeTuru === "nakit" ? { nakit: toplam, pos: 0, acik: 0 }
+    : odemeTuru === "kart" ? { nakit: 0, pos: toplam, acik: 0 }
+    : odemeTuru === "nakit-acik" ? { nakit: minPesin, pos: 0, acik: stkKurus(toplam - minPesin) }
+    : odemeTuru === "kart-acik" ? { nakit: 0, pos: minPesin, acik: stkKurus(toplam - minPesin) }
+    : { nakit: 0, pos: 0, acik: toplam };
+  const odemeAdi = odemeTuru === "nakit" ? "Nakit" : odemeTuru === "kart" ? "Kart" : odemeTuru === "nakit-acik" ? "Nakit %40 + Açık Hesap" : odemeTuru === "kart-acik" ? "Kart %40 + Açık Hesap" : "Açık Hesap";
+  return { odeme: odeme, odemeAdi: odemeAdi };
+}
+/* Teslim: siparişi satışa çevirir (bayi müşteri kartına bağlanır, stok `havuz`dan düşer). kaydet=false → store'a
+   dokunmadan yalnız ne olacağını hesaplar (önizleme). */
+function stkSiparisTeslim(S, o, odemeTuru, havuz, a, kaydet) {
+  odemeTuru = odemeTuru || o.odemeTuru || "bakiye";
+  const mevcut = stkSiparisMusteri(S, o);
+  let cust = mevcut || { id: null, ad: o.dealer, telefon: o.dealerTel || "", acilis: 0, adres: "", vergiNo: "" };
+  if (odemeTuru === "bakiye" && cust.onSiparisMinPesin) odemeTuru = "nakit-acik";
+  const items = (o.items || []).map((l) => {
+    const pr = stkSiparisUrun(S, l.urunId, l.ad);
+    return { urunId: pr ? pr.id : "", ad: l.ad, barkod: pr ? pr.barkod || "" : "", kdv: pr ? stkN(pr.kdv) : 0, fiyat: stkN(l.fiyat), adet: stkN(l.adet), iskyuzde: 0, alis: pr ? stkN(pr.alis) : 0 };
+  });
+  const brut = stkKurus(items.reduce((s, i) => s + i.fiyat * i.adet, 0)), iskonto = stkKurus(o.iskonto);
+  const toplam = stkKurus(stkN(o.toplam) || (brut - iskonto));
+  const minPesin = cust.onSiparisMinPesin ? stkKurus(toplam * 0.4) : 0;
+  const maliyet = stkKurus(items.reduce((s, i) => s + i.alis * i.adet, 0));
+  const od = stkSiparisOdeme(o, odemeTuru, toplam, minPesin);
+  const tarih = a.tarih || new Date().toISOString(), kaynak = havuz === "arac" ? "arac" : "dukkan";
+  const sonuc = { cust: cust, yeniMusteri: !mevcut, odemeTuru: odemeTuru, odemeAdi: od.odemeAdi, odeme: od.odeme, items: items, brut: brut, iskonto: iskonto, toplam: toplam, maliyet: maliyet, minPesin: minPesin, stokKaynak: kaynak, eslesmeyen: items.filter((i) => !i.urunId).map((i) => i.ad), sale: null };
+  if (!kaydet) return sonuc;
+  if (!mevcut) { cust.id = a.id(); S.customers.push(cust); }
+  cust.cayOcagi = true;
+  if (!cust.telefon && o.dealerTel) cust.telefon = o.dealerTel;
+  S.counters.sale = (S.counters.sale || 0) + 1;
+  const d = new Date(tarih), belgeNo = d.getFullYear() + "-" + String(S.counters.sale).padStart(6, "0");
+  const sale = { id: a.id(), belgeNo: belgeNo, musteriId: cust.id, personelId: null, not: "Çay Ocağı siparişi · " + o.dealer, odemeAdi: od.odemeAdi, items: items, brut: brut, iskonto: iskonto, toplam: toplam, maliyet: maliyet, odeme: od.odeme, tarih: tarih, servisGun: localDateStr(d), hafta: haftaNo(d), stokKaynak: kaynak };
+  S.sales.push(sale);
+  items.forEach((i) => { const pr = i.urunId && stkUrun(S, i.urunId); if (!pr) return; if (kaynak === "arac") pr.aracStok = stkKurus(stkN(pr.aracStok) - i.adet); else pr.stok = stkKurus(stkN(pr.stok) - i.adet); });
+  o.durum = "teslim"; o.saleId = sale.id; o.odemeTuru = odemeTuru;
+  sonuc.sale = sale;
+  return sonuc;
+}
+/* Satış AÇMADAN kapat: sipariş zaten elle satışa girilmişse. Çay ocağı "teslim edildi" görür. */
+function stkSiparisKapat(o, not, tarih) { o.durum = "teslim"; o.elleKapandi = true; o.kapanisNot = not || "Satışı ayrıca girildi"; o.kapanisTarih = tarih || new Date().toISOString(); }
+function stkSiparisBekleyen(S) { return (S.gelenSiparisler || []).filter((o) => o.durum === "yeni"); }
+function stkSiparisYasSaat(o, simdi) { const t = new Date(o.tarih || o.alindi).getTime(); return isNaN(t) ? 0 : Math.max(0, ((simdi ? new Date(simdi) : new Date()).getTime() - t) / 3600000); }
+function stkYasMetin(saat) { return saat < 1 ? "az önce" : saat < 24 ? Math.floor(saat) + " saat önce" : Math.floor(saat / 24) + " gün önce"; }
+function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[^a-zA-Z0-9]/g, ""); return s.slice(-5).toUpperCase(); }
+/* <<< STOK-ORTAK-BITTI */
+
+  function bayrak(ad) { const a = args.find((x) => x.indexOf("--" + ad + "=") === 0); return a ? a.slice(ad.length + 3) : null; }
+  function bayraklar(ad) { return args.filter((x) => x.indexOf("--" + ad + "=") === 0).map((x) => x.slice(ad.length + 3)); }
+  function sayi(v) { return Number(String(v).replace(",", ".")); }
+  function stkA(tarih) { return { id: () => genId(store), tarih: tarih || new Date().toISOString() }; }
+  function jsonGirdi(ham, ne) {
+    if (!ham) throw new Error(ne + " verisi gerekli: dosya yolu ya da JSON metni.");
+    return JSON.parse(fs.existsSync(ham) ? fs.readFileSync(ham, "utf8") : ham);
+  }
+  function isaretli(n) { return (n > 0 ? "+" : n < 0 ? "−" : "") + stkAdet(Math.abs(n)); }
+  function havuzAd(h) { return h === "arac" ? "Araç" : "Dükkan"; }
+
+  /* ---- sipariş: tablo okuma / yazma ---- */
+  function sipDurumAd(o) { return ({ yeni: "YENİ", onay: "ONAYLANDI", dagitim: "DAĞITIMDA", teslim: "TESLİM" })[o.durum] || String(o.durum || "").toLocaleUpperCase("tr-TR"); }
+  function sipOdemeAd(t) { return ({ nakit: "nakit", kart: "kart", bakiye: "açık hesap", parcali: "parçalı", "nakit-acik": "nakit %40 + açık hesap", "kart-acik": "kart %40 + açık hesap" })[t] || "açık hesap"; }
+  async function sipTabloOku(yalnizYeni, sureMs) {
+    const q = "siparisler?toptanci=eq.babuco&select=*&order=created_at" + (yalnizYeni ? "&durum=eq.yeni" : "");
+    const kes = new AbortController(), z = setTimeout(() => kes.abort(), sureMs || 15000);
+    try { return (await sb(q, { signal: kes.signal })) || []; } finally { clearTimeout(z); }
+  }
+  /* Panelin "Sil" dediği siparişler tabloda durur; yeniden içeri alınmasın diye kimlikleri saklanır. */
+  function sipSilinmis(orderId) { return (store.sipSilinenler || []).some((x) => x.id === orderId); }
+  /* store + tablo → tek liste. Tabloda olup panele henüz düşmemiş siparişler BELLEKTE kurulur; ancak işlenirken kaydedilir. */
+  async function sipOku() {
+    let rows = [], hata = null;
+    try { rows = await sipTabloOku(false); } catch (e) { hata = String(e.message || e).slice(0, 120); }
+    const tabloDurum = {};
+    rows.forEach((r) => { tabloDurum[r.id] = r.durum; });
+    const liste = (store.gelenSiparisler || []).map((o) => ({ o: o, yeniGelen: false, tabloDurum: o.orderId ? tabloDurum[o.orderId] : undefined }));
+    rows.forEach((r) => {
+      if ((store.gelenSiparisler || []).some((o) => o.orderId === r.id) || sipSilinmis(r.id)) return;
+      const o = stkSiparisSatirdan(store, r, { id: () => "gecici-" + r.id });
+      if (r.durum === "onay" || r.durum === "dagitim" || r.durum === "teslim") o.durum = r.durum;
+      liste.push({ o: o, yeniGelen: true, tabloDurum: r.durum });
+    });
+    liste.sort((x, y) => String(x.o.tarih).localeCompare(String(y.o.tarih)));
+    return { liste: liste, hata: hata };
+  }
+  function sipBul(liste, ara) {
+    const a = String(ara || "").trim();
+    if (!a) throw new Error("Siparis kodu gerekli ('siparisler' komutu kodlari [KOD] olarak gosterir).");
+    const kod = liste.filter((x) => stkSiparisKod(x.o) === a.toUpperCase() || x.o.orderId === a || x.o.id === a);
+    if (kod.length === 1) return kod[0];
+    const acik = liste.filter((x) => x.o.durum !== "teslim" && norm(x.o.dealer).includes(norm(a)));
+    if (!kod.length && acik.length === 1) return acik[0];
+    const aday = kod.length ? kod : acik;
+    if (!aday.length) throw new Error('Siparis bulunamadi: "' + ara + '"');
+    throw new Error('Siparis tek degil, "' + ara + '" birden cok eslesti:\n' + aday.map((x) => "  - [" + stkSiparisKod(x.o) + "] " + x.o.dealer + " · " + new Date(x.o.tarih).toLocaleString("tr-TR") + " · " + money(x.o.toplam)).join("\n") + "\nKodu yaz.");
+  }
+  /* Tablodan okunan (panele düşmemiş) siparişi store'a kalıcı kimlikle ekler. */
+  function sipKaliciYap(x) {
+    if (!x.yeniGelen) return x.o;
+    x.o.id = genId(store); x.o.alindi = new Date().toISOString();
+    store.gelenSiparisler = store.gelenSiparisler || []; store.gelenSiparisler.push(x.o); x.yeniGelen = false;
+    return x.o;
+  }
+  /* Durumu çay ocağının gördüğü tabloya geri yazar. Dönen: yazılamayanların listesi (boşsa hepsi tamam). */
+  async function sipDurumYaz(siparisler) {
+    const kalan = [];
+    for (const o of siparisler) {
+      if (!o.orderId) continue;
+      try {
+        const out = await sb("siparisler?id=eq." + encodeURIComponent(o.orderId), { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ durum: o.durum, updated_at: new Date().toISOString() }) });
+        if (!out || !out.length) kalan.push({ o: o, neden: "tabloda bu sipariş yok" });
+      } catch (e) { kalan.push({ o: o, neden: String(e.message || e).slice(0, 100) }); }
+    }
+    return kalan;
+  }
+  function sipDurumSonuc(kalan, n) {
+    if (!kalan.length) { if (n) console.log("  çay ocağına bildirildi: " + n + " sipariş"); return; }
+    console.log("  ! " + kalan.length + " siparişin durumu çay ocağına İLETİLEMEDİ (panel kaydı tamam): " + kalan.map((k) => "[" + stkSiparisKod(k.o) + "] " + k.neden).join(" · ") + "\n    Tekrar denemek için: node tools/babuco.cjs siparis-esitle --kaydet");
+  }
+  /* Sipariş tarihinden sonra aynı müşteriye kesilmiş fişler — sipariş elle satışa girilmiş olabilir. */
+  function sipSonrakiFisler(o) {
+    const c = stkSiparisMusteri(store, o); if (!c) return [];
+    const bas = new Date(new Date(o.tarih).getTime() - 3600000).toISOString();
+    return store.sales.filter((s) => s.musteriId === c.id && s.tarih >= bas && s.id !== o.saleId).slice(-4);
+  }
+  /* Komut bitince (çıktıdan SONRA) stderr'e kısa uyarı. satis fişi stdout'a basıldığı için oraya dokunulmaz.
+     Kapatmak için: BABUCO_SIPARIS_UYARI=0 */
+  function sipUyariKur() {
+    if (process.env.BABUCO_SIPARIS_UYARI === "0" || /^siparis/.test(komut)) return;
+    const istek = sipTabloOku(true, 4000).catch(() => null);
+    let basildi = false;
+    process.on("beforeExit", async () => {
+      if (basildi) return; basildi = true;
+      const rows = await istek;
+      const bekleyen = stkSiparisBekleyen(store).map((o) => ({ ad: o.dealer, tarih: o.tarih }));
+      (rows || []).forEach((r) => { if (!(store.gelenSiparisler || []).some((o) => o.orderId === r.id) && !sipSilinmis(r.id)) bekleyen.push({ ad: r.cay_ocagi || "Bilinmeyen bayi", tarih: (r.payload && r.payload.date) || r.created_at }); });
+      if (!bekleyen.length) return;
+      bekleyen.sort((a, b) => String(a.tarih).localeCompare(String(b.tarih)));
+      const eski = bekleyen[0];
+      console.error("\n[!] BEKLEYEN SIPARIS: " + bekleyen.length + " cay ocagi siparisi onay bekliyor (en eskisi " + stkYasMetin(stkSiparisYasSaat({ tarih: eski.tarih })) + ": " + eski.ad + "). Kullaniciya haber ver · ayrinti: node tools/babuco.cjs siparisler");
+    });
+  }
+
+  /* ---------- siparis-onayla / siparis-dagitim: panelin "Onayla" ve "Dağıtıma Al" aşamaları ---------- */
+  if (komut === "siparis-onayla" || komut === "siparis-dagitim") {
+    const t = await sipOku();
+    const x = sipBul(t.liste, pos[1]), o = x.o;
+    if (o.durum === "teslim") throw new Error("Bu siparis zaten teslim edilmis / kapatilmis.");
+    const dagitim = komut === "siparis-dagitim";
+    const gun = dagitim ? (pos[2] || o.teslimTarih || "") : "", saatS = dagitim ? (pos[3] || o.teslimSaat || "") : "";
+    console.log("Sipariş [" + stkSiparisKod(o) + "] " + o.dealer + " · " + money(o.toplam) + " · " + (o.items || []).length + " kalem");
+    console.log("  durum: " + sipDurumAd(o) + " -> " + (dagitim ? "DAĞITIMDA" + (gun ? " · teslim " + gun + " " + saatS : "") : "ONAYLANDI") + "   (çay ocağı uygulamasında da böyle görünecek)");
+    if (!kaydet) { provaUyari(komut + " " + stkSiparisKod(o) + (gun ? ' "' + gun + '"' : "") + (saatS ? " " + saatS : "")); return; }
+    sipKaliciYap(x);
+    if (dagitim) { o.teslimTarih = gun; o.teslimSaat = saatS; o.fisNo = o.fisNo || "FIS-" + Date.now().toString().slice(-6); o.durum = "dagitim"; }
+    else { o.durum = "onay"; o.teklifNo = o.teklifNo || "TKF-" + Date.now().toString().slice(-6); }
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + (dagitim ? "fiş " + o.fisNo : "teklif " + o.teklifNo) + " · yedek: " + path.basename(y.yedek));
+    sipDurumSonuc(await sipDurumYaz([o]), 1);
+    return;
+  }
+
+  /* ---------- siparis-teslim: siparişi satışa çevirir (panelin "Teslim Et"i) ----------
+     Bayi müşteri kartına bağlanır (yoksa açılır), stok düşer (varsayılan ARAÇ; --dukkan ile dükkan),
+     ödeme: --odeme=nakit|kart|bakiye|parcali|nakit-acik|kart-acik (yazılmazsa çay ocağının seçtiği). */
+  if (komut === "siparis-teslim") {
+    const t = await sipOku();
+    const x = sipBul(t.liste, pos[1]), o = x.o;
+    if (o.saleId || o.durum === "teslim") throw new Error("Bu siparis zaten teslim edilmis / kapatilmis.");
+    const oArg = bayrak("odeme");
+    const tur = oArg ? ({ nakit: "nakit", kart: "kart", pos: "kart", bakiye: "bakiye", acik: "bakiye", veresiye: "bakiye", parcali: "parcali", "nakit-acik": "nakit-acik", "kart-acik": "kart-acik" })[norm(oArg)] : (o.odemeTuru || "bakiye");
+    if (!tur) throw new Error("--odeme= nakit | kart | bakiye | parcali | nakit-acik | kart-acik");
+    const havuz = args.includes("--dukkan") ? "dukkan" : "arac";
+    const r = stkSiparisTeslim(store, o, tur, havuz, stkA(), false);
+    const q = (n) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
+    const L = [];
+    L.push("### 🧾 SİPARİŞ TESLİM — " + r.cust.ad + (r.yeniMusteri ? "  (YENİ MÜŞTERİ kartı açılacak)" : "") + "  [" + stkSiparisKod(o) + "]");
+    L.push("**" + new Date().toLocaleDateString("tr-TR") + "**" + (havuz === "arac" ? " · araçtan" : " · dükkandan") + " · sipariş " + new Date(o.tarih).toLocaleDateString("tr-TR") + " (" + stkYasMetin(stkSiparisYasSaat(o)) + ")", "");
+    L.push("| Adet | Ürün | Fiyat | Tutar |", "|---:|---|---:|---:|");
+    r.items.forEach((i) => L.push("| " + stkAdet(i.adet) + " | " + i.ad + (i.urunId ? "" : " ⚠") + " | " + q(i.fiyat) + " | " + q(i.adet * i.fiyat) + " |"));
+    if (r.iskonto) { L.push("| | | Ara toplam | " + q(r.brut) + " |"); L.push("| | | Nakit indirimi | −" + q(r.iskonto) + " |"); }
+    L.push("| | | **TOPLAM** | **" + q(r.toplam) + " ₺** |", "", "| | |", "|---|---:|");
+    L.push("| Ödeme | " + r.odemeAdi + (oArg ? "" : " (çay ocağının seçimi)") + " |");
+    if (r.odeme.nakit) L.push("| Nakit alınan | " + q(r.odeme.nakit) + " ₺ |");
+    if (r.odeme.pos) L.push("| Kart / pos | " + q(r.odeme.pos) + " ₺ |");
+    if (r.odeme.acik > 0.001) L.push("| **Açık hesap kalan** | **" + q(r.odeme.acik) + " ₺** |");
+    const eskiB = r.yeniMusteri ? 0 : customerBorc(store, r.cust.id);
+    L.push("| **Bakiye** | " + q(eskiB) + " → **" + q(kurus(eskiB + r.odeme.acik)) + " ₺** |");
+    L.push("| Kâr | " + q(r.toplam - r.maliyet) + " ₺ · " + karOrani(r.toplam, r.maliyet) + " |", "");
+    if (r.eslesmeyen.length) L.push("⚠ Ürün listesinde bulunamadı (stok düşmez, maliyeti 0 sayılır): " + r.eslesmeyen.join(", "));
+    if (Math.abs(kurus(r.odeme.nakit + r.odeme.pos + r.odeme.acik - r.toplam)) > 0.01) L.push("⚠ Ödeme parçaları toplamı tutmuyor (" + q(r.odeme.nakit + r.odeme.pos + r.odeme.acik) + " ≠ " + q(r.toplam) + ") — --odeme= ile tek tür seç.");
+    const f = sipSonrakiFisler(o);
+    if (f.length) L.push("⚠ Bu müşteriye siparişten sonra zaten fiş kesilmiş: " + f.map((s) => s.belgeNo + " (" + new Date(s.tarih).toLocaleDateString("tr-TR") + ", " + q(s.toplam) + " ₺)").join(" · ") + " — aynı teslimatsa satış AÇMA, `siparis-kapat " + stkSiparisKod(o) + "` kullan.");
+    if (Math.abs(kurus(r.odeme.nakit + r.odeme.pos + r.odeme.acik - r.toplam)) > 0.01 && kaydet) throw new Error("Odeme kirilimi toplami tutmuyor; --odeme= ile tek tur sec.");
+    if (!kaydet) { L.push("**KAYDEDİLMEDİ** — onayını bekliyorum"); console.log(L.join("\n")); provaUyari("siparis-teslim " + stkSiparisKod(o) + (oArg ? " --odeme=" + oArg : "") + (havuz === "dukkan" ? " --dukkan" : "")); return; }
+    sipKaliciYap(x);
+    const s = stkSiparisTeslim(store, o, tur, havuz, stkA(), true);
+    L.push("**KAYDEDİLDİ** — Belge " + s.sale.belgeNo);
+    console.log(L.join("\n"));
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI - Belge " + s.sale.belgeNo + " · " + money(s.sale.toplam) + " · kar " + money(s.sale.toplam - s.sale.maliyet) + " (" + karOrani(s.sale.toplam, s.sale.maliyet) + ") · yedek: " + path.basename(y.yedek));
+    sipDurumSonuc(await sipDurumYaz([o]), 1);
+    return;
+  }
+
+  /* ---------- siparis-kapat: satış AÇMADAN "halledildi" diye kapat ----------
+     Sipariş zaten elle satışa girilmişse. siparis-kapat <kod> [<kod>...] [--not="..."]  ya da  --eski=GUN (GUN günden eski hepsi). */
+  if (komut === "siparis-kapat") {
+    const t = await sipOku();
+    const eskiGun = bayrak("eski");
+    let secilen;
+    if (eskiGun != null) {
+      if (!(sayi(eskiGun) >= 0)) throw new Error("--eski=GUN (ornek --eski=3: 3 gunden eski bekleyenlerin hepsi)");
+      secilen = t.liste.filter((x) => x.o.durum !== "teslim" && stkSiparisYasSaat(x.o) >= sayi(eskiGun) * 24);
+    } else {
+      if (!pos[1]) throw new Error("Kullanim: siparis-kapat <kod> [<kod>...]   ya da   siparis-kapat --eski=GUN");
+      secilen = pos.slice(1).map((k) => sipBul(t.liste, k));
+    }
+    secilen = secilen.filter((x, i) => secilen.indexOf(x) === i);
+    if (secilen.some((x) => x.o.durum === "teslim")) throw new Error("Secilenlerden biri zaten kapali.");
+    if (!secilen.length) { console.log("Kapatılacak bekleyen sipariş yok."); return; }
+    const not = bayrak("not") || "Satışı ayrıca girildi";
+    const L = ["Satış AÇILMADAN kapatılacak siparişler (" + secilen.length + ") — stok ve bakiye DEĞİŞMEZ, çay ocağı \"teslim edildi\" görür:", ""];
+    secilen.forEach((x) => {
+      const o = x.o, f = sipSonrakiFisler(o);
+      L.push("  [" + stkSiparisKod(o) + "] " + o.dealer + " · " + new Date(o.tarih).toLocaleDateString("tr-TR") + " (" + stkYasMetin(stkSiparisYasSaat(o)) + ") · " + money(o.toplam) + " · " + (o.items || []).map((l) => stkAdet(l.adet) + " " + l.ad).join(", "));
+      L.push(f.length ? "        siparişten sonraki fişleri: " + f.map((s) => s.belgeNo + " " + new Date(s.tarih).toLocaleDateString("tr-TR") + " " + money(s.toplam)).join(" · ")
+                      : "        ! siparişten sonra bu müşteriye kesilmiş fiş YOK — gerçekten teslim edildi mi? (edilmediyse siparis-teslim)");
+    });
+    L.push("", "Not: " + not);
+    console.log(L.join("\n"));
+    if (!kaydet) { provaUyari("siparis-kapat " + (eskiGun != null ? "--eski=" + eskiGun : secilen.map((x) => stkSiparisKod(x.o)).join(" "))); return; }
+    const simdi = new Date().toISOString();
+    secilen.forEach((x) => { sipKaliciYap(x); stkSiparisKapat(x.o, not, simdi); });
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + secilen.length + " sipariş kapatıldı · yedek: " + path.basename(y.yedek));
+    sipDurumSonuc(await sipDurumYaz(secilen.map((x) => x.o)), secilen.length);
+    return;
+  }
+
+  /* ---------- siparis-esitle: paneldeki durumu çay ocağının tablosuna yeniden gönder ---------- */
+  if (komut === "siparis-esitle") {
+    const t = await sipOku();
+    if (t.hata) throw new Error("Siparis tablosu okunamadi: " + t.hata);
+    const farkli = t.liste.filter((x) => !x.yeniGelen && x.o.orderId && x.tabloDurum && x.tabloDurum !== x.o.durum);
+    if (!farkli.length) { console.log("Çay ocağının gördüğü durumlar panelle aynı — yapılacak bir şey yok."); return; }
+    farkli.forEach((x) => console.log("  [" + stkSiparisKod(x.o) + "] " + x.o.dealer + ": çay ocağı \"" + x.tabloDurum + "\" görüyor -> \"" + x.o.durum + "\" yazılacak"));
+    if (!kaydet) { provaUyari("siparis-esitle"); return; }
+    sipDurumSonuc(await sipDurumYaz(farkli.map((x) => x.o)), farkli.length);
+    return;
+  }
+
+  /* ---------- sayim: sayılan miktarı MUTLAK değer olarak yaz ----------
+     { "arac": { "<urun>": 6, ... }, "dukkan": { ... } }   ya da   { "havuz": "arac", "kalemler": [{ "urun": "..", "adet": 6 }] }
+     Listede olmayan ürün değişmez. Farklar stok hareketlerine "Sayım Düzeltme" diye işlenir. */
+  if (komut === "sayim") {
+    const girdi = jsonGirdi(pos[1], "Sayim");
+    const ham = [];
+    ["dukkan", "arac"].forEach((h) => { const o = girdi[h]; if (o && typeof o === "object") Object.keys(o).forEach((ad) => ham.push({ havuz: h, urun: ad, adet: o[ad] })); });
+    if (Array.isArray(girdi.kalemler)) { const h = girdi.havuz === "dukkan" ? "dukkan" : girdi.havuz === "arac" ? "arac" : null; if (!h) throw new Error('"havuz": "dukkan" | "arac" gerekli.'); girdi.kalemler.forEach((k) => ham.push({ havuz: h, urun: k.urun, adet: k.adet })); }
+    if (!ham.length) throw new Error('Sayimda kalem yok. Ornek: {"arac": {"Coca-Cola": 6}, "dukkan": {"Coca-Cola": 12}}');
+    const gorulen = {};
+    const satirlar = ham.map((k) => {
+      const p = urunBul(store, k.urun), yeni = sayi(k.adet);
+      if (k.adet === "" || k.adet == null || isNaN(yeni)) throw new Error('"' + p.ad + '" icin sayilan miktar gecersiz.');
+      if (gorulen[k.havuz + p.id]) throw new Error('"' + p.ad + '" ' + havuzAd(k.havuz) + " sayiminda iki kez yazilmis.");
+      gorulen[k.havuz + p.id] = true;
+      return { p: p, havuz: k.havuz, eski: Number(p[k.havuz === "arac" ? "aracStok" : "stok"]) || 0, yeni: yeni };
+    });
+    const L = ["# Stok sayımı — sayılan miktar kayıtlı stoğun YERİNE yazılır", ""];
+    ["dukkan", "arac"].forEach((h) => {
+      const hs = satirlar.filter((x) => x.havuz === h); if (!hs.length) return;
+      const deg = hs.filter((x) => x.eski !== x.yeni);
+      L.push("## " + havuzAd(h).toLocaleUpperCase("tr-TR") + " — " + hs.length + " ürün sayıldı, " + deg.length + " tanesi değişecek", "");
+      if (deg.length) {
+        L.push("| Ürün | Kayıtlı | Sayılan | Fark |", "|---|---:|---:|---:|");
+        deg.forEach((x) => L.push("| " + x.p.ad + " | " + stkAdet(x.eski) + " | **" + stkAdet(x.yeni) + "** | " + isaretli(x.yeni - x.eski) + " |"));
+        L.push("");
+      }
+      if (hs.length - deg.length) L.push("Değişmeyen (sayılan = kayıtlı): " + hs.filter((x) => x.eski === x.yeni).map((x) => x.p.ad).join(", "), "");
+      if (hs.some((x) => x.yeni < 0)) L.push("! Sayılan miktar eksi olamaz — kontrol et.", "");
+    });
+    L.push("Listede olmayan ürünlere dokunulmaz.");
+    console.log(L.join("\n"));
+    if (!kaydet) { provaUyari("sayim <dosya.json>"); return; }
+    const yazilan = stkStokYaz(store, satirlar.map((x) => ({ urunId: x.p.id, havuz: x.havuz, yeni: x.yeni })), stkA());
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + yazilan.length + " stok düzeltildi · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- eksi-stok: eksi görünen stokları listele; --sifirla ile 0 yap ---------- */
+  if (komut === "eksi-stok") {
+    const havuz = args.includes("--arac") ? "arac" : args.includes("--dukkan") ? "dukkan" : null;
+    const liste = stkEksiler(store, havuz), sifirla = args.includes("--sifirla");
+    if (!liste.length) { console.log("Eksi stok yok" + (havuz ? " (" + havuzAd(havuz) + ")" : "") + "."); return; }
+    const top = (h) => liste.filter((x) => x.havuz === h);
+    const L = ["# Eksi stoklar — dükkan " + top("dukkan").length + " ürün (" + stkAdet(top("dukkan").reduce((a, x) => a + x.miktar, 0)) + ") · araç " + top("arac").length + " ürün (" + stkAdet(top("arac").reduce((a, x) => a + x.miktar, 0)) + ")", ""];
+    L.push(sifirla ? "| Ürün | Havuz | Kayıtlı | Olacak |" : "| Ürün | Havuz | Kayıtlı |", sifirla ? "|---|---|---:|---:|" : "|---|---|---:|");
+    liste.sort((a, b) => a.miktar - b.miktar).forEach((x) => L.push("| " + x.p.ad + " | " + havuzAd(x.havuz) + " | " + stkAdet(x.miktar) + (sifirla ? " | **0** |" : " |")));
+    L.push("", "_Stok eksi olamaz: mal girişi kaydedilmeden satıldığı için birikmiş. Gerçek miktarı biliyorsan `sayim` ile yaz;_", "_bilmiyorsan `eksi-stok --sifirla` hepsini 0 yapar (sonraki alımlar doğru saysın diye)._");
+    console.log(L.join("\n"));
+    if (!sifirla) return;
+    if (!kaydet) { provaUyari("eksi-stok --sifirla" + (havuz ? " --" + havuz : "")); return; }
+    const yazilan = stkStokYaz(store, liste.map((x) => ({ urunId: x.p.id, havuz: x.havuz, yeni: 0 })), Object.assign(stkA(), { tur: "Eksi Stok Sıfırlama" }));
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + yazilan.length + " eksi stok sıfırlandı · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- aktar: dükkan ↔ araç (bir havuzdan düşer, diğerine eklenir) ----------
+     aktar "<urun>" <adet> [--dukkana]     ya da     aktar '{"yon":"araca","kalemler":[{"urun":"..","adet":5}]}' */
+  if (komut === "aktar") {
+    let kalemHam, yon = args.includes("--dukkana") ? "dukkana" : "araca";
+    if (pos[1] && (/^\s*\{/.test(pos[1]) || fs.existsSync(pos[1]))) { const g = jsonGirdi(pos[1], "Aktarma"); kalemHam = g.kalemler || []; if (g.yon === "dukkana" || g.yon === "araca") yon = g.yon; }
+    else kalemHam = [{ urun: pos[1], adet: pos[2] }];
+    const kalemler = kalemHam.map((k) => { const p = urunBul(store, k.urun), adet = sayi(k.adet); if (!(adet > 0)) throw new Error('"' + p.ad + '" icin adet gecersiz.'); return { p: p, adet: adet }; });
+    if (!kalemler.length) throw new Error('Kullanim: aktar "<urun>" <adet> [--dukkana]');
+    const L = [(yon === "araca" ? "DÜKKAN -> ARAÇ" : "ARAÇ -> DÜKKAN") + " aktarma", "", "| Adet | Ürün | Dükkan | Araç |", "|---:|---|---:|---:|"];
+    const eksiye = [];
+    kalemler.forEach((k) => {
+      const d = Number(k.p.stok) || 0, a = Number(k.p.aracStok) || 0, i = yon === "araca" ? -1 : 1;
+      L.push("| " + stkAdet(k.adet) + " | " + k.p.ad + " | " + stkAdet(d) + " → " + stkAdet(d + i * k.adet) + " | " + stkAdet(a) + " → " + stkAdet(a - i * k.adet) + " |");
+      if ((yon === "araca" ? d : a) - k.adet < 0) eksiye.push(k.p.ad);
+    });
+    if (eksiye.length) L.push("", "! " + (yon === "araca" ? "Dükkan" : "Araç") + " stoğu eksiye düşecek: " + eksiye.join(", ") + " — kayıtlı stok yanlış olabilir (önce `sayim`).");
+    console.log(L.join("\n"));
+    if (!kaydet) { provaUyari("aktar ..."); return; }
+    stkAktar(store, kalemler.map((k) => ({ urunId: k.p.id, adet: k.adet })), yon, stkA());
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + kalemler.length + " ürün aktarıldı · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- alinacaklar: azalan ürünler, önerilen miktarla ---------- */
+  if (komut === "alinacaklar") {
+    const r = stkAlinacaklar(store, { hafta: sayi(bayrak("hafta") || 0), hedefHafta: sayi(bayrak("hedef") || 0) });
+    if (args.includes("--metin")) { console.log(stkAlinacakMetin(r)); return; }
+    const L = ["# Alınacaklar — " + new Date().toLocaleDateString("tr-TR"), ""];
+    if (r.eksiSayisi) L.push("> ⚠ **Bu liste güvenilir DEĞİL:** " + r.eksiSayisi + " üründe kayıtlı stok eksi (mal girişi kaydedilmemiş). Eksi stok 0 sayıldı; doğru liste için önce sayım yap (`eksi-stok`, `sayim`).", "");
+    L.push("_Son " + r.hafta + " haftanın satış hızına göre; dükkan + araç toplamı " + r.hedefHafta + " haftalık satışın altına düşenler (ya da kritik seviyeye inenler)._", "");
+    if (!r.satirlar.length) { L.push("Alınacak ürün görünmüyor."); console.log(L.join("\n")); return; }
+    L.push("| Al | Ürün | Haftada satılan | Dükkan | Araç | Tahmini tutar |", "|---:|---|---:|---:|---:|---:|");
+    let grup = null;
+    r.satirlar.forEach((x) => {
+      const g = x.p.grup || "Diğer";
+      if (g !== grup) { grup = g; L.push("| | **" + g + "** | | | | |"); }
+      L.push("| **" + stkAdet(x.oneri) + "** " + (x.p.birim || "Adet") + " | " + x.p.ad + (x.eksi ? " ⚠" : "") + " | " + stkAdet(Math.round(x.haftalik * 10) / 10) + " | " + stkAdet(x.dukkan) + " | " + stkAdet(x.arac) + " | " + (x.tutar ? stkPara(x.tutar) : "—") + " |");
+    });
+    L.push("| | **" + r.satirlar.length + " ürün** | | | | **" + stkPara(r.tutar) + "** |", "", "⚠ = bu ürünün kayıtlı stoğu eksi · paylaşılacak düz liste için `alinacaklar --metin`");
+    console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- kritik-oner: satış hızından kritik seviye önerisi ---------- */
+  if (komut === "kritik-oner") {
+    const hafta = sayi(bayrak("hafta") || 0) || stkAyar().hizHafta, gun = sayi(bayrak("gun") || 0) || stkAyar().kritikGun, hepsi = args.includes("--hepsi");
+    const liste = stkKritikOneri(store, { hafta: hafta, gun: gun });
+    const yazilacak = liste.filter((x) => hepsi || x.eski == null);
+    console.log("# Kritik seviye önerisi\n\n_Son " + hafta + " haftanın satışına göre: elde (dükkan + araç) " + gun + " günlük mal kalınca uyarı verilsin._\n");
+    if (!liste.length) { console.log("Önerilecek değişiklik yok."); return; }
+    const L = ["| Ürün | Haftada satılan | Şimdiki kritik | Önerilen | |", "|---|---:|---:|---:|---|"];
+    liste.forEach((x) => L.push("| " + x.p.ad + " | " + stkAdet(Math.round(x.haftalik * 10) / 10) + " | " + (x.eski == null ? "—" : stkAdet(x.eski)) + " | **" + stkAdet(x.oneri) + "** | " + (hepsi || x.eski == null ? "yazılacak" : "elle girilmiş, dokunulmaz") + " |"));
+    L.push("", yazilacak.length + " üründe kritik seviye yazılacak" + (hepsi ? "" : " (elle girilmişleri de değiştirmek için --hepsi)") + ".");
+    console.log(L.join("\n"));
+    if (!yazilacak.length) return;
+    if (!kaydet) { provaUyari("kritik-oner" + (hepsi ? " --hepsi" : "")); return; }
+    const n = stkKritikUygula(liste, hepsi);
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + n + " üründe kritik seviye yazıldı · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- toplu-zam: gruba / seçilen ürünlere yüzde ya da tutar zam ----------
+     toplu-zam (--grup="Su" | --urun="A" [--urun="B"...] | --hepsi) (--yuzde=10 | --tutar=5 | --yeni=300)
+               [--yuvarla=5] [--yukari|--asagi] [--ozel]
+     Seçilen ürünün fiyat ailesi (aynı çeşit + aynı liste fiyatı) birlikte taşınır. --ozel: müşterilerin özel
+     fiyatları da aynı kuralla artar (yazılmazsa özel fiyatlara dokunulmaz). */
+  if (komut === "toplu-zam") {
+    const grup = bayrak("grup"), urunAd = bayraklar("urun"), hepsi = args.includes("--hepsi");
+    if ([!!grup, urunAd.length > 0, hepsi].filter(Boolean).length !== 1) throw new Error('Neye zam? Birini sec: --grup="Su"  |  --urun="..." (birden cok yazilabilir)  |  --hepsi');
+    const turler = [["yuzde", bayrak("yuzde")], ["tutar", bayrak("tutar")], ["yeni", bayrak("yeni")]].filter((x) => x[1] != null);
+    if (turler.length !== 1) throw new Error("Ne kadar? Birini sec: --yuzde=10  |  --tutar=5  |  --yeni=300 (yeni liste fiyati)");
+    const tur = turler[0][0], deger = sayi(turler[0][1]);
+    if (isNaN(deger) || (tur === "yeni" && !(deger > 0))) throw new Error("Zam degeri gecersiz.");
+    if (tur === "yeni" && !urunAd.length) throw new Error("--yeni yalniz --urun ile kullanilir (tek aileye yeni fiyat).");
+    let grupAd = null;
+    if (grup) { const gl = [...new Set(store.products.map((p) => p.grup || ""))].filter((g) => norm(g) === norm(grup)); if (!gl.length) throw new Error('Grup bulunamadi: "' + grup + '". Gruplar: ' + [...new Set(store.products.map((p) => p.grup || ""))].filter(Boolean).join(", ")); grupAd = gl[0]; }
+    const idler = urunAd.length ? urunAd.map((a) => urunBul(store, a).id) : null;
+    const yuv = bayrak("yuvarla") != null ? sayi(bayrak("yuvarla")) : 0;
+    if (isNaN(yuv) || yuv < 0) throw new Error("--yuvarla= 0.5 | 1 | 5 | 10 ...");
+    const yon = args.includes("--yukari") ? "yukari" : args.includes("--asagi") ? "asagi" : "yakin";
+    const plan = stkZamPlan(store, { urunIdler: idler, grup: grupAd, tur: tur, deger: deger, yuvarla: yuv, yon: yon, ozel: args.includes("--ozel") ? "ayni" : "dokunma" });
+    const tanim = (tur === "yuzde" ? "%" + stkAdet(deger) : tur === "tutar" ? isaretli(deger) + " ₺" : "yeni fiyat " + stkPara(deger)) + (yuv ? " · " + stkAdet(yuv) + " ₺'ye " + (yon === "yukari" ? "yukarı" : yon === "asagi" ? "aşağı" : "en yakına") + " yuvarla" : "");
+    const L = ["# Toplu zam — " + (grupAd ? "grup: " + grupAd : hepsi ? "TÜM ürünler" : urunAd.length + " ürün (+ aileleri)") + " · " + tanim, ""];
+    if (!plan.urunler.length) { L.push("Fiyatı değişecek ürün yok."); console.log(L.join("\n")); return; }
+    L.push("| Ürün | Eski | Yeni | Kâr | |", "|---|---:|---:|---:|---|");
+    plan.urunler.forEach((u) => L.push("| " + u.p.ad + " | " + stkPara(u.eski) + " | **" + stkPara(u.yeni) + "** | " + (u.alis > 0 ? stkYuzde(u.marj) : "—") + " | " + [u.aileden ? "ailesiyle birlikte" : "", u.zarar ? "⚠ ALIŞIN ALTINDA" : ""].filter(Boolean).join(" · ") + " |"));
+    L.push("", plan.urunler.length + " ürünün liste fiyatı değişecek.");
+    if (plan.ozel.length) {
+      L.push("", "## Özel fiyatlar da aynı kuralla değişecek (" + plan.ozel.length + ")", "", "| Müşteri | Ürün | Eski | Yeni |", "|---|---|---:|---:|");
+      plan.ozel.forEach((o) => L.push("| " + o.c.ad + " | " + o.p.ad + " | " + stkPara(o.eski) + " | **" + stkPara(o.yeni) + "** |"));
+    } else if (plan.ozelSayisi) L.push("", "Özel fiyatlar: " + plan.ozelSayisi + " özel fiyat " + (args.includes("--ozel") ? "değişmiyor (yuvarlama sonrası aynı)." : "DEĞİŞMEYECEK — o müşteriler eski fiyattan almaya devam eder. Onlar da artsın istersen --ozel ekle."));
+    plan.uyarilar.forEach((u) => L.push("", "⚠ " + u));
+    console.log(L.join("\n"));
+    if (!kaydet) { provaUyari("toplu-zam ... (aynı bayraklarla)"); return; }
+    const n = stkZamUygula(store, plan, Object.assign(stkA(), { kaynak: "Toplu zam (" + tanim + ")" }));
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nKAYDEDILDI · " + n.urun + " liste fiyatı" + (n.ozel ? " + " + n.ozel + " özel fiyat" : "") + " değişti · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- fiyat-kontrol: zararına / düşük kârlı / bakımsız fiyatlar ---------- */
+  if (komut === "fiyat-kontrol") {
+    const esik = bayrak("esik") != null ? sayi(bayrak("esik")) : stkMarjEsik(store);
+    const k = stkFiyatKontrol(store, esik), L = ["# Fiyat kontrol — kâr eşiği " + stkYuzde(esik), ""];
+    const bolum = (bas, arr, baslik, satir) => { L.push("## " + bas + " (" + arr.length + ")", ""); if (!arr.length) { L.push("_Yok._", ""); return; } L.push(baslik[0], baslik[1]); arr.forEach((x) => L.push(satir(x))); L.push(""); };
+    bolum("Zararına satılan: satış ≤ alış", k.zarar, ["| Ürün | Alış | Satış | Kâr |", "|---|---:|---:|---:|"], (x) => "| " + x.p.ad + " | " + stkPara(x.p.alis) + " | " + stkPara(x.p.satis) + " | " + stkYuzde(x.marj) + " |");
+    bolum("Kârı düşük ürünler", k.dusuk, ["| Ürün | Alış | Satış | Kâr |", "|---|---:|---:|---:|"], (x) => "| " + x.p.ad + " | " + stkPara(x.p.alis) + " | " + stkPara(x.p.satis) + " | " + stkYuzde(x.marj) + " |");
+    bolum("Kârı düşük özel fiyatlar", k.ozelDusuk, ["| Müşteri | Ürün | Alış | Özel fiyat | Kâr |", "|---|---|---:|---:|---:|"], (x) => "| " + x.c.ad + " | " + x.p.ad + " | " + stkPara(x.p.alis) + " | " + stkPara(x.fiyat) + " | " + stkYuzde(x.marj) + (x.zarar ? " ⚠ zarar" : "") + " |");
+    L.push("## Özel fiyatı liste fiyatından yüksek (" + k.ozelYuksek.reduce((a, x) => a + x.musteriler.length, 0) + " müşteri fiyatı, " + k.ozelYuksek.length + " ürün ailesi)", "");
+    if (!k.ozelYuksek.length) L.push("_Yok._", "");
+    else {
+      L.push("_Müşteri listeden pahalıya alıyorsa liste fiyatı eskimiş demektir._", "");
+      k.ozelYuksek.forEach((x) => {
+        L.push("- **" + x.urunler[0].ad + "**" + (x.urunler.length > 1 ? " (+" + (x.urunler.length - 1) + " çeşit, aynı aile)" : "") + " — liste " + stkPara(x.liste) + " · " + x.musteriler.map((m) => m.c.ad + " " + stkPara(m.fiyat)).join(" · "));
+        if (x.oneri != null) L.push("  öneri: liste fiyatını **" + stkPara(x.oneri) + "** yap (" + x.oneriSayi + " müşteri zaten bu fiyattan alıyor) → `toplu-zam --urun=\"" + x.urunler[0].ad + "\" --yeni=" + x.oneri + "`  _(özel fiyatı olmayan herkes yeni fiyattan alır)_");
+      });
+      L.push("");
+    }
+    if (k.alisYok.length) L.push("_Alış fiyatı girilmemiş " + k.alisYok.length + " üründe kâr hesaplanamadı: " + k.alisYok.slice(0, 8).map((x) => x.p.ad).join(", ") + (k.alisYok.length > 8 ? " …" : "") + "_");
+    console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- fiyat-gecmisi [urun]: alış / satış / özel fiyat ne zaman neyden neye değişti ---------- */
+  if (komut === "fiyat-gecmisi") {
+    const ara = pos.slice(1).join(" ");
+    const liste = (store.fiyatGecmisi || []).filter((g) => !ara || norm(g.ad).includes(norm(ara))).slice().sort((a, b) => String(b.tarih).localeCompare(String(a.tarih)));
+    if (!liste.length) { console.log("Fiyat değişikliği kaydı yok" + (ara ? ' ("' + ara + '")' : "") + ". (Geçmiş, bu sürümden sonraki değişiklikleri tutar.)"); return; }
+    const L = ["# Fiyat geçmişi" + (ara ? " — " + ara : ""), "", "| Tarih | Ürün | Ne | Eski | Yeni | Kaynak |", "|---|---|---|---:|---:|---|"];
+    liste.slice(0, 80).forEach((g) => { const c = g.musteriId && store.customers.find((x) => x.id === g.musteriId); L.push("| " + new Date(g.tarih).toLocaleDateString("tr-TR") + " | " + g.ad + " | " + (g.alan === "alis" ? "alış" : g.alan === "ozel" ? "özel fiyat" + (c ? " (" + c.ad + ")" : "") : "satış") + " | " + stkPara(g.eski) + " | " + stkPara(g.yeni) + " | " + (g.kaynak || "") + " |"); });
+    if (liste.length > 80) L.push("", "... " + (liste.length - 80) + " kayıt daha");
+    console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- alislar / sil-alim: alış kayıtları ---------- */
+  if (komut === "alislar") {
+    const liste = (store.purchases || []).slice().sort((a, b) => String(b.tarih).localeCompare(String(a.tarih)));
+    if (!liste.length) { console.log("Alış kaydı yok."); return; }
+    const L = ["# Alış kayıtları (" + liste.length + ")", "", "| Tarih | No | Firma | Nereye | Ödeme | Kalem | Tutar |", "|---|---|---|---|---|---:|---:|"];
+    liste.slice(0, 40).forEach((p) => { const f = p.firmaId && (store.firmalar || []).find((x) => x.id === p.firmaId); L.push("| " + new Date(p.tarih).toLocaleDateString("tr-TR") + " | " + (p.no || "-") + " | " + (f ? f.ad : "—") + " | " + havuzAd(p.hedef) + " | " + (p.odeme === "veresiye" ? "veresiye" : "peşin" + (p.odemeTuru ? " · " + p.odemeTuru : "")) + " | " + (p.items || []).length + " | " + stkPara(p.toplam) + " |"); });
+    L.push("", "**Toplam: " + stkPara(liste.reduce((a, p) => a + (Number(p.toplam) || 0), 0)) + "**");
+    console.log(L.join("\n"));
+    return;
+  }
+  if (komut === "sil-alim") {
+    const adaylar = (store.purchases || []).filter((p) => String(p.no) === String(pos[1]));
+    if (!adaylar.length) throw new Error("Alis kaydi bulunamadi: " + pos[1] + " ('alislar' komutu numaralari gosterir)");
+    if (adaylar.length > 1) throw new Error("Bu numarayla " + adaylar.length + " alis kaydi var; panelden sil.");
+    const p = adaylar[0], alan = p.hedef === "arac" ? "aracStok" : "stok";
+    console.log("SILINECEK ALIŞ: " + p.no + " · " + new Date(p.tarih).toLocaleDateString("tr-TR") + " · " + money(p.toplam) + " · " + havuzAd(p.hedef) + " stoğundan geri alınacak:");
+    (p.items || []).forEach((it) => { const pr = it.urunId && store.products.find((x) => x.id === it.urunId); console.log("  " + stkAdet(it.adet) + " x " + it.ad + (pr ? "   stok " + stkAdet(pr[alan]) + " -> " + stkAdet((Number(pr[alan]) || 0) - it.adet) : "   (ürün kartı yok)")); });
+    console.log("Alış fiyatları geri alınmaz (gerekirse urun-fiyat ile düzelt).");
+    if (!kaydet) { provaUyari("sil-alim " + p.no); return; }
+    stkAlimSil(store, p.id);
+    const y = await storeYaz(store, updatedAt);
+    console.log("\nSILINDI · yedek: " + path.basename(y.yedek));
     return;
   }
 
@@ -866,11 +1779,7 @@ function provaUyari(ornek) {
     if (adet <= 0) throw new Error('Adet gecersiz: iade "<musteri>" "<urun>" <adet> [fiyat]');
     // Fiyat verilmezse müşteriye bu ürünün en son satıldığı fiyat (iade, ödediği fiyattan düşülür).
     let fiyat = pos[4] != null ? kurus(String(pos[4]).replace(",", ".")) : null;
-    if (fiyat == null) {
-      const son = store.sales.filter((x) => x.musteriId === c.id).sort((a, b) => b.tarih.localeCompare(a.tarih))
-        .map((x) => x.items.find((it) => it.urunId === p.id && it.adet > 0)).find(Boolean);
-      fiyat = son ? Number(son.fiyat) : Number(p.satis) || 0;
-    }
+    if (fiyat == null) fiyat = stkIadeFiyat(store, c.id, p).fiyat;   // panelin iade ekranıyla aynı kural
     const tutar = kurus(adet * fiyat), maliyet = kurus(adet * (Number(p.alis) || 0));
     const kaynak = args.includes("--dukkan") ? "dukkan" : "arac";
     const eski = customerBorc(store, c.id);
@@ -885,19 +1794,8 @@ function provaUyari(ornek) {
     console.log("| Bugünün maliyetinden düşer (mal geri geldi) | −" + q(maliyet) + " ₺ |");
     console.log("| Kârdan düşer | −" + q(tutar - maliyet) + " ₺ |\n");
     if (!kaydet) { console.log("**KAYDEDİLMEDİ** — onayını bekliyorum"); provaUyari('iade "' + c.ad + '" "' + p.ad + '" ' + adet + " " + fiyat); return; }
-    const now = new Date();
-    store.counters.sale = (store.counters.sale || 0) + 1;
-    const belgeNo = now.getFullYear() + "-" + String(store.counters.sale).padStart(6, "0");
-    store.sales.push({
-      id: genId(store), belgeNo: belgeNo, musteriId: c.id, personelId: null, not: "İADE — " + adet + " x " + p.ad, odemeAdi: "İade",
-      items: [{ urunId: p.id, ad: p.ad, barkod: p.barkod || "", kdv: Number(p.kdv) || 0, fiyat: fiyat, adet: -adet, iskyuzde: 0 }],
-      brut: -tutar, iskonto: 0, toplam: -tutar, maliyet: -maliyet, komisyon: 0,
-      odeme: { nakit: 0, pos: 0, acik: -tutar }, tarih: now.toISOString(), servisGun: localDateStr(now), hafta: haftaNo(now), stokKaynak: kaynak,
-    });
-    const pr = store.products.find((x) => x.id === p.id);
-    if (kaynak === "arac") pr.aracStok = (Number(pr.aracStok) || 0) + adet; else pr.stok = (Number(pr.stok) || 0) + adet;
-    store.iadeler = store.iadeler || [];
-    store.iadeler.push({ id: genId(store), urunId: p.id, ad: p.ad, adet: adet, tutar: tutar, musteriId: c.id, tarih: now.toISOString() });
+    /* Kayıt panelin "Ürün İadesi Al" ekranıyla ortak işlevden geçer (stkIadeKaydet) — iki yol aynı sonucu verir. */
+    const belgeNo = stkIadeKaydet(store, { musteriId: c.id, urunId: p.id, adet: adet, fiyat: fiyat, havuz: kaynak }, stkA()).sale.belgeNo;
     const y = await storeYaz(store, updatedAt);
     console.log("**KAYDEDİLDİ** — İade belgesi " + belgeNo + " · yedek: " + path.basename(y.yedek));
     return;
@@ -933,8 +1831,19 @@ function provaUyari(ornek) {
     if (!(yeni >= 0) || pos[3] == null) throw new Error("Fiyat gecersiz.");
     console.log(p.ad + "\n  " + alan + ": " + money(p[alan]) + "  ->  " + money(yeni) +
       "\n  (alış " + money(alan === "alis" ? yeni : p.alis) + " · satış " + money(alan === "satis" ? yeni : p.satis) + " · birim kâr " + money((alan === "satis" ? yeni : Number(p.satis)) - (alan === "alis" ? yeni : Number(p.alis))) + ")");
+    /* Kâr uyarısı: bu değişiklikten sonra ürünün ya da özel fiyatlı müşterilerin kârı eşiğin altına düşüyor mu? */
+    {
+      const esik = bayrak("esik") != null ? sayi(bayrak("esik")) : stkMarjEsik(store);
+      const sanal = alan === "alis" ? store : Object.assign({}, store, { products: store.products.map((x) => (x.id === p.id ? Object.assign({}, x, { satis: yeni }) : x)) });
+      const etki = stkMarjEtki(sanal, { [p.id]: alan === "alis" ? yeni : Number(p.alis) || 0 }, esik);
+      const metin = stkMarjMetin(alan === "alis" ? etki : etki.map((e) => Object.assign({}, e, { musteriler: [] })).filter((e) => e.dusuk), esik);
+      if (metin.length) console.log("\n" + metin.join("\n"));
+      const kardes = alan === "satis" ? aile(store, p).filter((x) => x.id !== p.id) : [];
+      if (kardes.length && yeni !== Number(p.satis)) console.log("\nℹ Bu ürün \"" + (p.altKategori || "").trim() + "\" ailesinden AYRILIR (kardeşleri " + money(p.satis) + " kalır: " + kardes.map((x) => x.ad).join(", ") + ").\n  Aileyi birlikte taşımak için: toplu-zam --urun=\"" + p.ad + "\" --yeni=" + yeni);
+    }
     if (!kaydet) { provaUyari('urun-fiyat "' + p.ad + '" ' + alan + " " + yeni); return; }
     const pr = store.products.find((x) => x.id === p.id);
+    stkFiyatGecmis(store, stkA(), { urunId: pr.id, ad: pr.ad, alan: alan, eski: pr[alan], yeni: yeni, kaynak: "urun-fiyat" });
     pr[alan] = String(yeni);
     pr[alan === "alis" ? "adetAlis" : "adetSatis"] = yeni;
     const y = await storeYaz(store, updatedAt);
