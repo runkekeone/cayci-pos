@@ -824,6 +824,7 @@ const IKON_YOLLAR = {
   etiket: 'M3 12V4h8l10 10-8 8zM7.5 8v.01',
   internetyok: 'M3 3l18 18M5 12.5a10 10 0 0 1 3-2.2M12 20v.01M8.5 16a5 5 0 0 1 7 0M16 10.3a10 10 0 0 1 3 2.2',
 };
+IKON_YOLLAR.mikrofon = "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3";   // genel: sesli sipariş düğmesi
 function ikon(ad, boy, kalinlik) {
   const d = IKON_YOLLAR[ad]; if (!d) return "";
   const b = boy || 20;
@@ -2257,9 +2258,9 @@ function ggOzetWire() {
     });
   });
 }
-/* "+%3691" rozeti yerine düz cümle. Dün hiç satış yoksa kıyas yok, bir şey yazılmaz. */
+/* "+%3691" rozeti yerine düz cümle. Dün ya da bugün hiç satış yoksa kıyas yok, bir şey yazılmaz. */
 function ggDunFarki(bugun, dun) {
-  if (!(dun > 0)) return "";
+  if (!(dun > 0) || !(bugun > 0)) return "";   // gün daha başlamadıysa "dünden az" demek anlamsız
   const f = kurus(bugun - dun);
   if (Math.abs(f) < 0.005) return "Dünle aynı";
   return "Dünden " + money.format(Math.abs(f)) + (f > 0 ? " fazla" : " az");
@@ -5927,7 +5928,7 @@ function ziyaretKartiHTML(id) {
       <button class="btn soft" data-zkwa="${id}" type="button">${ikon("paylas")} Son İrsaliyeyi Paylaş (görsel)</button>
       <button class="btn soft" data-zkekstre="${id}" type="button">${ikon("fis")} Hesap Özeti Çıkar</button>
       ${servis.aktif ? `<button class="btn primary lg" data-zktamam="${id}" type="button">${ikon("tik")} Ziyareti Tamamla → Sonraki</button>
-      <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Rotanın Sonuna</button></div>` : ""}
+      <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">${ikon("geri")} Rotanın Sonuna</button></div>` : ""}
     </div>
     </div>
   </div>`;
@@ -6147,7 +6148,7 @@ function servisSihirbaz(id) {
       <p class="sihir-soru">Doğru müşteriye mi geldin?</p>
       <div class="sihir-btn">
         <button class="btn green lg" data-sonay="${id}" type="button">${ikon("tik")} Evet — Devam</button>
-        <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">&#8630; Sona At</button></div>
+        <div class="zk-alt"><button class="btn soft sm" data-zkpas="${id}" type="button">${ikon("sag")} Pas Geç</button><button class="btn soft sm" data-zksona="${id}" type="button">${ikon("geri")} Sona At</button></div>
       </div>
     </div>`;
   }
@@ -6162,8 +6163,8 @@ function servisSihirbaz(id) {
       <div class="sip-bar">
         <input id="zkHizli" class="sip-in" placeholder="Sipariş yaz veya söyle: 7 soda 2 gazoz 5 su" />
         <div class="sip-btns">
-          <button class="btn soft" id="zkSes" type="button">&#127908; Sesli</button>
-          <button class="btn green" id="zkHizliBtn" type="button">&#10003; Doldur</button>
+          <button class="btn soft" id="zkSes" type="button">${ikon("mikrofon")} Sesli</button>
+          <button class="btn green" id="zkHizliBtn" type="button">${ikon("tik")} Doldur</button>
         </div>
       </div>
       <div class="pos-search" style="margin-bottom:8px"><input class="bar-input" id="prodSearch" placeholder="Ürün ara..." value="${esc(pos.q || "")}" /></div>
@@ -6219,7 +6220,7 @@ function renderServisAktif() {
   const fab = `<button class="servis-fab" id="servisOzetFab" type="button"><span>${ikon("liste")} ${o.adet} satış</span><b>${money.format(o.toplam)}</b></button>`;
   const govde = servis.acik
     ? servisSihirbaz(servis.acik)
-    : `<div class="card" style="text-align:center;padding:24px"><h2 style="margin:0 0 6px">Rota tamam </h2><p class="hint" style="margin-bottom:14px">${done} satış · ${pas} pas</p><button class="btn softred lg" data-act="servisbitir" type="button" style="width:100%;justify-content:center">${ikon("kapat")} Servisi Bitir → Gün Sonu Raporu</button></div>`;
+    : `<div class="card" style="text-align:center;padding:24px"><h2 style="margin:0 0 6px">Rota tamam </h2><p class="hint" style="margin-bottom:14px">${done} satış · ${pas} pas</p><button class="btn green lg" data-act="servisbitir" type="button" style="width:100%;justify-content:center">${ikon("tik")} Servisi Bitir → Gün Sonu Raporu</button></div>`;
   return pageHead(`${ikon("araba")} Servis`, done + "/" + total + " durak" + (pas ? " · " + pas + " pas" : "")) +
     `<div class="rota-tiles">
        <button class="rt rt-satis" data-act="ekstrasatis" type="button"><span class="rt-ic">${ikon("arti")}</span><span>+Satış</span></button>

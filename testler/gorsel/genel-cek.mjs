@@ -83,6 +83,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       await git("cay-ocagi"); await page.evaluate(() => cayOrderModal(store.gelenSiparisler[0])); await cek("h3-siparis-penceresi");
       await git("anasayfa"); await page.evaluate(() => openOdemeAl("m5")); await cek("h4-odeme-al");
       await git("anasayfa"); await page.evaluate(() => fisGonderModal(store.sales.find((x) => x.musteriId === "m5"))); await cek("h5-fis-gonder");
+      // rota: kayıtlı rota + servis adımları
+      await page.evaluate(() => { rotaKaydet("Pazartesi Rotası", ["m5", "m6", "m2"]); }); await git("rota"); await cek("j1-rota-kayitli", true);
+      await page.evaluate(() => rotaIncele(store.rotalar[0].id)); await cek("j2-rota-incele"); await page.evaluate(() => document.querySelectorAll(".modal-overlay").forEach((x) => x.remove()));
+      await page.evaluate(() => servisBaslat(["m5", "m6", "m2"])); await bekle(300); await cek("j3-servis-stok-kontrol", true);
+      await page.evaluate(() => { servis.stokBitti = true; servis.adim = "onay"; render(); }); await cek("j4-servis-onay", true);
+      await page.evaluate(() => { servis.adim = "urun"; render(); }); await cek("j5-servis-urun", true);
+      await page.evaluate(() => { servis.adim = "kapanis"; render(); }); await cek("j6-servis-kapanis", true);
+      await page.evaluate(() => { servis.edilen = servis.musteriIds.slice(); servis.acik = null; render(); }); await cek("j7-servis-bitti", true);
+      await page.evaluate(() => { servis.aktif = false; servisKaydet(); render(); });
       // çevrimdışı şeridi
       await git("anasayfa"); await page.evaluate(() => { _esDurum.cevrimdisi = true; _esDurum.hata = ""; esSeritCiz(); }); await cek("i1-cevrimdisi-seridi");
       await page.evaluate(() => { _esDurum.cevrimdisi = false; _esDurum.hata = "Buluta yazılamadı"; _esDurum.hataSayisi = 5; esSeritCiz(); }); await cek("i2-hata-seridi");

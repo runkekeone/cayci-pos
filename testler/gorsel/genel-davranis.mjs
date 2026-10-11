@@ -94,7 +94,7 @@ try {
   d.esit([o.gizli, o.acikMi], [true, "false"], "tekrar dokununca kapanıyor");
   const not = await page.evaluate(() => [...document.querySelectorAll(".gg-buyuk .gg-not")].map((e) => e.textContent));
   d.dogru(/^Dünden [\d.,]+ ₺ (fazla|az)$/.test(not[0]) && !/%/.test(not.join(" ")), "ciro altında düz cümle: '" + not[0] + "' (yüzde yok)");
-  d.esit(await page.evaluate(() => [ggDunFarki(5000, 800), ggDunFarki(800, 5000), ggDunFarki(100, 0), ggDunFarki(0, 0), ggDunFarki(250, 250)]), ["Dünden 4.200 ₺ fazla", "Dünden 4.200 ₺ az", "", "", "Dünle aynı"], "dün kıyası: fazla / az / dün satış yoksa hiçbir şey");
+  d.esit(await page.evaluate(() => [ggDunFarki(5000, 800), ggDunFarki(800, 5000), ggDunFarki(100, 0), ggDunFarki(0, 0), ggDunFarki(0, 900), ggDunFarki(250, 250)]), ["Dünden 4.200 ₺ fazla", "Dünden 4.200 ₺ az", "", "", "", "Dünle aynı"], "dün kıyası: fazla / az / dün ya da bugün satış yoksa hiçbir şey");
   d.dogru(await page.evaluate(() => !document.querySelector('#content .page-head [data-goto="rapor-gunluk"]') && !/Raporlar/.test(document.querySelector("#content .page-head").textContent)), "ana ekranda 'Raporlar' düğmesi yok");
   d.dogru(await page.evaluate(() => !!document.querySelector("#content .pv-kart")), "'Vadesi geçenler' kartı yerinde");
   const liste = await page.evaluate(() => [...document.querySelectorAll("#content .gg-liste")].map((u) => ({ n: u.children.length, enAz: Math.min(...[...u.querySelectorAll(".gg-satir")].map((b) => Math.round(b.getBoundingClientRect().height))), ok: [...u.querySelectorAll(".gg-satir")].every((b) => b.querySelector("svg.ikon") && b.querySelector(".gg-ad") && b.querySelector(".gg-sag")), kesik: [...u.querySelectorAll(".gg-ad")].some((a) => a.scrollWidth > a.clientWidth + 1) })));

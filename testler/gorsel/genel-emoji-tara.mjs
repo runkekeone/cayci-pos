@@ -18,7 +18,8 @@ src.forEach((satir, i) => {
   // yorumları ve alert/confirm/prompt/bildirim çağrılarının içini sayma
   let s = /^\s*(\/\/|\/\*|\*)/.test(satir) ? "" : satir.replace(/\/\*.*?\*\//g, "").replace(/\s\/\/ .*$/, "");
   s = s.replace(/\b(alert|confirm|prompt|esBildir|console\.\w+)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/g, "");
-  const bulunan = [...s.matchAll(EMOJI)].map((x) => x[0]).filter((e) => !SERBEST.has(e.replace("️", "")));
+  const bulunan = [...s.matchAll(EMOJI)].map((x) => x[0]).filter((e) => !SERBEST.has(e.replace("\ufe0f", "")));
+  bulunan.push(...[...s.matchAll(/&#(\d+);/g)].filter((x) => Number(x[1]) > 8000).map((x) => x[0]));   // emoji sayı kodu (&#127908; gibi)
   if (!bulunan.length) return;
   const bolge = SATIS.includes(fn) ? "satis" : LISTE.includes(fn) ? "liste" : METIN.includes(fn) ? "metin" : "genel";
   say[bolge] += bulunan.length; cikti.push(`${bolge}\t${i + 1}\t${fn}\t${bulunan.join(" ")}`);
