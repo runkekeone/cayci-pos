@@ -751,6 +751,74 @@ const MENU = [
   { ico: "💳", label: "Ödeme Tipleri", route: "odeme-tipleri" },
 ];
 
+/* ============ Çizgi ikonlar (emoji yerine) ============ */
+/* Tek renk (currentColor), 24'lük ızgara, dosya/istek yok: her telefonda aynı görünür.
+   Çay ocağı uygulamasındaki takımın (src/lib/Ikon.tsx) aynısı + panele özgü birkaç ek.
+   Kullanım: ikon("zil")  ·  ikon("sepet", 24)  ·  `<button>${ikon("arti")} Ekle</button>`  (yazıyla aynı renkte çizilir) */
+const IKON_YOLLAR = {
+  ev: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+  kamyon: 'M2 6h11v10H2zM13 9h4l4 4v3h-8zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  arti: 'M12 5v14M5 12h14',
+  hediye: 'M4 11h16v10H4zM2.5 7h19v4h-19zM12 7v14M12 7S10.5 3 8 3.5 7 7 12 7zM12 7s1.5-4 4-3.5S17 7 12 7z',
+  grafik: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  ara: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
+  kapat: 'M6 6l12 12M18 6 6 18',
+  kisi: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6',
+  kisiler: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5M16 4.2a3.5 3.5 0 0 1 0 6.6M18 14.8c2.4.6 4 2.3 4 5.2',
+  saat: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  dikkat: 'M12 3 2 20h20zM12 10v4M12 17.5v.01',
+  ay: 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z',
+  kalem: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+  fis: 'M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4',
+  goz: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  cop: 'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14',
+  geri: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
+  asagi: 'M6 9l6 6 6-6',
+  yukari: 'M6 15l6-6 6 6',
+  sag: 'M9 6l6 6-6 6',
+  sol: 'M15 6l-6 6 6 6',
+  kutu: 'M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9',
+  para: 'M2 6h20v12H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v.01M18 15v.01',
+  kart: 'M2 5h20v14H2zM2 10h20M6 15h4',
+  defter: 'M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12M9 7h6',
+  takvim: 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4',
+  ayar: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4',
+  cikis: 'M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3',
+  indir: 'M12 3v12M7 10l5 5 5-5M4 21h16',
+  yukle: 'M12 21V9M7 14l5-5 5 5M4 3h16',
+  paylas: 'M12 3v13M7 8l5-5 5 5M5 12v8h14v-8',
+  yazici: 'M6 9V3h12v6M6 18H3v-8h18v8h-3M6 14h12v7H6z',
+  tik: 'M4 12.5 9.5 18 20 6',
+  bol: 'M12 3v18M5 8h4M15 16h4M5 16h4M15 8h4',
+  gunes: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  telefon: 'M7 2h10v20H7zM11 18h2',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  dukkan: 'M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6',
+  izgara: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  duyuru: 'M3 10v4h3l5 4V6l-5 4H3zM15 9a3.5 3.5 0 0 1 0 6M18 6a7.5 7.5 0 0 1 0 12',
+  sepet: 'M3 4h2l2.2 11h10.6L20 7H6.2M9 20h.01M17 20h.01',
+  zil: 'M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
+  araba: 'M3 13l2-6h14l2 6v5h-2.5M3 13v5h2.5M3 13h18M7.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM9.5 18h5',
+  harita: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14',
+  konum: 'M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  banka: 'M3 10 12 4l9 6zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18',
+  tara: 'M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M11 9v6M14 9v6M17 9v6',
+  mesaj: 'M4 5h16v11H9l-5 4z',
+  liste: 'M8 6h12M8 12h12M8 18h12M4 6v.01M4 12v.01M4 18v.01',
+  ucnokta: 'M5 12v.01M12 12v.01M19 12v.01',
+  kilit: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  yenile: 'M20 11a8 8 0 1 0-2.3 6.3M20 5v6h-6',
+  bardak: 'M7 4h10l-1.5 15a2 2 0 0 1-2 1.8h-3a2 2 0 0 1-2-1.8zM7.6 10h8.8',
+  eksi: 'M5 12h14',
+  etiket: 'M3 12V4h8l10 10-8 8zM7.5 8v.01',
+  internetyok: 'M3 3l18 18M5 12.5a10 10 0 0 1 3-2.2M12 20v.01M8.5 16a5 5 0 0 1 7 0M16 10.3a10 10 0 0 1 3 2.2',
+};
+function ikon(ad, boy, kalinlik) {
+  const d = IKON_YOLLAR[ad]; if (!d) return "";
+  const b = boy || 20;
+  return `<svg class="ikon" width="${b}" height="${b}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${kalinlik || 1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${d}"/></svg>`;
+}
+
 /* ============ Ortak HTML yardımcıları ============ */
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function pageHead(title, sub, actions) {
