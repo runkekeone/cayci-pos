@@ -120,11 +120,69 @@ async function storeYaz(store, beklenenTs) {
   if (onceki.updatedAt !== beklenenTs) {
     throw new Error("CAKISMA: bulut bu arada degisti (" + onceki.updatedAt + "). Telefondaki panel yazmis olabilir. Yeniden oku ve tekrar dene. (Onceki hal yedeklendi: " + path.basename(yedek) + ")");
   }
-  const ts = new Date().toISOString();
+  // Günün ilk yazmasından ÖNCE buluttaki hâlin kopyası bulutta da dursun (panel de aynısını yapar; kim önce yazarsa).
+  // Alınamazsa satış bekletilmez; uyarı basılır, sonraki yazmada yine denenir.
+  try { await gunlukYedekSagla(onceki); }
+  catch (e) { console.error("UYARI: gunluk bulut yedegi alinamadi (" + String(e.message || e).slice(0, 120) + "). Yerel yedek var: " + path.basename(yedek)); }
+  // Zaman mutlaka ileri gitsin (panelin "değişmediyse yaz" koşulu da buna bakar; saat geri kalmış olabilir).
+  const ts = new Date(Math.max(Date.now(), (Date.parse(beklenenTs) || 0) + 1)).toISOString();
   const q = "kv?key=eq." + encodeURIComponent(BULUT_KEY) + "&updated_at=eq." + encodeURIComponent(beklenenTs);
   const out = await sb(q, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ value: store, updated_at: ts }) });
   if (!out || !out.length) throw new Error("CAKISMA: yazma sirasinda bulut degisti, hicbir sey yazilmadi. Tekrar dene.");
   return { ts: ts, yedek: yedek };
+}
+
+/* ---------- bulut yedekleri: babuco:yedek:<YYYY-AA-GG> (günlük) ve babuco:yedek:<gün>-<saat>-<etiket> ---------- */
+const YEDEK_ONEK = "babuco:yedek:";
+const YEDEK_GUN = 30;
+/** İstanbul saatine göre { gun, saat } — panel de aynı günü hesaplar (bulut oturumu UTC'de çalışsa bile). */
+function istGunSaat(d) {
+  const p = {};
+  new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    .formatToParts(d || new Date()).forEach((x) => { p[x.type] = x.value; });
+  return { gun: p.year + "-" + p.month + "-" + p.day, saat: (p.hour === "24" ? "00" : p.hour) + p.minute + p.second };
+}
+/** Yedek satırı: { ozet, store }. Aynı anahtar varsa DOKUNMAZ (günün ilk yedeği korunur). */
+async function bulutYedekYaz(key, store, ek) {
+  const say = (k) => (Array.isArray(store[k]) ? store[k].length : 0);
+  const ozet = Object.assign({ satis: say("sales"), musteri: say("customers"), tahsilat: say("payments"), urun: say("products"), alindi: new Date().toISOString(), kim: "arac" }, ek || {});
+  await sb("kv?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({ key: key, value: { ozet: ozet, store: store }, updated_at: new Date().toISOString() }) });
+}
+async function gunlukYedekSagla(onceki) {
+  const key = YEDEK_ONEK + istGunSaat().gun;
+  const var_ = await sb("kv?key=eq." + encodeURIComponent(key) + "&select=key");
+  if (var_ && var_.length) return false;
+  await bulutYedekYaz(key, onceki.store, { tur: "gunluk", kaynakTs: onceki.updatedAt });
+  await yedekBudama();
+  return true;
+}
+/** Tarihi YEDEK_GUN günden eski bulut yedeklerini siler. */
+async function yedekBudama() {
+  const rows = await sb("kv?key=like." + encodeURIComponent(YEDEK_ONEK + "*") + "&select=key");
+  const sinir = istGunSaat(new Date(Date.now() - YEDEK_GUN * 86400000)).gun;
+  const eski = (rows || []).map((r) => r.key).filter((k) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(k.slice(YEDEK_ONEK.length)); return m && m[1] <= sinir; });
+  for (const k of eski) await sb("kv?key=eq." + encodeURIComponent(k), { method: "DELETE" });
+  return eski.length;
+}
+/** İki store arasında koleksiyon koleksiyon: kaç kayıt silinir / geri gelir / değişir (geri yükleme provası). */
+function storeFarki(simdi, hedef) {
+  const sirali = (v) => (v && typeof v === "object")
+    ? (Array.isArray(v) ? "[" + v.map(sirali).join(",") + "]" : "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + sirali(v[k])).join(",") + "}")
+    : JSON.stringify(v === undefined ? null : v);
+  const out = [];
+  const adlar = Array.from(new Set(Object.keys(simdi).concat(Object.keys(hedef)))).sort();
+  adlar.forEach((ad) => {
+    const a = Array.isArray(simdi[ad]) ? simdi[ad] : null, b = Array.isArray(hedef[ad]) ? hedef[ad] : null;
+    if (!a && !b) return;
+    const harita = (d) => { const m = new Map(); (d || []).forEach((x, i) => m.set(x && x.id != null ? "i:" + x.id : "c:" + i + ":" + sirali(x), x)); return m; };
+    const ma = harita(a), mb = harita(b);
+    let sil = 0, ek = 0, deg = 0;
+    ma.forEach((v, k) => { if (!mb.has(k)) sil++; else if (sirali(v) !== sirali(mb.get(k))) deg++; });
+    mb.forEach((v, k) => { if (!ma.has(k)) ek++; });
+    if (sil || ek || deg) out.push({ ad: ad, simdi: (a || []).length, hedef: (b || []).length, sil: sil, ek: ek, deg: deg });
+  });
+  return out;
 }
 
 /* ---------- eşleştirme ---------- */
@@ -737,6 +795,79 @@ function provaUyari(ornek) {
     store.payments = store.payments.filter((p) => String(p.not || "").indexOf("Belge " + belge) === -1);
     const y = await storeYaz(store, updatedAt);
     console.log("\nSILINDI · yedek: " + path.basename(y.yedek));
+    return;
+  }
+
+  /* ---------- yedekler: buluttaki yedeklerin listesi ---------- */
+  if (komut === "yedekler") {
+    const rows = await sb("kv?key=like." + encodeURIComponent(YEDEK_ONEK + "*") + "&select=key,updated_at,ozet:value->ozet&order=key.desc");
+    if (!rows || !rows.length) { console.log("Bulutta yedek yok. Ilk yedek, gunun ilk yazmasiyla birlikte kendiliginden alinir."); return; }
+    console.log("# Bulut yedekleri (son " + YEDEK_GUN + " gun tutulur)", "");
+    console.log("| Yedek | Alındı | Satış | Müşteri | Tahsilat | Ürün | Tür |");
+    console.log("|---|---|---:|---:|---:|---:|---|");
+    rows.forEach((r) => {
+      const o = r.ozet || {};
+      console.log("| " + r.key.slice(YEDEK_ONEK.length) + " | " + new Date(o.alindi || r.updated_at).toLocaleString("tr-TR") + " | " +
+        (o.satis == null ? "?" : o.satis) + " | " + (o.musteri == null ? "?" : o.musteri) + " | " + (o.tahsilat == null ? "?" : o.tahsilat) + " | " + (o.urun == null ? "?" : o.urun) + " | " + (o.tur || "") + (o.kim ? " (" + o.kim + ")" : "") + " |");
+    });
+    console.log("", "_Gunluk yedek (yalniz tarih) = o gun ilk kayit girilmeden onceki hal. Donmek icin: node babuco.js geri-yukle <yedek>_");
+    let yerel = 0; try { yerel = fs.readdirSync(YEDEK_DIR).filter((f) => /\.json$/.test(f)).length; } catch (e) {}
+    console.log("Bu bilgisayardaki yerel yedek dosyasi: " + yerel + " (" + YEDEK_DIR + ")");
+    return;
+  }
+
+  /* ---------- yedek-al: buluttaki su anki hali yerel dosyaya indir ---------- */
+  if (komut === "yedek-al") {
+    let dosya = pos[1];
+    if (!dosya) { fs.mkdirSync(YEDEK_DIR, { recursive: true }); dosya = path.join(YEDEK_DIR, "elle-" + istGunSaat().gun + "-" + istGunSaat().saat + ".json"); }
+    fs.writeFileSync(dosya, JSON.stringify(store));
+    console.log("Yedek indirildi: " + path.resolve(dosya));
+    console.log("Bulut hali: " + new Date(updatedAt).toLocaleString("tr-TR") + " · Satis " + store.sales.length + " · Musteri " + store.customers.length + " · Tahsilat " + store.payments.length + " · Urun " + store.products.length);
+    console.log("Geri yuklemek icin: node babuco.js geri-yukle \"" + dosya + "\"");
+    return;
+  }
+
+  /* ---------- geri-yukle: bulut yedegine (tarih) ya da yerel dosyaya don ---------- */
+  if (komut === "geri-yukle") {
+    const kaynak = pos[1];
+    if (!kaynak) throw new Error("Hangi yedek? Ornek: geri-yukle 2026-10-11  ya da  geri-yukle tools/yedek/dosya.json  (liste: yedekler)");
+    let hedef, ad;
+    if (fs.existsSync(kaynak) && fs.statSync(kaynak).isFile()) {
+      hedef = JSON.parse(fs.readFileSync(kaynak, "utf8")); ad = "dosya " + path.basename(kaynak);
+    } else {
+      const key = kaynak.indexOf(YEDEK_ONEK) === 0 ? kaynak : YEDEK_ONEK + kaynak;
+      const rows = await sb("kv?key=eq." + encodeURIComponent(key) + "&select=value");
+      if (!rows || !rows.length) throw new Error("Yedek bulunamadi: " + key + " (liste icin: yedekler)");
+      hedef = rows[0].value; ad = "bulut yedegi " + key.slice(YEDEK_ONEK.length);
+    }
+    if (hedef && hedef.store && Array.isArray(hedef.store.products)) hedef = hedef.store;
+    if (!hedef || !Array.isArray(hedef.products) || !Array.isArray(hedef.sales) || !Array.isArray(hedef.customers)) throw new Error("Bu bir babuco yedegi degil (products/sales/customers yok).");
+    const AD = { sales: "Satış", payments: "Tahsilat", customers: "Müşteri", products: "Ürün", expenses: "Gider", incomes: "Gelir", purchases: "Alış" };
+    const fark = storeFarki(store, hedef);
+    const alacak = (s) => kurus(s.customers.reduce((a, c) => a + Math.max(0, customerBorc(s, c.id)), 0));
+    console.log("# GERİ YÜKLEME — " + ad, "");
+    console.log("Buluttaki şimdiki hâl (" + new Date(updatedAt).toLocaleString("tr-TR") + ") TÜMÜYLE bu yedekle değiştirilecek.", "");
+    if (!fark.length) console.log("Kayıtlarda fark yok (şimdiki hâl ile yedek aynı).");
+    else {
+      console.log("| Kayıt | Şimdi | Yedekte | Silinecek | Geri gelecek | Değişecek |");
+      console.log("|---|---:|---:|---:|---:|---:|");
+      fark.forEach((f) => console.log("| " + (AD[f.ad] || f.ad) + " | " + f.simdi + " | " + f.hedef + " | " + f.sil + " | " + f.ek + " | " + f.deg + " |"));
+    }
+    console.log("", "Sahadaki alacak: " + money(alacak(store)) + " → " + money(alacak(hedef)));
+    const sonS = (s) => { const x = s.sales[s.sales.length - 1]; return x ? x.belgeNo + " · " + new Date(x.tarih).toLocaleString("tr-TR") : "(yok)"; };
+    console.log("Son satış: " + sonS(store) + " → " + sonS(hedef));
+    if (!kaydet) { provaUyari("geri-yukle " + kaynak); return; }
+    // Önce şimdiki hâlin bulut yedeği (alınamazsa hiçbir şey yazılmaz), sonra compare-and-swap ile yaz.
+    const z = istGunSaat();
+    const onceKey = YEDEK_ONEK + z.gun + "-" + z.saat + "-geri-yukleme-oncesi";
+    await bulutYedekYaz(onceKey, store, { tur: "geri-yukleme-oncesi", kaynakTs: updatedAt });
+    // Panellerin yama sayaçları (esitleme) geri gitmesin: iki hâlin en büyüğü.
+    const es = Object.assign({}, hedef.esitleme || {});
+    Object.keys(store.esitleme || {}).forEach((c) => { es[c] = Math.max(Number(es[c]) || 0, Number(store.esitleme[c]) || 0); });
+    if (Object.keys(es).length) hedef.esitleme = es;
+    const y = await storeYaz(hedef, updatedAt);
+    console.log("\nGERİ YÜKLENDİ · önceki hâlin bulut yedeği: " + onceKey.slice(YEDEK_ONEK.length) + " · yerel yedek: " + path.basename(y.yedek));
+    console.log("Vazgeçmek için: node babuco.js geri-yukle " + onceKey.slice(YEDEK_ONEK.length) + " --kaydet");
     return;
   }
 

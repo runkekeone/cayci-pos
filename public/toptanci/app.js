@@ -56,7 +56,7 @@ function seedStore(st) {
   }
   return st;
 }
-function saveStore() { localStorage.setItem(STORE_KEY, JSON.stringify(store)); bulutaYaz(); }
+function saveStore() { yerelKaydet(); bulutaYaz(); }
 function genId() { store.counters.seq = (store.counters.seq || 0) + 1; return "id" + store.counters.seq + Date.now().toString(36); }
 // ISO hafta numarası: "2026-H31"
 function haftaNo(d) {
@@ -261,15 +261,13 @@ function openCsvImport(onText) { openFileImport(".csv,text/csv", onText); }
 
 /* Tam yedek — JSON dışa/içe */
 function exportBackup() { downloadFile("babuco-yedek-" + todayStr() + ".json", JSON.stringify(store), "application/json"); }
+/* Dosyadan geri yükleme: önce buluttaki şimdiki hâlin yedeği alınır, sonra güvenli yazma yolundan
+   (bulut bu arada değiştiyse yazmaz) geçer — ayrıntı: yedektenYukle(). */
 function importBackup(text) {
   let data; try { data = JSON.parse(text); } catch (e) { alert("Geçersiz yedek dosyası."); return; }
+  if (data && data.store && Array.isArray(data.store.products)) data = data.store;   // buluttan indirilmiş yedek biçimi
   if (!data || !Array.isArray(data.products)) { alert("Bu bir babu.co yedeği değil."); return; }
-  if (!confirm("Mevcut TÜM veri bu yedekle DEĞİŞTİRİLECEK. Devam edilsin mi?")) return;
-  const base = emptyStore();
-  for (const k in base) if (data[k] === undefined) data[k] = base[k];
-  data.settings = Object.assign(base.settings, data.settings || {});
-  data.counters = Object.assign(base.counters, data.counters || {});
-  store = data; saveStore(); alert("Yedek geri yüklendi ✔"); navigate("anasayfa");
+  return yedektenYukle(data, "dosya-oncesi", "Seçtiğin dosya");
 }
 function headerIndex(head, names) { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; }
 
@@ -2325,24 +2323,390 @@ async function cayDurumBulut(o) {
   catch (e) { /* sessiz */ }
 }
 
-/* ---- Bulut yedek: tüm store'u Supabase kv tablosuna yedekle (çevrimdışı çalışır, gelince senkron) ---- */
-/* Çay ocağı uygulamasıyla aynı kv tablosu; farklı anahtar (babuco:store). Son-yazan-kazanır. */
-const BULUT_KEY = "babuco:store";
-let _bulutHazir = false;      // ilk çekme bitene kadar buluta YAZMA (boş store gerçek yedeği ezmesin)
-let _yazZamanlayici = null;
+/* ---- Bulut eşitleme: tüm store Supabase kv tablosunda tek satır (babuco:store) ---- */
+/* Çay ocağı uygulamasıyla aynı kv tablosu; farklı anahtar. Aynı satırı terminal aracı (tools/babuco.cjs)
+   ve başka telefonlar da yazar. Bu yüzden panel ASLA körlemesine üstüne yazmaz:
+     1. Bu cihazda yapılıp buluta henüz gitmemiş değişiklikler "yama" olarak tutulur (günlük, localStorage).
+     2. Yazmadan önce buluttaki güncel hâl okunur, yamalar onun ÜSTÜNE uygulanır (üç yönlü birleştirme).
+     3. Sonuç "bulut hâlâ okuduğum hâldeyse yaz" koşuluyla gönderilir (updated_at eşitse). Koşul tutmazsa
+        hiçbir şey yazılmamıştır: yeniden okunur, yeniden birleştirilir.
+     4. Her yama numaralıdır; buluttaki kayıt "bu cihazın kaçıncı yamasına kadar işlendi" bilgisini
+        (store.esitleme[cihaz]) taşır. Yazma ulaşıp yanıtı kaybolsa bile aynı yama iki kez uygulanmaz
+        (stok iki kez düşmez). */
 
-async function kvGet(key) {
-  if (!SB) return null;
-  try {
-    const { data, error } = await SB.from("kv").select("value, updated_at").eq("key", key).maybeSingle();
-    if (error || !data) return null;
-    return { value: data.value, updatedAt: data.updated_at };
-  } catch (e) { return null; }
+/* <esitleme-saf> ---------------------------------------------------------------------------------
+   SAF BİRLEŞTİRME ÇEKİRDEĞİ — tarayıcıya, store'a, buluta dokunmaz; girdilerini değiştirmez
+   (esYerinde hariç: o bilerek hedefini yerinde günceller). testler/senkron/birim.mjs bu iki işaret
+   arasını Node'da ayrıca çalıştırıp sınar; buraya dış bağımlılık EKLEME.
+
+   Fikir:  yerel = taban + yama   →   buluta yazılacak hâl = bulut + yama.
+   Yama kuralları (esFark çıkarır, esUygula uygular):
+     · id'li kayıt dizileri id'ye göre: yerelde eklenen eklenir, silinen silinir, değişen kayıtta yalnız
+       yerelin değiştirdiği alanlar yerelden gelir (diğer alanlar buluttaki hâliyle kalır).
+     · Sayaç alanları (stok, aracStok) FARK olarak: bulut + (yerel − taban). İki taraf da satış
+       yaptıysa ikisinin düşümü de kalır.
+     · counters / esitleme: anahtar anahtar en büyük değer.  · settings ve diğer düz nesneler: anahtar anahtar.
+     · En üst düzeydeki id'siz diziler içeriğe göre (ekle/çıkar); kayıt içindeki id'siz diziler bütün olarak.
+     · Emin olunamayan yerde SİLMEK yerine TUTULUR: bulutta bu arada değişmiş kaydı yerel silme silmez;
+       bulutta silinmiş kaydı yerelin gerçek (stok dışı) değişikliği geri getirir. */
+const ES_SAYAC = { stok: 1, aracStok: 1 };            // fark olarak birleşen alan adları
+const ES_ENBUYUK = { counters: 1, esitleme: 1 };       // en üst düzeyde "en büyük kazanır" nesneleri
+const ES_TEKIL = { gelenSiparisler: "orderId", groups: "ad" };   // aynı şeyi iki cihaz ayrı id ile ekleyebilir → tek kayıt
+
+function esDuz(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+function esYok(v) { return v === undefined || v === null; }
+function esBos(v) { return (Array.isArray(v) && v.length === 0) || (esDuz(v) && Object.keys(v).length === 0); }
+function esKlon(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+function esSayi(v) { return (typeof v === "number" && isFinite(v)) || (typeof v === "string" && v.trim() !== "" && isFinite(Number(v))); }
+function esYuvarla(n) { return Math.round(n * 1e6) / 1e6; }
+function esIdVar(x) { return esDuz(x) && (typeof x.id === "string" || typeof x.id === "number") && x.id !== ""; }
+function esIdli(d) { return d.every(esIdVar); }
+/** Derin eşitlik. Anahtar SIRASI önemsizdir (Postgres jsonb anahtarları yeniden sıralar); undefined alan = yok. */
+function esEsit(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  const ad = Array.isArray(a);
+  if (ad !== Array.isArray(b)) return false;
+  if (ad) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!esEsit(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a).filter((k) => a[k] !== undefined);
+  let nb = 0;
+  for (const k in b) if (Object.prototype.hasOwnProperty.call(b, k) && b[k] !== undefined) nb++;
+  if (ka.length !== nb) return false;
+  for (const k of ka) { if (b[k] === undefined || !esEsit(a[k], b[k])) return false; }
+  return true;
 }
+/** Anahtarları sıralı, kararlı JSON metni (özet ve içerik anahtarı için). */
+function esKanonik(v) {
+  if (v === null || typeof v !== "object") { const s = JSON.stringify(v); return s === undefined ? "null" : s; }
+  if (Array.isArray(v)) return "[" + v.map(esKanonik).join(",") + "]";
+  return "{" + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + esKanonik(v[k])).join(",") + "}";
+}
+function esOzet(s) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+/** Dizi öğelerinin kimlikleri: id varsa "i:<id>", yoksa "c:<içerik>"; aynısı tekrar ederse "#2", "#3"… */
+function esAnahtarlar(d) {
+  const say = new Map();
+  return d.map((x) => {
+    const ham = esIdVar(x) ? "i:" + x.id : "c:" + esKanonik(x);
+    const n = (say.get(ham) || 0) + 1; say.set(ham, n);
+    return n === 1 ? ham : ham + "#" + n;
+  });
+}
+function esSayacsiz(k) { const o = {}; Object.keys(k).forEach((a) => { if (!ES_SAYAC[a]) o[a] = k[a]; }); return o; }
+/** Kaydın "bu arada değişmiş mi" karşılaştırması için özeti (stok gibi sayaçlar hariç). */
+function esKayitOzeti(k) { return esOzet(esKanonik(esDuz(k) ? esSayacsiz(k) : k)); }
+
+/** taban → yerel farkı (yama). Fark yoksa null. ad: bu değerin anahtarı, ust: bir üstünün anahtarı, derin: kökten uzaklık. */
+function esFark(t, y, ad, ust, derin) {
+  derin = derin || 0;
+  if (y === undefined) return null;
+  if (esEsit(t, y)) return null;
+  if (esYok(t) && esBos(y)) return null;            // tembel oluşturulan boş koleksiyon değişiklik sayılmaz
+  if (Array.isArray(y)) {
+    const tb = Array.isArray(t) ? t : (esYok(t) ? [] : null);
+    if (tb && (derin === 1 || (esIdli(y) && esIdli(tb)))) return esDiziFark(tb, y, ad, derin);
+    return { t: "=", v: esKlon(y) };
+  }
+  if (esDuz(y)) {
+    const tb = esDuz(t) ? t : (esYok(t) ? {} : null);
+    if (!tb) return { t: "=", v: esKlon(y) };
+    const a = {}, s = [];
+    Object.keys(y).forEach((k) => { if (y[k] === undefined) return; const f = esFark(tb[k], y[k], k, ad, derin + 1); if (f) a[k] = f; });
+    Object.keys(tb).forEach((k) => { if (y[k] === undefined && tb[k] !== undefined) s.push(k); });
+    return (Object.keys(a).length || s.length) ? { t: "n", a, s } : null;
+  }
+  if (derin === 2 && ES_ENBUYUK[ust] && typeof y === "number") return { t: "m", v: y };
+  if (ES_SAYAC[ad] && esSayi(y) && (esYok(t) || t === "" || esSayi(t))) return { t: "+", d: esYuvarla(Number(y) - (Number(t) || 0)), v: Number(y) };
+  return { t: "=", v: y };
+}
+function esDiziFark(tb, y, ad, derin) {
+  const tk = esAnahtarlar(tb), yk = esAnahtarlar(y), tMap = new Map(), yVar = new Set(yk);
+  tk.forEach((k, i) => tMap.set(k, tb[i]));
+  const ek = [], sil = {}, deg = {};
+  yk.forEach((k, i) => {
+    if (!tMap.has(k)) { ek.push(esKlon(y[i])); return; }
+    if (k[0] !== "i") return;                        // içerik anahtarlı öğe: aynı içerik = değişmemiş
+    const f = esFark(tMap.get(k), y[i], null, ad, derin + 1);
+    if (f) deg[k] = { f, tam: esKlon(y[i]) };        // tam: bulutta silinmişse geri getirebilmek için
+  });
+  tk.forEach((k, i) => { if (!yVar.has(k)) sil[k] = k[0] === "i" ? esKayitOzeti(tb[i]) : 1; });
+  return (ek.length || Object.keys(sil).length || Object.keys(deg).length) ? { t: "d", ek, sil, deg } : null;
+}
+/** Yamada sayaç (stok) dışında gerçek bir değişiklik var mı? */
+function esGercek(f) {
+  if (!f || f.t === "+") return false;
+  if (f.t !== "n") return true;
+  return f.s.length > 0 || Object.keys(f.a).some((k) => esGercek(f.a[k]));
+}
+/** Yamayı h üstüne uygular; h'yi değiştirmez, yeni değeri döndürür. bag: { esleme, notlar } */
+function esUygula(h, f, ad, derin, bag) {
+  if (!f) return h;
+  if (f.t === "=") return esKlon(f.v);
+  if (f.t === "+") return esYuvarla((Number(h) || 0) + f.d);
+  if (f.t === "m") return (typeof h === "number" && h > f.v) ? h : f.v;
+  if (f.t === "n") {
+    const o = esDuz(h) ? Object.assign({}, h) : {};
+    Object.keys(f.a).forEach((k) => { o[k] = esUygula(o[k], f.a[k], k, derin + 1, bag); });
+    f.s.forEach((k) => { delete o[k]; });
+    return o;
+  }
+  if (f.t === "d") return esDiziUygula(Array.isArray(h) ? h : [], f, ad, derin, bag);
+  return h;
+}
+function esDiziUygula(h, f, ad, derin, bag) {
+  const dizi = h.slice(), konum = new Map(), cikar = new Set();
+  esAnahtarlar(dizi).forEach((k, i) => konum.set(k, i));
+  const esleme = (derin === 1 && bag.esleme[ad]) || {};        // önceki yamalarda bulut kaydıyla eşlenen yerel id'ler
+  Object.keys(f.sil).forEach((k0) => {
+    const k = esleme[k0] || k0, i = konum.get(k);
+    if (i === undefined) return;                                // bulutta zaten yok
+    if (k === k0 && k[0] === "i" && esKayitOzeti(dizi[i]) !== f.sil[k0]) {   // bulutta bu arada değişmiş → silme, tut
+      bag.notlar.push({ tur: "silinmedi", kol: ad, id: dizi[i].id });
+      return;
+    }
+    cikar.add(i);
+  });
+  Object.keys(f.deg).forEach((k0) => {
+    const k = esleme[k0] || k0, d = f.deg[k0], i = konum.get(k);
+    if (i !== undefined) { dizi[i] = esUygula(dizi[i], d.f, null, derin + 1, bag); return; }
+    if (esGercek(d.f)) {                                        // bulutta silinmiş ama yerelde gerçekten değiştirilmiş → tut
+      konum.set(k, dizi.length); dizi.push(esKlon(d.tam));
+      bag.notlar.push({ tur: "geri-geldi", kol: ad, id: d.tam && d.tam.id });
+    }
+  });
+  const tekil = derin === 1 ? ES_TEKIL[ad] : null;
+  f.ek.forEach((kayit) => {
+    const k = esIdVar(kayit) ? "i:" + kayit.id : "c:" + esKanonik(kayit);
+    const i = konum.get(k);
+    if (i !== undefined && !cikar.has(i)) {                     // iki tarafta da aynı kimlikle var
+      if (k[0] === "i") {
+        const o = Object.assign({}, dizi[i], esKlon(kayit));
+        Object.keys(ES_SAYAC).forEach((s) => { if (dizi[i][s] !== undefined) o[s] = dizi[i][s]; });
+        dizi[i] = o;
+      }
+      return;
+    }
+    if (tekil && k[0] === "i" && !esYok(kayit[tekil]) && kayit[tekil] !== "") {
+      const j = dizi.findIndex((x, n) => !cikar.has(n) && esDuz(x) && x[tekil] === kayit[tekil]);
+      if (j >= 0) {                                             // aynı şey bulutta başka id ile var → buluttaki kalır
+        if (esIdVar(dizi[j])) { bag.esleme[ad] = bag.esleme[ad] || {}; bag.esleme[ad][k] = "i:" + dizi[j].id; }
+        return;
+      }
+    }
+    konum.set(k, dizi.length); dizi.push(esKlon(kayit));
+  });
+  return cikar.size ? dizi.filter((x, i) => !cikar.has(i)) : dizi;
+}
+/** Yerelde açılan satışın belge numarası bulutta başka bir satışta kullanılmışsa yereldekine yeni numara
+    verir; aynı yamadaki tahsilat notlarında geçen "Belge <eski>" atıflarını da düzeltir. Yamayı değiştirmez. */
+function esBelgeNoDuzelt(m, yama, bag) {
+  const sf = yama && yama.t === "n" && yama.a.sales && yama.a.sales.t === "d" ? yama.a.sales : null;
+  if (!sf || !sf.ek.length) return yama;
+  const mevcut = new Map();
+  (Array.isArray(m && m.sales) ? m.sales : []).forEach((s) => { if (esDuz(s) && s.belgeNo) mevcut.set(String(s.belgeNo), s.id); });
+  const carpisir = (s) => esDuz(s) && s.belgeNo && mevcut.has(String(s.belgeNo)) && mevcut.get(String(s.belgeNo)) !== s.id;
+  if (!sf.ek.some(carpisir)) return yama;
+  const y = esKlon(yama);
+  let enBuyuk = Number(m && m.counters && m.counters.sale) || 0;
+  const ys = y.a.counters && y.a.counters.t === "n" ? y.a.counters.a.sale : null;
+  if (ys && typeof ys.v === "number") enBuyuk = Math.max(enBuyuk, ys.v);
+  const tum = new Set(mevcut.keys());
+  y.a.sales.ek.forEach((s) => { if (esDuz(s) && s.belgeNo) tum.add(String(s.belgeNo)); });
+  y.a.sales.ek.forEach((s) => {
+    if (!carpisir(s)) return;
+    const eski = String(s.belgeNo), mt = /^(.*?)(\d+)$/.exec(eski);
+    if (!mt) return;                                            // tanımadığımız biçim: dokunma
+    tum.forEach((b) => { if (b.indexOf(mt[1]) === 0 && /^\d+$/.test(b.slice(mt[1].length))) enBuyuk = Math.max(enBuyuk, Number(b.slice(mt[1].length))); });
+    let n = enBuyuk, yeni;
+    do { n++; yeni = mt[1] + String(n).padStart(mt[2].length, "0"); } while (tum.has(yeni));
+    enBuyuk = n; tum.add(yeni); s.belgeNo = yeni;
+    const re = new RegExp("Belge " + eski.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?!\\d)", "g");
+    if (y.a.payments && y.a.payments.t === "d") y.a.payments.ek.forEach((p) => { if (esDuz(p) && typeof p.not === "string") p.not = p.not.replace(re, "Belge " + yeni); });
+    bag.notlar.push({ tur: "belgeNo", eski, yeni, id: s.id });
+  });
+  if (!y.a.counters || y.a.counters.t !== "n") y.a.counters = { t: "n", a: {}, s: [] };
+  y.a.counters.a.sale = { t: "m", v: enBuyuk };
+  return y;
+}
+/** Buluttaki hâlin üstüne bekleyen yamaları sırayla uygular → { store, notlar }. */
+function esBirlestir(bulut, yamalar) {
+  const bag = { esleme: {}, notlar: [] };
+  let m = esDuz(bulut) ? bulut : {};
+  (yamalar || []).forEach((y) => { if (y) m = esUygula(m, esBelgeNoDuzelt(m, y, bag), null, 0, bag); });
+  return { store: m, notlar: bag.notlar };
+}
+/** Klasik üç yönlü birleştirme: taban (son ortak hâl), yerel, bulut → birleşmiş store. */
+function ucYonluBirlestir(taban, yerel, bulut) { return esBirlestir(bulut, [esFark(taban, yerel, null, null, 0)]).store; }
+/** Taban yokken (eski sürümden geçiş): yalnız "yerelde olup bulutta olmayan kayıtları ekle" yaması. Hiçbir şey silmez. */
+function esTabansizFark(yerel, bulut) {
+  const a = {};
+  Object.keys(yerel || {}).forEach((k) => {
+    const y = yerel[k];
+    if (!Array.isArray(y) || !y.length) return;
+    const varOlan = new Set(esAnahtarlar(Array.isArray(bulut && bulut[k]) ? bulut[k] : []));
+    const ek = [];
+    esAnahtarlar(y).forEach((an, i) => { if (an[0] === "i" && !varOlan.has(an)) ek.push(esKlon(y[i])); });
+    if (ek.length) a[k] = { t: "d", ek, sil: {}, deg: {} };
+  });
+  return Object.keys(a).length ? { t: "n", a, s: [] } : null;
+}
+/** h'yi k'ya eşitler ama nesneleri YERİNDE günceller: açık bir pencerenin elinde tuttuğu müşteri/ürün
+    nesnesi geçerli kalır (store toptan değiştirilseydi o nesneye yazılan değişiklik boşa giderdi). */
+function esYerinde(h, k) {
+  if (Array.isArray(k)) {
+    if (!Array.isArray(h)) return esKlon(k);
+    if (esIdli(k) && esIdli(h)) {
+      const eski = new Map();
+      h.forEach((x) => { if (!eski.has(x.id)) eski.set(x.id, x); });
+      const yeni = k.map((x) => { const e = eski.get(x.id); if (e) { eski.delete(x.id); return esYerinde(e, x); } return esKlon(x); });
+      h.length = 0; for (let i = 0; i < yeni.length; i++) h.push(yeni[i]);
+      return h;
+    }
+    if (esEsit(h, k)) return h;
+    const kopya = esKlon(k); h.length = 0; for (let i = 0; i < kopya.length; i++) h.push(kopya[i]);
+    return h;
+  }
+  if (esDuz(k)) {
+    if (!esDuz(h)) return esKlon(k);
+    Object.keys(h).forEach((a) => { if (k[a] === undefined) delete h[a]; });
+    Object.keys(k).forEach((a) => { if (k[a] !== undefined) h[a] = esYerinde(h[a], k[a]); });
+    return h;
+  }
+  return k;
+}
+/** İki store arasındaki kayıt farkının sayımı (geri yükleme onayında "ne değişecek" demek için). */
+function esKarsilastir(simdi, hedef) {
+  const kol = {}; let toplam = 0;
+  const adlar = new Set(Object.keys(simdi || {}).concat(Object.keys(hedef || {})));
+  adlar.forEach((ad) => {
+    const a = simdi && simdi[ad], b = hedef && hedef[ad];
+    if (!Array.isArray(a) && !Array.isArray(b)) return;
+    const da = Array.isArray(a) ? a : [], db = Array.isArray(b) ? b : [];
+    const ma = new Map(), mb = new Map();
+    esAnahtarlar(da).forEach((k, i) => ma.set(k, da[i]));
+    esAnahtarlar(db).forEach((k, i) => mb.set(k, db[i]));
+    let sil = 0, ek = 0, deg = 0;
+    ma.forEach((v, k) => { if (!mb.has(k)) sil++; else if (!esEsit(v, mb.get(k))) deg++; });
+    mb.forEach((v, k) => { if (!ma.has(k)) ek++; });
+    if (sil || ek || deg) { kol[ad] = { sil, ek, deg }; toplam += sil + ek + deg; }
+  });
+  const ayar = !esEsit((simdi && simdi.settings) || {}, (hedef && hedef.settings) || {});
+  return { kol, toplam, ayar };
+}
+/* </esitleme-saf> */
+
+const BULUT_KEY = "babuco:store";
+const ES_GUNLUK_KEY = BULUT_KEY + ":gunluk";   // localStorage: bu cihazın buluta henüz gitmemiş yamaları
+const ES_CIHAZ_KEY = "babuco:cihaz";           // localStorage: bu cihazın kimliği (store.esitleme anahtarı)
+const YEDEK_ONEK = "babuco:yedek:";            // bulut: günlük yedek = babuco:yedek:<YYYY-AA-GG>
+const YEDEK_GUN = 30;                          // bu kadar gün tutulur
+let _bulutHazir = false;      // buluttan ilk çekme başarıyla bitti mi
+let _yazZamanlayici = null;
+let _esKapi = false;          // giriş kapısı geçildi mi (geçilmeden buluta dokunulmaz)
+let _esCalisiyor = null;      // süren eşitleme (aynı anda yalnız bir tane)
+let _esTekrar = false;        // eşitleme sürerken yeni yazma istendi
+let _esIlk = true;            // bu oturumda bulut kaydı henüz tam okunmadı
+let _esCizBekliyor = false;   // ekranı yenileme ertelendi (kullanıcı yazıyor / pencere açık)
+const _esDurum = { cevrimdisi: false, hata: "", hataSayisi: 0, sonraki: 0, depoDolu: false, yedekHata: "" };
+let _esCihaz = esCihazKimligi();
+let _esGunluk = esGunlukOku();
+let _esTaban = esKlon(store); // açık yamanın ölçüldüğü hâl (son eşitlenen hâl ya da açılıştaki hâl)
+
+function esCihazKimligi(yenile) {
+  const uret = () => "c" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  try {
+    let c = yenile ? "" : localStorage.getItem(ES_CIHAZ_KEY);
+    if (!c) { c = uret(); localStorage.setItem(ES_CIHAZ_KEY, c); }
+    return c;
+  } catch (e) { return uret(); }
+}
+/** Günlük: { n: son yama no, y: [{k, f}] gönderilmeyi bekleyen dondurulmuş yamalar, acik: son eşitlemeden
+    beri bu oturumda biriken yama, tabanTs: son eşitlenen bulut zamanı, ilkBekleyen, sonBasari, gecis } */
+function esGunlukOku() {
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(ES_GUNLUK_KEY) || "null"); } catch (e) { g = null; }
+  if (!g || typeof g !== "object" || !Array.isArray(g.y)) g = { v: 1, n: 0, y: [], acik: null, tabanTs: "", ilkBekleyen: 0, sonBasari: 0, gecis: true };
+  g.n = Number(g.n) || 0;
+  // Önceki oturumun açık yaması o oturumun tabanına göreydi; taban artık yok → numaralayıp dondur.
+  if (g.acik) { g.n += 1; g.y.push({ k: g.n, f: g.acik }); g.acik = null; }
+  return g;
+}
+function esGunlukYaz() {
+  try { localStorage.setItem(ES_GUNLUK_KEY, JSON.stringify(_esGunluk)); return true; } catch (e) { return false; }
+}
+function esBekleyenVar() { return !!(_esGunluk.acik || _esGunluk.y.length); }
+/** Çalışan store'u telefona yazar. Sıra önemli: önce küçük günlük (bekleyen değişiklik kaybolmasın),
+    sonra store. Telefonun hafızası dolarsa store bellekte çalışmaya ve buluta gitmeye devam eder. */
+function yerelKaydet() {
+  let metin = null;
+  try { metin = JSON.stringify(store); } catch (e) { console.error("store metne çevrilemedi", e); return; }
+  try {
+    _esGunluk.acik = esFark(_esTaban, JSON.parse(metin), null, null, 0);
+    if (esBekleyenVar() && !_esGunluk.ilkBekleyen) _esGunluk.ilkBekleyen = Date.now();
+  } catch (e) { console.error("eşitleme farkı çıkarılamadı", e); }
+  let tamam = esGunlukYaz();
+  try { localStorage.setItem(STORE_KEY, metin); } catch (e) { tamam = false; }
+  _esDurum.depoDolu = !tamam;
+  esSeritCiz();
+}
+
+/* ---- kv tablosu: düşük düzey ---- */
+function esAgHatasi(h) { return /fetch|network|abort|load failed|timeout|internet|bulut-yok/i.test(String(h || "")); }
+/** Supabase sorgusunu zaman aşımıyla çalıştırır → { data, hata }. Asla fırlatmaz. */
+async function kvSor(kur, ms) {
+  if (!SB) return { data: null, hata: "bulut-yok" };
+  const ac = typeof AbortController === "function" ? new AbortController() : null;
+  const t = setTimeout(() => { if (ac) ac.abort(); }, ms || 25000);
+  try {
+    let q = kur(SB.from("kv"));
+    if (ac && q && typeof q.abortSignal === "function") q = q.abortSignal(ac.signal);
+    const { data, error } = await q;
+    if (error) return { data: null, hata: String(error.message || error.code || "hata"), kod: error.code || "" };
+    return { data, hata: "" };
+  } catch (e) { return { data: null, hata: String((e && e.message) || e || "hata") }; }
+  finally { clearTimeout(t); }
+}
+/** Okuma. "kayıt yok" ile "okunamadı" AYRI sonuçlardır: { durum: "var" | "yok" | "hata" }.
+    (Eskiden ikisi de null dönüyor, ağ hatası "bulut boş" sanılıp eldeki store buluta itiliyordu.) */
+async function kvOku(key, sutun, ms) {
+  const r = await kvSor((t) => t.select(sutun || "value, updated_at").eq("key", key).limit(1), ms);
+  if (r.hata) return { durum: "hata", hata: r.hata };
+  if (!r.data || !r.data.length) return { durum: "yok" };
+  return { durum: "var", value: r.data[0].value, updatedAt: r.data[0].updated_at };
+}
+/** Koşullu yazma: yalnız bulut hâlâ beklenenTs'deyse yazar → "tamam" | "cakisma" (hiçbir şey yazılmadı) | "hata". */
+async function kvKosulluYaz(key, value, ts, beklenenTs) {
+  const r = await kvSor((t) => t.update({ value, updated_at: ts }).eq("key", key).eq("updated_at", beklenenTs).select("updated_at"), 60000);
+  if (r.hata) return { durum: "hata", hata: r.hata };
+  if (!r.data || !r.data.length) return { durum: "cakisma" };
+  return { durum: "tamam", updatedAt: r.data[0].updated_at };
+}
+/** Yalnız kayıt YOKSA oluşturur (var olanın üstüne asla yazmaz). */
+async function kvEkle(key, value, ts) {
+  const r = await kvSor((t) => t.insert({ key, value, updated_at: ts }).select("updated_at"), 60000);
+  if (r.hata) return /duplicate|23505|409/i.test(r.hata + " " + (r.kod || "")) ? { durum: "cakisma" } : { durum: "hata", hata: r.hata };
+  return { durum: "tamam", updatedAt: r.data && r.data[0] ? r.data[0].updated_at : ts };
+}
+/** Diğer anahtarlar (puan, duyuru…) için eski sade okuma: yoksa da okunamazsa da null. */
+async function kvGet(key) {
+  const r = await kvOku(key);
+  return r.durum === "var" ? { value: r.value, updatedAt: r.updatedAt } : null;
+}
+/** Diğer anahtarlar için sade yazma. Ana kayıt (babuco:store) buradan körlemesine YAZILMAZ; güvenli yola gider. */
 async function kvSet(key, value, updatedAt) {
   if (!SB) return false;
-  try { const { error } = await SB.from("kv").upsert({ key, value, updated_at: updatedAt }); return !error; }
-  catch (e) { return false; }
+  if (key === BULUT_KEY) return bulutaYaz(true);
+  const r = await kvSor((t) => t.upsert({ key, value, updated_at: updatedAt }));
+  return !r.hata;
 }
 
 /** Müşteri sipariş ekranında yalnız ön ödeme kuralı okunur; müşteri/cari verisi paylaşılmaz. */
@@ -2379,41 +2743,386 @@ function bulutStoreBirlestir(parsed) {
   return parsed;
 }
 
-/** Store değişince buluta yaz (1sn debounce). Yedek hazır olmadan yazmaz. */
-function bulutaYaz() {
-  if (!SB || !_bulutHazir) return;
-  clearTimeout(_yazZamanlayici);
-  _yazZamanlayici = setTimeout(() => {
-    const ts = new Date().toISOString();
-    localStorage.setItem(BULUT_KEY + ":ts", ts);
-    kvSet(BULUT_KEY, store, ts);
-  }, 1000);
+/** Store değişince buluta gönder (1 sn bekleyip toplu). hemen=true: beklemeden.
+    Değişiklik zaten günlükte (telefonda) durduğu için bu çağrı kaçsa bile kayıt kaybolmaz. */
+function bulutaYaz(hemen) {
+  if (!SB) return hemen ? Promise.resolve(false) : undefined;
+  clearTimeout(_yazZamanlayici); _yazZamanlayici = null;
+  if (hemen) return esitle();
+  _yazZamanlayici = setTimeout(() => { _yazZamanlayici = null; esitle(); }, 1000);
 }
+/** Uygulama arka plana alınırken / kapanırken: bekleyen varsa 1 sn'yi beklemeden dene.
+    Yetişmezse sorun değil — günlük telefonda; bir sonraki açılışta birleştirilerek gider. */
+function esHemenGonder() { if (esBekleyenVar()) bulutaYaz(true); }
+function bulutHydrate() { return esitle(); }
 
-/** Açılışta: buluttan çek. Bulut daha yeniyse benimse; yerel daha yeniyse buluta it. */
-async function bulutHydrate() {
-  if (!SB) { _bulutHazir = true; kategoriGocKontrol(); return; }
-  const localTs = localStorage.getItem(BULUT_KEY + ":ts") || "";
-  const cloud = await kvGet(BULUT_KEY);
-  if (cloud && cloud.value && (!localTs || cloud.updatedAt > localTs)) {
-    store = bulutStoreBirlestir(cloud.value);
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    localStorage.setItem(BULUT_KEY + ":ts", cloud.updatedAt);
-    render();
-  } else if (!cloud || (localTs && localTs > cloud.updatedAt)) {
-    const ts = localTs || new Date().toISOString();
-    localStorage.setItem(BULUT_KEY + ":ts", ts);
-    kvSet(BULUT_KEY, store, ts);
-  }
+function esSonrakiZaman(onceki) {   // buluttaki zamandan mutlaka ileri (aracın "değişmediyse yaz" koşulu buna dayanır)
+  return new Date(Math.max(Date.now(), (Date.parse(onceki) || 0) + 1)).toISOString();
+}
+function esHata(h) {
+  _esDurum.hata = String(h || "hata");
+  _esDurum.cevrimdisi = (typeof navigator !== "undefined" && navigator.onLine === false) || esAgHatasi(h);
+  _esDurum.hataSayisi += 1;
+  // İnternet var ama sunucu kabul etmiyorsa aralığı aç (8 sn → en çok 5 dk); internet yoksa yoklama zaten bekletir.
+  _esDurum.sonraki = _esDurum.cevrimdisi ? 0 : Date.now() + Math.min(300000, 4000 * Math.pow(2, Math.min(_esDurum.hataSayisi, 7)));
+  return false;
+}
+function esTamam() { _esDurum.hata = ""; _esDurum.cevrimdisi = false; _esDurum.hataSayisi = 0; _esDurum.sonraki = 0; }
+function esIlkHazir() {
+  if (_bulutHazir) return;
   _bulutHazir = true;
-  kategoriGocKontrol();
+  try { kategoriGocKontrol(); } catch (e) { console.error(e); }
+}
+function esYazildi() { try { window.dispatchEvent(new CustomEvent("babuco:bulut-yazildi")); } catch (e) {} }
+
+/** Eşitle: buluttaki hâli oku, bekleyen yerel değişiklikleri üstüne uygula, koşullu yaz, sonucu ekrana al.
+    Aynı anda tek eşitleme çalışır. Döner: Promise<boolean> (true = telefon ile bulut aynı hâlde). */
+function esitle() {
+  if (!SB || !_esKapi) return Promise.resolve(false);
+  if (_esCalisiyor) { _esTekrar = true; return _esCalisiyor; }
+  const p = esitleIc()
+    .catch((e) => { console.error("eşitleme hatası", e); return esHata("ic: " + ((e && e.message) || e)); })
+    .then((sonuc) => {
+      if (_esCalisiyor === p) _esCalisiyor = null;
+      esSeritCiz();
+      if (_esTekrar) { _esTekrar = false; if (esBekleyenVar()) bulutaYaz(); }
+      return sonuc;
+    });
+  _esCalisiyor = p;
+  return p;
+}
+async function esitleIc() {
+  const g = _esGunluk;
+  for (let deneme = 0; deneme < 5; deneme++) {
+    // Gönderilecek bir şey yoksa koca kaydı indirmeden önce yalnız zamanına bak.
+    if (!_esIlk && !esBekleyenVar()) {
+      const z = await kvOku(BULUT_KEY, "updated_at", 12000);
+      if (z.durum === "hata") return esHata(z.hata);
+      if (z.durum === "var" && z.updatedAt === g.tabanTs && !esBekleyenVar()) { esTamam(); return true; }
+    }
+    const b = await kvOku(BULUT_KEY);
+    if (b.durum === "hata") return esHata(b.hata);       // OKUNAMADI ≠ BOŞ: buluta hiçbir şey itilmez
+
+    /* --- buradan bir sonraki await'e kadar tek solukta: yerel hâl tutarlı bir anda dondurulur --- */
+    const yerel = esKlon(store);
+    const acik = esFark(_esTaban, yerel, null, null, 0);
+
+    if (b.durum === "yok") {
+      // Bulutta gerçekten kayıt yok. Yalnız tohum katalog varsa itme; gerçek veri/değişiklik varsa OLUŞTUR
+      // (insert: bu arada başkası oluşturduysa üstüne yazmaz, çakışma sayılır).
+      const gercekVeri = (yerel.customers || []).length || (yerel.sales || []).length || (yerel.payments || []).length;
+      if (!acik && !g.y.length && !gercekVeri) { _esIlk = false; esTamam(); esIlkHazir(); return true; }
+      if (acik) { g.n += 1; g.y.push({ k: g.n, f: acik }); g.acik = null; }
+      _esTaban = yerel; esGunlukYaz();
+      const ilk = esKlon(yerel);
+      ilk.esitleme = Object.assign({}, ilk.esitleme, { [_esCihaz]: g.n });
+      const tsIlk = esSonrakiZaman("");
+      const ri = await kvEkle(BULUT_KEY, ilk, tsIlk);
+      if (ri.durum === "cakisma") continue;
+      if (ri.durum === "hata") return esHata(ri.hata);
+      g.y = []; g.gecis = false;
+      esBenimse(ilk, ri.updatedAt || tsIlk);
+      esTamam(); esIlkHazir(); esYazildi();
+      return true;
+    }
+    if (!esDuz(b.value) || !Array.isArray(b.value.products)) return esHata("bulut-bozuk");   // tanımadığımız içerik: ne al ne ez
+
+    // Bulut bu cihaz için bizim bildiğimizden ileri bir yama numarası söylüyorsa günlük kaybolmuş ya da
+    // kimlik başka cihazla paylaşılıyor demektir: bekleyenleri "işlenmiş" sanmamak için yeni kimlik al.
+    let islenen = Number((b.value.esitleme || {})[_esCihaz]) || 0;
+    if (islenen > g.n) { _esCihaz = esCihazKimligi(true); g.y.forEach((x, i) => { x.k = i + 1; }); g.n = g.y.length; islenen = 0; }
+    g.y = g.y.filter((x) => x.k > islenen);              // yazması ulaşmış ama yanıtı kaybolmuş yamalar: tekrar uygulanmaz
+
+    if (g.gecis) {
+      // Eski panel sürümünden ilk geçiş: taban yok. Eski sürüm "yerelim buluttan yeni" diyorsa (gönderemediği
+      // kayıt kalmış olabilir) yerelde olup bulutta olmayan kayıtları ekle; hiçbir şeyi silme/ezme.
+      g.gecis = false;
+      let eskiTs = ""; try { eskiTs = localStorage.getItem(BULUT_KEY + ":ts") || ""; } catch (e) {}
+      if (eskiTs && Date.parse(eskiTs) > Date.parse(b.updatedAt)) {
+        const tf = esTabansizFark(yerel, b.value);
+        if (tf) { g.n += 1; g.y.push({ k: g.n, f: tf }); }
+      }
+    }
+    if (!acik && !g.y.length) {                          // gönderilecek bir şey yok → buluttaki hâli al
+      esBenimse(b.value, b.updatedAt);
+      esTamam(); esIlkHazir();
+      return true;
+    }
+    if (acik) { g.n += 1; g.y.push({ k: g.n, f: acik }); g.acik = null; }
+    _esTaban = yerel;
+    esGunlukYaz();
+    const br = esBirlestir(b.value, g.y.map((x) => x.f));
+    const m = br.store;
+    m.esitleme = Object.assign({}, m.esitleme, { [_esCihaz]: g.n });
+    const sonK = g.n;
+    /* --- tek soluk bitti --- */
+
+    await gunlukYedekSagla(b);                           // günün ilk yazmasından ÖNCE buluttaki hâlin kopyası
+    const ts = esSonrakiZaman(b.updatedAt);
+    const r = await kvKosulluYaz(BULUT_KEY, m, ts, b.updatedAt);
+    if (r.durum === "hata") return esHata(r.hata);       // ulaştı mı bilinmez: yamalar günlükte, numaralı; sonra bakılır
+    if (r.durum === "cakisma") {                         // araya başkası yazdı: hiçbir şey yazılmadı → baştan
+      await new Promise((c) => setTimeout(c, 120 + Math.random() * 380));
+      continue;
+    }
+    g.y = g.y.filter((x) => x.k > sonK);
+    esBenimse(m, r.updatedAt || ts, br.notlar);
+    esTamam(); esIlkHazir(); esYazildi();
+    return true;
+  }
+  return esHata("cakisma");
+}
+/** Eşitlenen hâli (m) telefona al. Eşitleme sürerken yapılan yeni yerel değişiklikler m'nin üstüne
+    yeniden uygulanır (kaybolmaz, bir sonraki turda gider). */
+function esBenimse(m, ts, notlar) {
+  const g = _esGunluk;
+  const simdi = esKlon(store);
+  const acik = esFark(_esTaban, simdi, null, null, 0);
+  const taban = bulutStoreBirlestir(esKlon(m));
+  const hedef = acik ? bulutStoreBirlestir(esBirlestir(taban, [acik]).store) : esKlon(taban);
+  // Ekranların tembel oluşturduğu boş koleksiyonlar (store.x = store.x || []) yerinde kalsın.
+  Object.keys(store).forEach((k) => { if (hedef[k] === undefined && esBos(store[k])) { hedef[k] = esKlon(store[k]); taban[k] = esKlon(store[k]); } });
+  const degisti = !esEsit(simdi, hedef);
+  if (degisti) esYerinde(store, hedef);
+  _esTaban = taban;
+  g.acik = acik ? esFark(taban, hedef, null, null, 0) : null;
+  g.tabanTs = ts || "";
+  g.sonBasari = Date.now();
+  if (!esBekleyenVar()) g.ilkBekleyen = 0;
+  _esIlk = false;
+  // Sıra önemli (yerelKaydet'in tersi): önce store, sonra günlük. Arada kesilirse günlükteki eski yamalar
+  // bulutta "işlendi" göründüğü için atılır; tersi olsaydı telefon eski hâlde kalıp fark edilmezdi.
+  let tamam = true;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { tamam = false; }
+  tamam = esGunlukYaz() && tamam;
+  _esDurum.depoDolu = !tamam;
+  if (degisti) esEkranYenile();
+  (notlar || []).forEach((n) => { if (n.tur === "belgeNo") esBildir("Fiş numarası değişti: " + n.eski + " → " + n.yeni + ". Aynı numara başka bir cihazda da kullanılmıştı."); });
+  if (g.acik) bulutaYaz();
+}
+/** Bulut yeni hâl getirdiğinde ekranı yenile; kullanıcı yazarken, pencere açıkken ya da sepet doluyken
+    bekle (veri yerinde güncellendi, yalnız görüntü gecikir) — internetKontrol sonra tekrar dener. */
+function esEkranYenile() {
+  try {
+    const a = document.activeElement;
+    const yaziyor = !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+    let sepetDolu = false;
+    try { sepetDolu = currentRoute() === "satis" && pos.carts[pos.active].items.length > 0; } catch (e) {}
+    if (yaziyor || sepetDolu || document.querySelector(".modal-overlay") || document.body.classList.contains("sheet-open")) { _esCizBekliyor = true; return; }
+    _esCizBekliyor = false;
+    const y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+  } catch (e) { console.error(e); }
+}
+function esBildir(metin) {
+  try {
+    const el = document.createElement("div");
+    el.className = "es-bildirim"; el.setAttribute("role", "status"); el.textContent = metin;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 9000);
+  } catch (e) {}
 }
 
-/* ---- İnternet kapısı: bağlantı yoksa tüm paneli kapatan tam ekran örtü ---- */
+/* ---- Yedek: günde bir otomatik + istenince; son 30 gün ---- */
+/** İstanbul saatine göre { gun: "YYYY-AA-GG", saat: "SSDDss" } — panel de araç da aynı günü hesaplasın diye. */
+function esGunSaat(d) {
+  d = d || new Date();
+  try {
+    const p = {};
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(d).forEach((x) => { p[x.type] = x.value; });
+    return { gun: p.year + "-" + p.month + "-" + p.day, saat: (p.hour === "24" ? "00" : p.hour) + p.minute + p.second };
+  } catch (e) { return { gun: localDateStr(d), saat: pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) }; }
+}
+function esYedekAnahtari(etiket) {
+  const z = esGunSaat();
+  const ek = String(etiket || "elle").toLocaleLowerCase("tr-TR").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "elle";
+  return YEDEK_ONEK + z.gun + "-" + z.saat + "-" + ek;
+}
+/** Yedek satırı yazar: { ozet, store }. Aynı anahtar varsa DOKUNMAZ (günün ilk yedeği korunur). */
+async function yedekYaz(key, deger, ek) {
+  const s = esDuz(deger) ? deger : {};
+  const say = (k) => (Array.isArray(s[k]) ? s[k].length : 0);
+  const ozet = Object.assign({ satis: say("sales"), musteri: say("customers"), tahsilat: say("payments"), urun: say("products"), alindi: new Date().toISOString(), kim: "panel" }, ek || {});
+  const r = await kvSor((t) => t.upsert({ key, value: { ozet, store: deger }, updated_at: new Date().toISOString() }, { onConflict: "key", ignoreDuplicates: true }), 60000);
+  return !r.hata;
+}
+/** Bugünün yedeği bulutta yoksa, verilen (yazmadan önceki) bulut hâlini yedek olarak koyar.
+    Yedek alınamazsa yazma ENGELLENMEZ (satışlar bekletilmez) ama Yedekleme ekranında görünür ve sonraki yazmada yine denenir. */
+async function gunlukYedekSagla(b) {
+  const gun = esGunSaat().gun;
+  try { if (localStorage.getItem(YEDEK_ONEK + "son") === gun) return true; } catch (e) {}
+  const key = YEDEK_ONEK + gun;
+  const v = await kvOku(key, "key", 15000);
+  if (v.durum === "hata") { _esDurum.yedekHata = v.hata; return false; }
+  if (v.durum === "yok") {
+    if (!(await yedekYaz(key, b.value, { tur: "gunluk", kaynakTs: b.updatedAt }))) { _esDurum.yedekHata = "yedek yazılamadı"; return false; }
+    yedekBudama();                                         // beklemeden: eski yedekleri temizle
+  }
+  _esDurum.yedekHata = "";
+  try { localStorage.setItem(YEDEK_ONEK + "son", gun); } catch (e) {}
+  return true;
+}
+/** Tarihi YEDEK_GUN günden eski yedekleri siler. */
+async function yedekBudama() {
+  const r = await kvSor((t) => t.select("key").like("key", YEDEK_ONEK + "%").limit(1000), 20000);
+  if (r.hata || !r.data) return 0;
+  const sinir = esGunSaat(new Date(Date.now() - YEDEK_GUN * 86400000)).gun;
+  const eski = r.data.map((x) => x.key).filter((k) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(k).slice(YEDEK_ONEK.length)); return m && m[1] <= sinir; });
+  for (const k of eski) await kvSor((t) => t.delete().eq("key", k), 15000);
+  return eski.length;
+}
+/** Buluttaki O ANKİ hâlin kopyasını ayrı bir yedek olarak alır (ör. "silme-oncesi"). Başarıda true.
+    Telefonda bekleyen kayıt varsa önce onları göndermeyi dener ki yedekte onlar da olsun. */
+async function yedekAl(etiket) {
+  if (!SB) return false;
+  try {
+    while (_esCalisiyor) await _esCalisiyor;
+    if (_esKapi && esBekleyenVar()) await esitle();
+    const b = await kvOku(BULUT_KEY);
+    if (b.durum === "hata") return false;
+    return await yedekYaz(esYedekAnahtari(etiket), b.durum === "var" ? b.value : esKlon(store), { tur: String(etiket || "elle"), kaynakTs: b.updatedAt || "" });
+  } catch (e) { console.error(e); return false; }
+}
+/** Telefonda bekleyen her şeyi gönder ve buluttaki son hâli al. true = telefon ile bulut şu an aynı. */
+async function esHepsiniGonder() {
+  if (!SB || !_esKapi) return false;
+  for (let i = 0; i < 3; i++) {
+    while (_esCalisiyor) await _esCalisiyor;
+    _esDurum.sonraki = 0;
+    const ok = await esitle();
+    if (ok && !esBekleyenVar()) return true;
+    if (!ok && _esDurum.cevrimdisi) return false;
+  }
+  return false;
+}
+/** Buluttaki kaydı TÜMÜYLE verilen store ile değiştirir (geri yükleme). Önce şimdiki hâlin yedeğini alır;
+    yedek alınamazsa ya da bulut beklenenTs'den beri değiştiyse HİÇBİR ŞEY yazmaz. → { tamam, mesaj } */
+async function esTamDegistir(yeni, etiket, beklenenTs) {
+  while (_esCalisiyor) await _esCalisiyor;
+  let birak; const kilit = new Promise((c) => { birak = c; });
+  _esCalisiyor = kilit;
+  try {
+    const b = await kvOku(BULUT_KEY);
+    if (b.durum === "hata") return { tamam: false, mesaj: "İnternete ulaşılamadı. Hiçbir şey değiştirilmedi." };
+    if (b.durum === "var" && beklenenTs && b.updatedAt !== beklenenTs) return { tamam: false, mesaj: "Bu sırada başka bir cihazdan kayıt girildi. Hiçbir şey değiştirilmedi; lütfen tekrar dene." };
+    if (b.durum === "var" && !(await yedekYaz(esYedekAnahtari(etiket), b.value, { tur: String(etiket || "elle"), kaynakTs: b.updatedAt }))) {
+      return { tamam: false, mesaj: "Şimdiki hâlin yedeği alınamadı. Hiçbir şey değiştirilmedi." };
+    }
+    const m = bulutStoreBirlestir(esKlon(yeni));
+    const es = Object.assign({}, m.esitleme);              // cihazların yama sayaçları geri gitmesin
+    const bes = (b.durum === "var" && esDuz(b.value) && b.value.esitleme) || {};
+    Object.keys(bes).forEach((c) => { es[c] = Math.max(Number(es[c]) || 0, Number(bes[c]) || 0); });
+    m.esitleme = es;
+    const ts = esSonrakiZaman(b.durum === "var" ? b.updatedAt : "");
+    const r = b.durum === "var" ? await kvKosulluYaz(BULUT_KEY, m, ts, b.updatedAt) : await kvEkle(BULUT_KEY, m, ts);
+    if (r.durum === "cakisma") return { tamam: false, mesaj: "Bu sırada başka bir cihazdan kayıt girildi. Hiçbir şey değiştirilmedi; lütfen tekrar dene." };
+    if (r.durum !== "tamam") return { tamam: false, mesaj: "Gönderilemedi. İnternet bağlantını kontrol edip tekrar dene." };
+    _esGunluk.y = []; _esGunluk.acik = null; _esTaban = esKlon(store);   // her şey yeni hâlle değişiyor: bekleyen yok
+    esBenimse(m, r.updatedAt || ts);
+    esTamam(); esYazildi();
+    return { tamam: true, mesaj: "" };
+  } catch (e) {
+    console.error(e);
+    return { tamam: false, mesaj: "Beklenmeyen bir hata oldu. Hiçbir şey değiştirilmedi." };
+  } finally {
+    if (_esCalisiyor === kilit) _esCalisiyor = null;
+    birak(false);
+  }
+}
+const ES_KOL_ADI = { sales: "satış", payments: "tahsilat", customers: "müşteri", products: "ürün", expenses: "gider", incomes: "gelir", purchases: "alış", firmalar: "firma", iadeler: "iade" };
+function esFarkMetni(fark) {
+  const satir = (alan, baslik) => {
+    const p = []; let diger = 0;
+    Object.keys(fark.kol).forEach((k) => { const n = fark.kol[k][alan]; if (!n) return; if (ES_KOL_ADI[k]) p.push(n + " " + ES_KOL_ADI[k]); else diger += n; });
+    if (diger) p.push(diger + " diğer kayıt");
+    return p.length ? baslik + ": " + p.join(", ") : "";
+  };
+  const s = [satir("sil", "Silinecek (şimdi var, yedekte yok)"), satir("ek", "Geri gelecek (şimdi yok, yedekte var)"), satir("deg", "Yedekteki hâline dönecek"), fark.ayar ? "Ayarlar yedekteki hâline dönecek." : ""].filter(Boolean);
+  return s.length ? s.join("\n") : "Şimdiki kayıtlarla bu yedek arasında fark yok.";
+}
+/** Bir yedeği (buluttan ya da dosyadan) geri yükler: fark söylenir, onay alınır, şimdiki hâl yedeklenir, güvenli yazılır. */
+async function yedektenYukle(hedefHam, etiket, ad) {
+  const hedef = bulutStoreBirlestir(esKlon(hedefHam));
+  if (!SB) {                                               // bulutsuz kurulum: yalnız bu cihaz
+    if (!confirm("Mevcut TÜM veri bu yedekle DEĞİŞTİRİLECEK. Devam edilsin mi?")) return false;
+    esYerinde(store, hedef); saveStore(); alert("Yedek geri yüklendi ✔"); navigate("anasayfa"); render();
+    return true;
+  }
+  if (!(await esHepsiniGonder())) { alert("İnternete ulaşılamadı.\n\nGeri yükleme için internet gerekir. Hiçbir şey değiştirilmedi."); return false; }
+  const fark = esKarsilastir(store, hedef);
+  if (!confirm(ad + " geri yüklenecek.\n\n" + esFarkMetni(fark) + "\n\nÖnce şimdiki hâlin yedeği alınır; istersen ona geri dönebilirsin.\n\nDevam edilsin mi?")) return false;
+  const r = await esTamDegistir(hedef, etiket, _esGunluk.tabanTs);
+  if (!r.tamam) { alert(r.mesaj); return false; }
+  alert("Geri yüklendi ✔");
+  navigate("anasayfa"); render();
+  return true;
+}
+/* Yedekleme sekmesi (Profil) */
+const ES_ETIKET_ADI = { "geri-donus-oncesi": "Geri dönmeden önceki hâl", "dosya-oncesi": "Dosyadan yüklemeden önceki hâl", "silme-oncesi": "Silmeden önceki hâl", "geri-yukleme-oncesi": "Geri yüklemeden önceki hâl", elle: "Elle alınan yedek" };
+function esYedekCoz(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:-(\d{2})(\d{2})(\d{2}))?(?:-(.+))?$/.exec(String(key).slice(YEDEK_ONEK.length));
+  if (!m) return null;
+  const tarih = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  const gunAdi = tarih.toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" });
+  if (!m[4] && !m[7]) return { key, gunluk: true, baslik: gunAdi, alt: "Gün başlarken" };
+  return { key, gunluk: false, baslik: gunAdi + (m[4] ? " · " + m[4] + ":" + m[5] : ""), alt: ES_ETIKET_ADI[m[7]] || (m[7] || "").replace(/-/g, " ") };
+}
+async function yedekListeGetir() {
+  const r = await kvSor((t) => t.select("key, updated_at, ozet:value->ozet").like("key", YEDEK_ONEK + "%").order("key", { ascending: false }).limit(200), 20000);
+  if (r.hata) return null;
+  return (r.data || []).map((x) => { const c = esYedekCoz(x.key); return c ? Object.assign(c, { ozet: x.ozet || {} }) : null; }).filter(Boolean);
+}
+function yedekDurumHTML() {
+  const g = _esGunluk;
+  const son = g.sonBasari ? fmtDate(new Date(g.sonBasari).toISOString()) : "henüz yok";
+  const bek = esBekleyenVar() ? `<b class="yd-uyari">${esc(esBekleyenMetni())} gönderilmeyi bekliyor</b>` : "Bekleyen kayıt yok ✔";
+  return `<div><span>İnternete son gönderim</span><b>${esc(son)}</b></div><div><span>Telefonda bekleyen</span>${bek}</div>` +
+    (_esDurum.yedekHata ? `<div><span>Günlük yedek</span><b class="yd-uyari">Bugünkü yedek alınamadı; sonraki kayıtta yine denenecek.</b></div>` : "");
+}
+async function yedekSekmeKur() {
+  const kutu = document.getElementById("yedekListe"), durum = document.getElementById("yedekDurum");
+  if (!kutu) return;
+  if (durum) durum.innerHTML = yedekDurumHTML();
+  const simdi = document.getElementById("yedekSimdiBtn");
+  if (simdi && !simdi._bagli) {
+    simdi._bagli = true;
+    simdi.addEventListener("click", async () => {
+      simdi.disabled = true; simdi.textContent = "Yedek alınıyor…";
+      const ok = await yedekAl("elle");
+      alert(ok ? "Yedek alındı ✔" : "Yedek alınamadı. İnternet bağlantını kontrol edip tekrar dene.");
+      if (document.body.contains(simdi)) { simdi.disabled = false; simdi.textContent = "Şimdi yedek al"; yedekSekmeKur(); }
+    });
+  }
+  if (!SB) { kutu.innerHTML = `<p class="hint">Bulut bağlantısı yok; yalnız dosyaya yedek alınabilir.</p>`; return; }
+  kutu.innerHTML = `<p class="hint">Yedekler getiriliyor…</p>`;
+  const liste = await yedekListeGetir();
+  if (!document.body.contains(kutu)) return;
+  if (!liste) { kutu.innerHTML = `<p class="hint">Yedek listesi alınamadı. İnternet gelince bu sayfayı yeniden aç.</p>`; return; }
+  if (!liste.length) { kutu.innerHTML = `<p class="hint">Henüz yedek yok. İlk yedek, bir sonraki kayıtla birlikte kendiliğinden alınır.</p>`; return; }
+  kutu.innerHTML = liste.map((y, i) => `<div class="yedek-satir">
+      <div class="ys-bilgi"><b>${esc(y.baslik)}</b><small>${esc(y.alt)} · ${Number(y.ozet.satis) || 0} satış · ${Number(y.ozet.musteri) || 0} müşteri</small></div>
+      <button class="btn soft" type="button" data-yedek="${i}">Bu hâle dön</button>
+    </div>`).join("");
+  kutu.querySelectorAll("[data-yedek]").forEach((b) => b.addEventListener("click", async () => {
+    const y = liste[Number(b.dataset.yedek)];
+    b.disabled = true; b.textContent = "Getiriliyor…";
+    const v = await kvOku(y.key, "value", 60000);
+    const icerik = v.durum === "var" && v.value ? (v.value.store || v.value) : null;
+    if (!icerik || !Array.isArray(icerik.products)) alert("Yedek okunamadı. İnternet bağlantını kontrol edip tekrar dene.");
+    else await yedektenYukle(icerik, "geri-donus-oncesi", y.baslik + " (" + y.alt + ") yedeği");
+    if (document.body.contains(b)) { b.disabled = false; b.textContent = "Bu hâle dön"; yedekSekmeKur(); }
+  }));
+}
+
+/* ---- İnternet durumu: veri telefondaysa internetsiz de çalışılır (üstte küçük şerit);
+        telefonda hiç veri yoksa (ilk kurulum) tam ekran örtü kalır ---- */
 async function sbPing() {
   if (!SB) return false;
-  try { const { error } = await SB.from("kv").select("key").limit(1); return !error; }
-  catch (e) { return false; }
+  const r = await kvSor((t) => t.select("key").limit(1), 8000);
+  return !r.hata;
 }
 function internetOverlay(goster) {
   let el = document.getElementById("net-kapi");
@@ -2421,13 +3130,83 @@ function internetOverlay(goster) {
     el = document.createElement("div");
     el.id = "net-kapi";
     el.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#0f1115;color:#e8e8ea;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px";
-    el.innerHTML = '<div style="font-size:48px">📡</div><div style="font-weight:700;font-size:20px">İnternet bağlantısı gerekli</div><div style="opacity:.75;max-width:320px">Panel verileri buluttan çalışır. Bağlantı gelince otomatik açılır.</div>';
+    el.innerHTML = '<div style="font-size:48px">📡</div><div style="font-weight:700;font-size:20px">İnternet bağlantısı gerekli</div><div style="opacity:.75;max-width:320px">Bu telefona veriler henüz inmedi. İlk açılış için internet gerekir; bağlantı gelince kendiliğinden açılır.</div>';
     document.body.appendChild(el);
   } else if (!goster && el) { el.remove(); }
 }
-async function internetKontrol() {
-  const online = (navigator.onLine !== false) && await sbPing();
-  internetOverlay(!online);
+/** Bu telefonda daha önce buluttan çekilmiş (ya da burada girilmiş) veri var mı? */
+function esCihazdaVeriVar() {
+  if (_esGunluk.tabanTs || esBekleyenVar()) return true;
+  try { if (localStorage.getItem(BULUT_KEY + ":ts")) return true; } catch (e) {}
+  return (store.customers || []).length > 0 || (store.sales || []).length > 0;
+}
+function esSureMetni(ms) {
+  const dk = Math.floor(ms / 60000);
+  if (dk < 60) return Math.max(1, dk) + " dakikadır";
+  const sa = Math.floor(dk / 60);
+  return sa < 48 ? sa + " saattir" : Math.floor(sa / 24) + " gündür";
+}
+function esBekleyenMetni() {
+  let satis = 0, tahsilat = 0;
+  _esGunluk.y.map((x) => x.f).concat(_esGunluk.acik ? [_esGunluk.acik] : []).forEach((f) => {
+    const a = (f && f.a) || {};
+    if (a.sales && a.sales.t === "d") satis += a.sales.ek.length;
+    if (a.payments && a.payments.t === "d") tahsilat += a.payments.ek.length;
+  });
+  const p = [];
+  if (satis) p.push(satis + " satış");
+  if (tahsilat) p.push(tahsilat + " tahsilat");
+  return p.length ? p.join(", ") : "Yaptığın değişiklikler";
+}
+/** Üstteki durum şeridi: internet yok / kayıtlar gönderilemiyor / telefon hafızası dolu. Her şey yolundaysa görünmez. */
+function esSeritCiz() {
+  if (typeof document === "undefined" || !document.body) return;
+  const bekleyen = esBekleyenVar();
+  const sure = bekleyen && _esGunluk.ilkBekleyen ? Date.now() - _esGunluk.ilkBekleyen : 0;
+  let tur = "", baslik = "", alt = "";
+  if (_esDurum.depoDolu) {
+    tur = "hata"; baslik = "Telefonun hafızası doldu";
+    alt = "Kayıtlar internete gönderiliyor ama telefonda saklanamıyor. İnternet varken kullan.";
+  } else if (_esDurum.cevrimdisi) {
+    tur = "uyari"; baslik = "İnternet yok";
+    alt = bekleyen ? esBekleyenMetni() + " telefonda bekliyor. Bağlantı gelince gönderilecek." : "Kayıtlar telefonda tutulur, bağlantı gelince gönderilir.";
+    if (bekleyen && sure > 3600000) { tur = "hata"; alt = esBekleyenMetni() + " " + esSureMetni(sure) + " gönderilemedi. İnternete bağlanınca gidecek."; }
+  } else if (bekleyen && sure > 90000) {
+    tur = "hata"; baslik = "Kayıtlar gönderilemiyor";
+    alt = esBekleyenMetni() + " " + esSureMetni(sure) + " bekliyor. Tekrar denemek için dokun.";
+  }
+  let el = document.getElementById("es-serit");
+  if (!tur) {
+    if (el) el.remove();
+    document.body.classList.remove("es-seritli");
+    return;
+  }
+  if (!el) {
+    el = document.createElement("button");
+    el.id = "es-serit"; el.type = "button";
+    el.addEventListener("click", () => { _esDurum.sonraki = 0; internetKontrol(true); });
+    document.body.appendChild(el);
+  }
+  el.className = "es-serit " + tur;
+  const html = `<span class="es-ikon" aria-hidden="true">${tur === "uyari" ? "📡" : "⚠️"}</span><span class="es-yazi"><b>${esc(baslik)}</b><small>${esc(alt)}</small></span>`;
+  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+  document.body.classList.add("es-seritli");
+  document.documentElement.style.setProperty("--es-serit-h", el.offsetHeight + "px");
+}
+/** 8 sn'de bir + ekrana dönünce + bağlantı değişince: internet var mı, bulut değişmiş mi, bekleyen var mı → gerekiyorsa eşitle. */
+async function internetKontrol(zorla) {
+  if (!_esKapi) return;
+  if (!SB) { _esDurum.cevrimdisi = true; internetOverlay(!esCihazdaVeriVar()); esSeritCiz(); return; }
+  const z = navigator.onLine === false ? { durum: "hata", hata: "network: cihaz çevrimdışı" } : await kvOku(BULUT_KEY, "updated_at", 8000);
+  const agYok = z.durum === "hata" && (navigator.onLine === false || esAgHatasi(z.hata));
+  _esDurum.cevrimdisi = agYok;
+  internetOverlay(agYok && !esCihazdaVeriVar());
+  if (!agYok && z.durum !== "hata") {
+    const gerek = _esIlk || esBekleyenVar() || (z.durum === "var" && z.updatedAt !== _esGunluk.tabanTs);
+    if (gerek && (zorla === true || Date.now() >= _esDurum.sonraki)) esitle();
+  }
+  if (_esCizBekliyor) esEkranYenile();
+  esSeritCiz();
 }
 
 function caySiparisAl(raw) {
@@ -4292,12 +5071,17 @@ function renderProfilim() {
       </form>
       <div class="ptab" data-ptab="2" style="display:none">
         <h1 style="font-size:15px;margin:0 0 14px">Yedekleme</h1>
-        <p class="sub">Tüm verini (ürün, müşteri, satış, ayar) tek dosyaya yedekle; başka cihaza taşı veya sonra geri yükle.</p>
+        <p class="sub">Kayıtların her gün kendiliğinden yedeklenir ve 30 gün saklanır. Bir şey yanlış giderse aşağıdan eski bir güne dönebilirsin.</p>
+        <div class="yedek-durum" id="yedekDurum"></div>
+        <div class="yedek-liste" id="yedekListe"></div>
+        <div style="margin-top:12px"><button class="btn soft" id="yedekSimdiBtn" type="button">Şimdi yedek al</button></div>
+        <h1 style="font-size:15px;margin:22px 0 8px">Dosyaya yedekle</h1>
+        <p class="sub">Tüm verini (ürün, müşteri, satış, ayar) tek dosyaya indir; başka cihaza taşı veya sonra geri yükle.</p>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn green lg" id="backupBtn" type="button">⇩ Yedek Al (JSON indir)</button>
           <button class="btn soft lg" id="restoreBtn" type="button">⇧ Yedekten Geri Yükle</button>
         </div>
-        <p class="hint">Geri yükleme mevcut tüm veriyi seçtiğin yedekle değiştirir.</p>
+        <p class="hint">Geri yükleme mevcut tüm veriyi seçtiğin yedekle değiştirir. Önce şimdiki hâlin yedeği alınır.</p>
       </div>
       <div class="ptab" data-ptab="3" style="display:none">
         <h1 style="font-size:15px;margin:0 0 14px">Verilerimi Sil</h1>
@@ -4317,6 +5101,7 @@ function mountProfilim() {
   document.getElementById("fisForm").addEventListener("submit", (e) => { e.preventDefault(); const f = new FormData(e.target); ["fisBaslik", "fisTel", "fisAdres", "fisAltbilgi"].forEach((k) => store.settings[k] = f.get(k)); saveStore(); alert("Fiş ayarları kaydedildi ✔"); });
   document.getElementById("backupBtn").addEventListener("click", exportBackup);
   document.getElementById("restoreBtn").addEventListener("click", () => openFileImport(".json,application/json", importBackup));
+  yedekSekmeKur();
   document.getElementById("wipeBtn").addEventListener("click", () => { if (confirm("TÜM veriler (ürün, müşteri, satış...) silinecek. Emin misiniz?") && confirm("Son kez: gerçekten sil?")) { localStorage.removeItem(STORE_KEY); store = emptyStore(); saveStore(); alert("Veriler silindi."); navigate("anasayfa"); } });
 }
 
@@ -4530,19 +5315,23 @@ initTopbar();
 mobilBarKur();
 render();
 if (servis.aktif) navigate("rota");
-// Bulut yedeği: açılışta store'u buluttan çek (başka cihazdan da erişilsin).
-bulutHydrate();
-// İnternet kapısı: bağlantı yoksa paneli kapat, gelince aç (tümü-buluttan mimarisi).
-internetKontrol();
-setInterval(internetKontrol, 8000);
-window.addEventListener("online", internetKontrol);
-window.addEventListener("offline", internetKontrol);
-// Ekrana geri dönünce: internet kontrol + buluttan tazele (veri hep güncel).
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
-  internetKontrol();
-  if (SB && _bulutHazir) bulutHydrate();
+// Giriş kapısı (varsa) geçilmeden buluta dokunulmaz. Kapı, cihazda geçerli oturum varsa internetsiz de açılır.
+(typeof girisKapisi === "function" ? girisKapisi() : Promise.resolve()).then(() => {
+  _esKapi = true;
+  if (!SB) { _bulutHazir = true; kategoriGocKontrol(); }
+  // Açılışta buluttan çek + bekleyen kayıt varsa birleştirerek gönder. Sonra 8 sn'de bir yokla:
+  // internet var mı, başka cihaz/araç yazmış mı, gönderilemeyen kayıt var mı.
+  internetKontrol(true);
+  setInterval(internetKontrol, 8000);
+  window.addEventListener("online", () => internetKontrol(true));
+  window.addEventListener("offline", () => internetKontrol());
+  // Ekrana dönünce tazele; ekrandan çıkarken / kapanırken bekleyen kaydı 1 sn'yi beklemeden gönder.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") internetKontrol(true);
+    else esHemenGonder();
+  });
+  window.addEventListener("pagehide", esHemenGonder);
+  // Çay ocağı siparişlerini internetten otomatik çek (açılışta + 15sn'de bir).
+  if (SB) { cayPullSupabase(); setInterval(cayPullSupabase, 15000); }
 });
-// Çay ocağı siparişlerini internetten otomatik çek (açılışta + 15sn'de bir).
-if (SB) { cayPullSupabase(); setInterval(cayPullSupabase, 15000); }
 if (typeof window !== "undefined") window.app = { getStore: () => store, pos, addToCart, finalizeSale, finalizeCustom, findProduct, customerBorc, firmaBorc, saveStore, render, navigate, openSale, netLine, cartTotals, exportBackup, importBackup, criticalProducts, saleOdeme };

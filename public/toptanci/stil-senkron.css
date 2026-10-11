@@ -1,1 +1,49 @@
 /* Eşitleme, çevrimdışı çalışma ve yedek ekranlarının stilleri. */
+
+/* ---- Üstteki durum şeridi: "İnternet yok" / "Kayıtlar gönderilemiyor" ---- */
+.es-serit {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 78;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; margin: 0; border: 0; border-radius: 0;
+  padding: calc(6px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));
+  font: inherit; text-align: left; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.12);
+}
+.es-serit.uyari { background: #fff3cd; color: #4d3800; border-bottom: 1px solid #e9cf7a; }
+.es-serit.hata { background: #fde3e0; color: #6f1710; border-bottom: 1px solid #efaaa3; }
+.es-serit .es-ikon { flex: 0 0 auto; font-size: 20px; line-height: 1; }
+.es-serit .es-yazi { flex: 1; min-width: 0; }
+.es-serit b { display: block; font-size: 14px; font-weight: 700; line-height: 1.25; }
+.es-serit small { display: block; font-size: 12.5px; line-height: 1.3; opacity: 0.92; }
+/* Şerit görünürken sayfayı ve yapışkan üst çubukları şeridin altına indir. */
+body.es-seritli .layout { padding-top: var(--es-serit-h, 48px); }
+body.es-seritli .topbar,
+body.es-seritli .sidebar .brand,
+body.es-seritli .satis-appbar { top: var(--es-serit-h, 48px); }
+@media print { .es-serit, .es-bildirim { display: none !important; } body.es-seritli .layout { padding-top: 0; } }
+
+/* Kısa bilgi notu (ör. fiş numarası değişti) */
+.es-bildirim {
+  position: fixed; left: 12px; right: 12px; z-index: 95;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  background: #1f2937; color: #fff; border-radius: 12px; padding: 12px 14px;
+  font-size: 13.5px; line-height: 1.35; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.28);
+}
+
+/* ---- Profil → Yedekleme ---- */
+.yedek-durum { margin: 12px 0 6px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.yedek-durum > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; font-size: 13px; }
+.yedek-durum > div + div { border-top: 1px solid var(--line); }
+.yedek-durum span { color: #5b6470; flex: 0 0 auto; }
+.yedek-durum b { font-weight: 600; text-align: right; }
+.yedek-durum .yd-uyari { color: #b42318; }
+.yedek-liste { margin-top: 10px; }
+.yedek-satir {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.yedek-satir:last-child { border-bottom: 0; }
+.yedek-satir .ys-bilgi { flex: 1; min-width: 0; }
+.yedek-satir .ys-bilgi b { display: block; font-size: 14px; font-weight: 600; }
+.yedek-satir .ys-bilgi small { display: block; font-size: 12.5px; color: #5b6470; line-height: 1.35; margin-top: 2px; }
+.yedek-satir .btn, #yedekSimdiBtn { min-height: 44px; flex: 0 0 auto; white-space: nowrap; }
