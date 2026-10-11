@@ -41,7 +41,7 @@ try {
   const sale = await page.evaluate(() => store.sales[store.sales.length - 1]);
   d.esit([sale.items[0].alis, sale.maliyet], [500, 1000], "satış kalemine o anki birim maliyet yazıldı (alis 500), fiş maliyeti 1.000");
   d.esit([r.once.urunsel, r.sonra.urunsel], [280, 280], "Ürünsel rapor: alış fiyatı değişse de yapılmış satışın kârı 280 kalıyor");
-  d.esit([r.sonra.grupsal, r.sonra.analiz], ["₺280,00", 280], "Grupsal rapor ve Ürün Analizi de aynı (280)");
+  d.esit([r.sonra.grupsal, r.sonra.analiz], ["280 ₺", 280], "Grupsal rapor ve Ürün Analizi de aynı (280)");
   d.esit(await page.evaluate(() => [kalemAlis({ urunId: "u3" }), kalemAlis({ urunId: "u3", alis: 500 }), kalemAlis({ urunId: "u3", alis: 0 }), kalemAlis({ urunId: null }), kalemAlis({ urunId: "yok" })]), [600, 500, 0, 0, 0], "kalemAlis: alan varsa o (0 dahil), yoksa ürünün şimdiki alışı; ürün yoksa 0");
   // eski satış (alis yok): eski davranış — şimdiki alışla hesaplanır, ekran bozulmaz
   const eski = await page.evaluate(() => { const s = store.sales.find((x) => x.id === "s1"); return { alanVar: "alis" in s.items[1], mal: kalemAlis(s.items[1]) }; });

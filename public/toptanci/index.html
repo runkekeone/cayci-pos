@@ -7,7 +7,7 @@
     <title>babu.co — İşletme Paneli</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="vendor/leaflet.css" />
     <link rel="stylesheet" href="styles.css?v=operasyon112" />
     <!-- Bölüm stilleri: her biri tek bir işin stilini taşır (çakışmasın diye ayrı dosya) -->
@@ -36,29 +36,23 @@
       <!-- Ana alan -->
       <div class="mainarea">
         <header class="topbar">
-          <button class="hamburger" id="hamburger" type="button" aria-label="Menü">&#9776;</button>
+          <!-- İkonlar çizgi (app.js ikon()) — initTopbar doldurur. -->
+          <button class="hamburger" id="hamburger" type="button" aria-label="Menü"></button>
+          <span class="ust-ad">Özgür Ticaret</span>
           <div class="searchbox">
-            <input type="text" placeholder="Merak ettiklerini ara..." />
-            <button type="button" aria-label="Ara">&#128269;</button>
+            <input type="text" placeholder="Müşteri, ürün ya da belge no ara" aria-label="Müşteri, ürün ya da belge no ara" />
           </div>
           <div class="topbar-right">
-            <a class="t-link" title="Davet Et">&#10148; Davet Et,Kazan!</a>
             <span class="t-firma">ÖZGÜR TİCARET @ U225211984</span>
             <div class="user-menu">
-              <button class="t-ico bell" id="bellBtn" type="button" title="Bildirimler">&#128276;<span class="bell-badge" id="bellBadge"></span></button>
+              <button class="t-ico bell" id="bellBtn" type="button" title="Bildirimler" aria-label="Bildirimler"><span class="bell-badge" id="bellBadge"></span></button>
               <div class="dropdown" id="bellDropdown"></div>
             </div>
-            <span class="t-ico" title="Mobil">&#128241;</span>
             <div class="user-menu">
-              <button class="user-btn" id="userBtn" type="button">ANA HESAP &#9662;</button>
+              <button class="user-btn" id="userBtn" type="button" aria-label="Hesap"></button>
               <div class="dropdown" id="userDropdown">
-                <a data-route="profilim">&#9881; Profilim</a>
-                <a>&#128421; Masaüstü Cihazlarım</a>
-                <a>&#128196; Fiş Şablonu Tasarım Aracı</a>
-                <a>&#8646; Hareketler</a>
-                <a>&#128179; Lisans Satın Al</a>
-                <a>&#128274; E-posta / Parola Değiştir</a>
-                <a>&#9211; Çıkış Yap</a>
+                <a data-route="profilim" data-ikon="ayar">Profilim</a>
+                <a data-ikon="cikis">Çıkış Yap</a>
               </div>
             </div>
           </div>

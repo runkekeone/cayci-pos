@@ -162,9 +162,9 @@ const sade = (sale) => { const s = { ...sale }; delete s.id; delete s.tarih; ret
   const borcOnce = borc(stokStore(), "m3");
   await t.git("urun-iade");
   await t.page.selectOption("#iMus", "m3"); await t.page.selectOption("#iUrun", "u3"); await bekle(100);
-  d.esit([await t.page.inputValue("#iFiyat"), /en son ₺620,00 fiyatla aldı/.test(await t.page.textContent("#iFiyatNot")), await t.page.inputValue("#iHavuz")], ["620", true, "arac"], "fiyat müşterinin EN SON aldığı fiyattan geliyor (620, liste 640 değil); varsayılan havuz araç");
+  d.esit([await t.page.inputValue("#iFiyat"), /en son 620 ₺ fiyatla aldı/.test(await t.page.textContent("#iFiyatNot")), await t.page.inputValue("#iHavuz")], ["620", true, "arac"], "fiyat müşterinin EN SON aldığı fiyattan geliyor (620, liste 640 değil); varsayılan havuz araç");
   await t.page.fill("#iAdet", "2"); await bekle(50);
-  d.dogru(/1\.240,00/.test(await t.page.textContent("#iTutar")), "iade tutarı miktar × alınan fiyat");
+  d.dogru(/1\.240 ₺/.test(await t.page.textContent("#iTutar")), "iade tutarı miktar × alınan fiyat");
   await t.page.click("#iSave"); await bekle(300);
   const pS = await t.page.evaluate(() => ({ sale: store.sales[store.sales.length - 1], iade: store.iadeler[store.iadeler.length - 1], stok: [store.products.find((x) => x.id === "u3").stok, store.products.find((x) => x.id === "u3").aracStok], borc: window.app.customerBorc("m3"), odemeler: store.payments.length }));
   const b2 = await sahteBulut({ satirlar: satirlar(stokStore()) });

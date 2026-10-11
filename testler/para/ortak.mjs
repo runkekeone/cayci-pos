@@ -19,7 +19,12 @@ export const gunStr = (d) => d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" 
 /** n gün önce, verilen saatte (yerel) — ISO metni. */
 export function gun(n = 0, saat = 11, dk = 0) { const d = new Date(); d.setDate(d.getDate() - n); d.setHours(saat, dk, 0, 0); return d.toISOString(); }
 export const bugunStr = () => gunStr(new Date());
-export const tl = (n) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n);          // panelin biçimi: ₺1.234,50
+// panelin ekran biçimi: 1.234 ₺ · kuruş yalnız varsa: 1.234,50 ₺ (görsel yenileme; app.js money.format ile aynı kural)
+export const tl = (n) => { const y = Math.round(Number(n) * 100) / 100 || 0; return new Intl.NumberFormat("tr-TR", Number.isInteger(y) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(y) + " ₺"; };
+// eski biçim: ₺1.234,50 — taban (yenileme öncesi) paneli ve müşteriye giden belgeler (fiş, hesap özeti, hatırlatma) hâlâ böyle yazar
+export const tlEski = (n) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(n);
+// "₺1.234,50" ya da "1.234,50 ₺" → 1234.5 (iki biçimi karşılaştırmak için)
+export const paraSayi = (m) => (m == null ? null : Number(String(m).replace(/[₺s.]/g, "").replace(",", ".")));
 export const tlArac = (n) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " ₺"; // aracın biçimi: 1.234,50 ₺
 
 /** Örnek store'dan kalem üretir (alis YAZMAZ → eski kayıt gibi). */
@@ -56,7 +61,7 @@ export async function git(page, yol) {
   await page.evaluate((r) => { if (location.hash === "#/" + r) window.app.render(); else location.hash = "#/" + r; }, yol);
   await bekle(200);
 }
-/** Ekrandaki özet kutuları: { "Nakit Kasa": "₺265,00", ... } */
+/** Ekrandaki özet rakamları (üç büyük rakam + Ayrıntı satırları): { "Kasadaki nakit": "265 ₺", ... } */
 export async function statlar(page) {
   return page.evaluate(() => { const o = {}; document.querySelectorAll(".stat").forEach((s) => { const l = s.querySelector(".s-label"), v = s.querySelector(".s-value"); if (l && v) o[l.textContent.trim()] = v.textContent.trim().replace(/ /g, " "); }); return o; });
 }

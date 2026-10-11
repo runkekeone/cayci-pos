@@ -2,7 +2,7 @@
 // borcun yaşı (ilk giren ilk kapanır), vadesi geçenler, hatırlatma, aracın fiş uyarısı ve tahsilat-listesi.
 // Çalıştır: node testler/para/limit-vade.mjs
 import { denetci } from "../ortak/panel.mjs";
-import { ortam, git, ornekStore, satis, gun, tl, tabanVar, bekle } from "./ortak.mjs";
+import { ortam, git, ornekStore, satis, gun, tl, tlEski, tabanVar, bekle } from "./ortak.mjs";
 
 const d = denetci("para/limit-vade");
 
@@ -111,7 +111,7 @@ try {
   await page.evaluate(() => { window.__acilan = []; window.open = (u) => { window.__acilan.push(u); return null; }; });
   await page.click('.pv-kart [data-hatirlat="m2"]');
   const metin = await page.inputValue("#htMetin");
-  d.dogru(/Merhaba Örnek Çay Ocağı/.test(metin) && metin.replace(/ /g, " ").includes(tl(2100)) && /20 gündür/.test(metin) && /Teşekkür/.test(metin), "hatırlatma metni: selam, tutar, kaç gündür, teşekkür");
+  d.dogru(/Merhaba Örnek Çay Ocağı/.test(metin) && metin.replace(/ /g, " ").includes(tlEski(2100)) && /20 gündür/.test(metin) && /Teşekkür/.test(metin), "hatırlatma metni: selam, tutar, kaç gündür, teşekkür");
   d.esit(await page.evaluate(() => window.__acilan.length), 0, "pencere açılınca hiçbir şey gönderilmiyor/açılmıyor");
   await page.click("#htGonder");
   const url = await page.evaluate(() => window.__acilan[0] || "");

@@ -54,7 +54,7 @@ function veri() {
   await t.page.fill('[data-ar="0"][data-fld="birimFiyat"]', "600");
   d.dogru(await t.page.evaluate(() => document.activeElement && document.activeElement.dataset.fld === "birimFiyat"), "fiyat yazarken satır yeniden çizilmiyor (odak yerinde kalıyor)");
   await t.page.fill("#aFisToplam", "3200");
-  d.dogru(/3\.200,00/.test(await t.page.textContent("#aTotal")) && /fark ₺200,00/.test(await t.page.textContent("#aFark")), "faturadaki toplam esas alınıyor, satır toplamıyla fark gösteriliyor");
+  d.dogru(/3\.200 ₺/.test(await t.page.textContent("#aTotal")) && /fark 200 ₺/.test(await t.page.textContent("#aFark")), "faturadaki toplam esas alınıyor, satır toplamıyla fark gösteriliyor");
   await t.page.click("#aSave"); await bekle(300);
   d.esit(await t.urun("u3"), [12, 1], "mal ARAÇ stoğuna girdi (−4 → 1), dükkan değişmedi");
   const k = await t.page.evaluate(() => store.purchases[store.purchases.length - 1]);

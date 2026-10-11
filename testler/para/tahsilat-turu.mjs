@@ -2,7 +2,7 @@
 // kart/havale kasayı şişirmez; iade müşterinin gerçekte aldığı fiyattan yazılır ve kasaya girmez.
 // Çalıştır: node testler/para/tahsilat-turu.mjs
 import { denetci } from "../ortak/panel.mjs";
-import { ortam, git, statlar, mdDeger, ornekStore, satis, karisikGun, gun, bugunStr, tl, tlArac, tabanVar, bekle } from "./ortak.mjs";
+import { ortam, git, statlar, mdDeger, ornekStore, satis, karisikGun, gun, bugunStr, tl, tlEski, tlArac, tabanVar, bekle } from "./ortak.mjs";
 
 const d = denetci("para/tahsilat-turu");
 const bugun = bugunStr();
@@ -31,7 +31,7 @@ if (tabanVar) {
     const iade = await t.page.evaluate(() => store.iadeler[store.iadeler.length - 1].tutar);
     d.esit(iade, 640, "TABAN: iade liste fiyatından (640) yazılıyordu — müşteri 620'den almıştı, 20 ₺ fazla alacak");
     await git(t.page, "anasayfa");
-    d.esit((await statlar(t.page))["Nakit Kasa"], tl(340 + 300 + 100 + 640), "TABAN: kart tahsilatı ve iade nakit kasaya ekleniyordu (340 yerine 1.380)");
+    d.esit((await statlar(t.page))["Nakit Kasa"], tlEski(340 + 300 + 100 + 640), "TABAN: kart tahsilatı ve iade nakit kasaya ekleniyordu (340 yerine 1.380)");
   } finally { await t.kapat(); }
 }
 
@@ -64,7 +64,7 @@ try {
   d.esit(await page.evaluate(() => [musteriUrunFiyat("m1", "u1"), musteriUrunFiyat("m3", "u5"), musteriUrunFiyat("m4", "u3"), musteriUrunFiyat(null, "u3")]), [90, 55, 640, 640], "iade fiyatı sırası: son satış fiyatı → özel fiyat → liste");
 
   await git(page, "anasayfa"); const ana = await statlar(page);
-  d.esit(ana["Nakit Kasa"], tl(340 + 200), "nakit kasa yalnız nakdi sayıyor: 340 satış + 200 nakit tahsilat (kart, havale, iade, borç ekleme hariç)");
+  d.esit(ana["Kasadaki nakit"], tl(340 + 200), "nakit kasa yalnız nakdi sayıyor: 340 satış + 200 nakit tahsilat (kart, havale, iade, borç ekleme hariç)");
   d.esit(ana["Kart / Havale ile Gelen"], tl(300 + 150 + 100), "kart + havale ayrı satırda: 550");
   await page.evaluate(() => { selectedCustomerId = "m2"; }); await git(page, "musteri-detay");
   const turSutun = await page.evaluate(() => [...document.querySelectorAll("table")][1].innerText);
