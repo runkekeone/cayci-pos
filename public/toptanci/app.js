@@ -323,6 +323,391 @@ function importCustomers(text) {
   saveStore(); alert(`İçe aktarma bitti ✔\nEklendi: ${add} · Güncellendi: ${upd} · Hatalı: ${err}`); render();
 }
 
+/* ============ GİRİŞ / OTURUM ============ */
+/* Panel e-posta + şifreyle açılır (Supabase Auth). Oturum cihazda saklanır: bir kez girilir, bir daha sorulmaz.
+ *
+ * Dışarıya açık noktalar (adlar sabit, diğer bölümler bunlara güvenir):
+ *   girisKapisi()     Promise. Cihazda oturum varsa (internet olmasa da) hemen çözülür; yoksa giriş ekranını
+ *                     gösterir ve giriş yapılınca çözülür.
+ *   bulutYetkiliMi()  Promise<boolean>. "Bulutta kayıt yok" cevabına güvenip yazmadan önce sorulur:
+ *                     false = oturum yok / hesabın izni yok / emin olunamadı → YAZMA.
+ *   sbFetch()         Supabase istemcisinin bütün istekleri buradan geçer (SB bunu kullanır):
+ *                     - oturum yokken veri isteği GİTMEZ, giriş yapılana kadar bekler (ekrana veri gelmez);
+ *                     - kv istekleri kullanıcının jetonuyla gider; jetonun süresi dolduysa yenilenir;
+ *                     - veritabanı kilidi kurulmadan ÖNCE de çalışsın diye: kullanıcı jetonuyla boş/yetkisiz
+ *                       dönen kv isteği bir kez de herkese açık anahtarla denenir (bugünkü davranış);
+ *                     - iki yolla da boş/yetkisiz dönen özel anahtarda hesabın izni sorulur; izinsizse oturum
+ *                       kapanır ve istek yetkili girişe kadar bekler ("bulut boş" diye yorumlanamaz).
+ *   Olaylar: "babuco:giris" (giriş yapıldı), "babuco:cikis" (çıkışta yerel veri silinmeden hemen önce).
+ *
+ * Çıkış: bu cihazdaki veri kopyası silinir (ortak telefonda borç listesi kalmasın). Oturum kendiliğinden
+ * düşerse (süre/iptal) yerel kopya SİLİNMEZ; giriş ekranı üstünü kapatır, girince kaldığı yerden sürer. */
+const OTURUM_ANAHTAR = "babuco:oturum";
+const KATALOG_KEY = "babuco:katalog";
+let _kapiSoz = null, _kapiCoz = null;    // kapı kapalıyken bekleyenlerin sözü
+let _bilerekCikis = false;               // çıkışı biz başlattıysak "oturumun kapanmış" uyarısı gösterme
+let _yetkiSoz = null, _yetkiSon = null;
+let _katalogSonOzet = "";                // bu sayfanın en son yayınladığı / bulutta gördüğü kataloğun özeti
+const _bekleyenOkuma = new Map();        // kapı kapalıyken aynı okuma tek istek olsun
+
+function oturumKaydi() { try { return JSON.parse(localStorage.getItem(OTURUM_ANAHTAR) || "null"); } catch (e) { return null; } }
+/** Cihazda saklı oturum var mı? İnternet gerektirmez. */
+function oturumKayitli() { const o = oturumKaydi(); return !!(o && o.refresh_token && o.user); }
+function oturumEposta() { const o = oturumKaydi(); return (o && o.user && o.user.email) || ""; }
+let _sonEposta = oturumEposta();         // oturum kendiliğinden düşerse e-posta kutusu dolu gelsin
+
+function girisKapisi() {
+  if (_kapiSoz) return _kapiSoz;
+  if (oturumKayitli()) return Promise.resolve();
+  kapiyiKapat("");
+  return _kapiSoz;
+}
+/** Kapıyı kapat: giriş ekranını göster, giriş yapılana kadar veri isteklerini beklet. */
+function kapiyiKapat(mesaj) {
+  if (!_kapiSoz) _kapiSoz = new Promise((coz) => { _kapiCoz = coz; });
+  girisEkrani(mesaj);
+}
+function kapiyiAc() {
+  const el = document.getElementById("giris-kapi"); if (el) el.remove();
+  document.documentElement.classList.remove("giris-kilit");
+  const coz = _kapiCoz; _kapiSoz = null; _kapiCoz = null;
+  if (coz) coz();
+  try { window.dispatchEvent(new CustomEvent("babuco:giris")); } catch (e) {}
+  setTimeout(katalogDenetle, 1500);
+}
+
+function girisEkrani(mesaj) {
+  document.documentElement.classList.add("giris-kilit");
+  let el = document.getElementById("giris-kapi");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "giris-kapi";
+    el.innerHTML = `<form class="gk-kutu" id="gkForm" novalidate>
+      <img class="gk-logo" src="logo.png?v=2" alt="" />
+      <h1 class="gk-baslik">Özgür Ticaret</h1>
+      <p class="gk-alt">Paneli açmak için giriş yap.</p>
+      <div class="gk-alan"><label for="gkEposta">E-posta</label>
+        <input id="gkEposta" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" /></div>
+      <div class="gk-alan"><label for="gkSifre">Şifre</label>
+        <div class="gk-sifre"><input id="gkSifre" type="password" autocomplete="current-password" /><button type="button" id="gkGoster">Göster</button></div></div>
+      <div class="gk-mesaj" id="gkMesaj" role="alert" aria-live="polite"></div>
+      <button class="gk-buton" id="gkGir" type="submit">Giriş Yap</button>
+      <p class="gk-not">Bir kez giriş yapman yeter, bu telefon seni hatırlar.</p>
+    </form>`;
+    document.body.appendChild(el);
+    el.querySelector("#gkEposta").value = _sonEposta || "";
+    el.querySelector("#gkForm").addEventListener("submit", (e) => { e.preventDefault(); girisDene(); });
+    el.querySelector("#gkGoster").addEventListener("click", () => {
+      const s = el.querySelector("#gkSifre"), acik = s.type === "text";
+      s.type = acik ? "password" : "text"; el.querySelector("#gkGoster").textContent = acik ? "Göster" : "Gizle";
+    });
+  }
+  if (mesaj) girisMesaj(mesaj);
+}
+function girisMesaj(metin) { const m = document.getElementById("gkMesaj"); if (m) { m.textContent = metin || ""; m.classList.toggle("dolu", !!metin); } }
+function girisMesgul(evet) { const b = document.getElementById("gkGir"); if (b) { b.disabled = !!evet; b.textContent = evet ? "Giriş yapılıyor…" : "Giriş Yap"; } }
+function girisHataMetni(h) {
+  const kod = String((h && (h.code || h.error_code)) || ""), durum = h && h.status, m = String((h && h.message) || "").toLowerCase();
+  if (kod === "invalid_credentials" || m.indexOf("invalid login") >= 0) return "E-posta ya da şifre yanlış.";
+  if (kod === "email_not_confirmed" || m.indexOf("not confirmed") >= 0) return "Bu hesap henüz onaylanmamış. Hesabı açan kişiye haber ver.";
+  if (durum === 429 || kod.indexOf("rate_limit") >= 0) return "Çok fazla deneme yapıldı. Birkaç dakika bekleyip tekrar dene.";
+  if (!durum || durum >= 500) return "Bağlantı kurulamadı. İnternetini kontrol edip tekrar dene.";
+  if (durum === 400 || durum === 401 || durum === 403 || durum === 422) return "E-posta ya da şifre yanlış.";
+  return "Giriş yapılamadı. Biraz sonra tekrar dene.";
+}
+async function girisDene() {
+  const eposta = (document.getElementById("gkEposta").value || "").trim(), sifre = document.getElementById("gkSifre").value || "";
+  if (!eposta || !sifre) return girisMesaj("E-posta ve şifreni yaz.");
+  if (!SB) return girisMesaj("Panel tam yüklenemedi. Sayfayı yenileyip tekrar dene.");
+  if (navigator.onLine === false) return girisMesaj("İnternet yok. Bağlantını kontrol edip tekrar dene.");
+  girisMesaj(""); girisMesgul(true);
+  let s;
+  try { s = await SB.auth.signInWithPassword({ email: eposta, password: sifre }); } catch (e) { s = { error: e }; }
+  if (s.error || !s.data || !s.data.session) { girisMesgul(false); return girisMesaj(girisHataMetni(s.error)); }
+  _yetkiSon = null;
+  if ((await yetkiSor()) === "yetkisiz") { await oturumuSil(); girisMesgul(false); return girisMesaj("Bu hesabın panele girme izni yok."); }
+  girisMesgul(false);
+  _sonEposta = eposta;
+  kapiyiAc();
+}
+/** Oturumu bu cihazdan kaldır ("oturumun kapanmış" uyarısı göstermeden). */
+async function oturumuSil() {
+  _bilerekCikis = true;
+  try { await SB.auth.signOut({ scope: "local" }); } catch (e) {}
+  try { localStorage.removeItem(OTURUM_ANAHTAR); } catch (e) {}
+  _bilerekCikis = false;
+}
+/** SB kurulduktan hemen sonra çağrılır: oturum düşmesini ve bulut yazımlarını dinler. */
+function girisBaslat() {
+  if (!SB) return;
+  SB.auth.onAuthStateChange((olay) => {
+    if (olay === "SIGNED_OUT" && !_bilerekCikis) setTimeout(() => kapiyiKapat("Oturumun kapanmış. Yeniden giriş yap."), 0);
+  });
+  window.addEventListener("babuco:bulut-yazildi", () => { katalogYayinla(); });
+  if (oturumKayitli()) setTimeout(() => { yetkiDenetle(); katalogDenetle(); }, 1500);
+}
+
+/* ---- Yetki: bu hesap toptancı verisine girebilir mi? (kilit.sql'deki babuco_yetkili fonksiyonu) ---- */
+/** "yetkili" | "yetkisiz" | "kilitsiz" (veritabanı kilidi henüz kurulmamış) | "bilinmiyor" (internet yok vb.) */
+async function yetkiSor() {
+  if (!SB) return "bilinmiyor";
+  try {
+    const { data, error, status } = await SB.rpc("babuco_yetkili");
+    if (!error) return data === true ? "yetkili" : "yetkisiz";
+    if (status === 404 || error.code === "PGRST202") return "kilitsiz";
+    return "bilinmiyor";
+  } catch (e) { return "bilinmiyor"; }
+}
+/** Yetkiyi sor; hesap izinsizse oturumu kapatıp giriş ekranına döndür. Aynı anda tek sorgu.
+ *  Olumlu cevap bir dakika hatırlanır (her boş okumada sunucuya sorulmasın); taze=true hatırlananı yok sayar. */
+function yetkiDenetle(taze) {
+  if (!taze && _yetkiSon && Date.now() - _yetkiSon.an < 60000) return Promise.resolve(_yetkiSon.durum);
+  if (!_yetkiSoz) {
+    _yetkiSoz = yetkiSor().then(async (d) => {
+      _yetkiSoz = null;
+      _yetkiSon = d === "yetkili" || d === "kilitsiz" ? { durum: d, an: Date.now() } : null;
+      if (d === "yetkisiz" && oturumKayitli()) { await oturumuSil(); kapiyiKapat("Bu hesabın panele girme izni yok."); }
+      return d;
+    });
+  }
+  return _yetkiSoz;
+}
+/** İstek, kilit kurulunca yalnız yetkili hesabın görebildiği bir kv anahtarını mı soruyor? */
+function ozelAnahtarIstegi(url) {
+  let m = null;
+  try { m = decodeURIComponent(url).match(/[?&]key=(?:eq|like|ilike|in)\.\(?"?(babuco:[^&,)"]*)/); } catch (e) { return false; }
+  return !!m && m[1] !== KATALOG_KEY && m[1].indexOf("babuco:on-siparis:policy:") !== 0;
+}
+async function bulutYetkiliMi() {
+  if (!SB || _kapiSoz || !oturumKayitli()) return false;
+  const d = await yetkiDenetle();
+  return d === "yetkili" || d === "kilitsiz";
+}
+
+/* ---- Supabase istekleri ---- */
+/** Kullanıcının geçerli jetonu. Oturum yoksa giriş yapılana kadar bekler; cihazda oturum var ama
+ *  yenilenemiyorsa (internet yok) bağlantı hatası gibi düşer — isteği oturumsuz GÖNDERMEZ. */
+async function kullaniciJetonu() {
+  for (;;) {
+    let o = null;
+    try { o = (await SB.auth.getSession()).data.session; } catch (e) { o = null; }
+    if (o && o.access_token) return o.access_token;
+    if (oturumKayitli()) throw new TypeError("Oturum yenilenemedi (bağlantı yok)");
+    await girisKapisi();
+  }
+}
+async function sbGovdeBos(r) {
+  try {
+    const okuyucu = r.clone().body.getReader();
+    const { value, done } = await okuyucu.read();
+    okuyucu.cancel().catch(() => {});
+    if (done || !value || !value.length) return true;
+    return value.length <= 8 && new TextDecoder().decode(value).trim() === "[]";
+  } catch (e) { return false; }
+}
+/** Cevap "bu kimlikle veri yok / izin yok" mu diyor? (öbür kimlikle bir kez daha denemeye değer mi) */
+async function sbAnormal(r, yontem, init) {
+  if (r.status === 401 || r.status === 403 || r.status === 406) return true;
+  if (r.status !== 200) return false;
+  const tercih = new Headers((init && init.headers) || {}).get("Prefer") || "";
+  if (yontem === "GET" || ((yontem === "PATCH" || yontem === "DELETE") && tercih.indexOf("return=representation") >= 0)) return sbGovdeBos(r);
+  return false;
+}
+async function sbIstek(url, init, yontem) {
+  const kvMi = /\/rest\/v1\/kv(\?|$)/.test(url), rpcMi = url.indexOf("/rest/v1/rpc/") >= 0;
+  const gonder = (jeton) => {
+    const h = new Headers((init && init.headers) || {});
+    h.set("apikey", SB_KEY); h.set("Authorization", "Bearer " + jeton);
+    return fetch(url, Object.assign({}, init, { headers: h }));
+  };
+  for (let tur = 0; ; tur++) {
+    const jeton = await kullaniciJetonu();
+    if (!kvMi && !rpcMi) return gonder(SB_KEY);            // siparişler vb.: bugünkü gibi herkese açık anahtarla
+    let r = await gonder(jeton);
+    if (r.status === 401) {                                // jetonun süresi dolmuş olabilir: yenile, bir kez daha dene
+      let y = null;
+      try { y = await SB.auth.refreshSession(); } catch (e) { y = { error: e }; }
+      const yeni = y && !y.error && y.data && y.data.session;
+      if (yeni) r = await gonder(yeni.access_token);
+      else {
+        const d = y && y.error && y.error.status;
+        if ((d >= 400 && d < 500 && d !== 429) || !oturumKayitli()) {
+          // Sunucu hem jetonu hem yenilemeyi reddetti: oturum bitmiş. Girişi bekle, sonra aynı isteği yinele.
+          if (oturumKayitli()) await oturumuSil();
+          kapiyiKapat("Oturumun kapanmış. Yeniden giriş yap.");
+          if (tur < 2) continue;
+        }
+        if (!rpcMi) throw new TypeError("Oturum yenilenemedi (bağlantı yok)");
+      }
+    }
+    if (!kvMi || !(await sbAnormal(r, yontem, init))) return r;
+    const r2 = await gonder(SB_KEY);                       // kilit kurulmadan önceki düzen: herkese açık anahtar
+    if (!(await sbAnormal(r2, yontem, init))) return r2;
+    // İki kimlikle de boş/yetkisiz. Özel bir anahtarsa "kayıt yok" ile "iznin yok" karışmasın: hesabın iznini sor.
+    // İzinsizse oturum kapanır ve istek, yetkili bir hesapla giriş yapılana kadar bekler (çağırana "boş" dönmez).
+    const reddedildi = r.status === 401 || r.status === 403;
+    if (reddedildi || ozelAnahtarIstegi(url)) {
+      if ((await yetkiDenetle(reddedildi)) === "yetkisiz" && tur < 2) continue;
+    }
+    return r;
+  }
+}
+async function sbFetch(input, init) {
+  const url = typeof input === "string" ? input : String((input && input.url) || input);
+  if (url.indexOf("/rest/v1/") < 0) return fetch(input, init);   // giriş / jeton yenileme istekleri
+  const yontem = String((init && init.method) || "GET").toUpperCase();
+  if (_kapiSoz && yontem === "GET") {                             // kapı kapalı: aynı okumayı bir kez beklet
+    if (!_bekleyenOkuma.has(url)) _bekleyenOkuma.set(url, sbIstek(url, init, yontem).finally(() => _bekleyenOkuma.delete(url)));
+    return (await _bekleyenOkuma.get(url)).clone();
+  }
+  return sbIstek(url, init, yontem);
+}
+
+/* ---- Çıkış ---- */
+function depoKanonik(x) {
+  const duz = JSON.parse(JSON.stringify(x || {})), taban = emptyStore();
+  for (const k in taban) if (duz[k] === undefined) duz[k] = taban[k];
+  const sirala = (v) => Array.isArray(v) ? v.map(sirala) : (v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => { o[k] = sirala(v[k]); return o; }, {}) : v);
+  return JSON.stringify(sirala(duz));
+}
+/** Bu cihazdaki kayıtlar bulutla aynı mı? true / false / null (bakılamadı: internet yok). */
+async function yerelBulutlaAyniMi() {
+  if (!SB || navigator.onLine === false) return null;
+  const oku = () => Promise.race([
+    SB.from("kv").select("value").eq("key", BULUT_KEY).maybeSingle().then((c) => (c.error ? undefined : (c.data ? c.data.value : null))),
+    new Promise((coz) => setTimeout(() => coz(undefined), 8000)),
+  ]);
+  try {
+    let b = await oku();
+    if (b === undefined) return null;
+    if (b && depoKanonik(b) === depoKanonik(store)) return true;
+    await new Promise((coz) => setTimeout(coz, 1800));            // sırada bekleyen yazma varsa bitsin
+    b = await oku();
+    if (b === undefined) return null;
+    return !!(b && depoKanonik(b) === depoKanonik(store));
+  } catch (e) { return null; }
+}
+function yerelVeriyiSil() {
+  try { window.dispatchEvent(new CustomEvent("babuco:cikis")); } catch (e) {}
+  try {
+    const sil = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k === STORE_KEY || k === "servis-v1" || k.indexOf("babuco:") === 0) sil.push(k); }
+    sil.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {}
+}
+async function cikisYap() {
+  if (!confirm("Çıkış yapılsın mı?\n\nBu telefondaki kayıtlar silinir. Verilerin bulutta durur; tekrar giriş yapınca geri gelir.")) return;
+  const ayni = await yerelBulutlaAyniMi();
+  if (ayni !== true && !confirm("DİKKAT: Bu telefondaki son işlemler buluta gitmemiş olabilir" + (ayni === null ? " (internet yok)" : "") + ".\n\nŞimdi çıkarsan o işlemler KAYBOLUR. Yine de çıkılsın mı?")) return;
+  _bilerekCikis = true;
+  try { if (SB) await Promise.race([SB.auth.signOut({ scope: "local" }), new Promise((coz) => setTimeout(coz, 5000))]); } catch (e) {}
+  yerelVeriyiSil();
+  location.reload();
+}
+
+/* ---- Herkese açık katalog: çay ocağı sipariş ekranı yalnız bunu okur ---- */
+/** Kataloğa yalnız bu alanlar girer. Alış fiyatı, stok, müşteri, özel fiyat GİRMEZ. (tools/babuco-kimlik.cjs ile aynı) */
+function katalogUrunleri(urunler) {
+  return (Array.isArray(urunler) ? urunler : []).filter((p) => p && p.id && p.ad && p.gorunur !== false)
+    .map((p) => ({ id: String(p.id), ad: String(p.ad), grup: p.grup || "", satis: Number(p.satis) || 0, birim: p.birim || "", barkod: p.barkod || "" }));
+}
+function katalogOzet(liste) {
+  const s = JSON.stringify(liste);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36) + "-" + liste.length;
+}
+async function katalogYaz(liste) {
+  if (!SB || !liste.length) return false;                          // boş katalog yayınlanmaz (sipariş ekranı boşalmasın)
+  const ozet = katalogOzet(liste);
+  if (ozet === _katalogSonOzet) return true;
+  const ts = new Date().toISOString();
+  const { error } = await SB.from("kv").upsert({ key: KATALOG_KEY, value: { v: 1, ozet, guncellendi: ts, urunler: liste }, updated_at: ts });
+  if (error) return false;
+  _katalogSonOzet = ozet;
+  return true;
+}
+/** Store buluta yazıldıktan hemen sonra: yereldeki ürünler bulutla aynıdır, katalog onlardan çıkarılır. */
+async function katalogYayinla() {
+  if (_kapiSoz || !oturumKayitli()) return false;
+  try { return await katalogYaz(katalogUrunleri(store.products)); } catch (e) { return false; }
+}
+/** Açılışta / girişten sonra: katalog buluttaki ürün listesinden çıkarılır (yerel kopya eski olabilir). */
+async function katalogDenetle() {
+  if (!SB || _kapiSoz || !oturumKayitli()) return false;
+  try {
+    // Yalnız gereken parçalar istenir (bütün store inmesin). Sunucu bu seçimi anlamazsa satırların tamamı okunur.
+    let { data, error } = await SB.from("kv").select("key, ozet:value->>ozet, urunler:value->products").in("key", [BULUT_KEY, KATALOG_KEY]);
+    if (error) {
+      const tam = await SB.from("kv").select("key, value").in("key", [BULUT_KEY, KATALOG_KEY]);
+      if (tam.error || !Array.isArray(tam.data)) return false;
+      data = tam.data.map((r) => ({ key: r.key, ozet: r.value && r.value.ozet, urunler: r.value && r.value.products }));
+    }
+    if (!Array.isArray(data)) return false;
+    const depo = data.find((r) => r.key === BULUT_KEY), kat = data.find((r) => r.key === KATALOG_KEY);
+    if (!depo || !Array.isArray(depo.urunler)) return false;        // bulutta ürün listesi görünmüyor: dokunma
+    const liste = katalogUrunleri(depo.urunler);
+    if (kat && kat.ozet && kat.ozet === katalogOzet(liste)) { _katalogSonOzet = kat.ozet; return true; }
+    return await katalogYaz(liste);
+  } catch (e) { return false; }
+}
+
+/* ---- "Tüm Verileri Sil": şifre + yazılı onay + önce yedek ---- */
+/** "dogru" | "yanlis" | "bilinmiyor". Açık oturuma dokunmaz. */
+async function sifreDogrula(sifre) {
+  try {
+    const r = await fetch(SB_URL + "/auth/v1/token?grant_type=password", { method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email: oturumEposta(), password: sifre }) });
+    if (r.ok) {
+      const j = await r.json().catch(() => null);   // doğrulama için açılan geçici oturumu kapat
+      if (j && j.access_token) fetch(SB_URL + "/auth/v1/logout?scope=local", { method: "POST", headers: { apikey: SB_KEY, Authorization: "Bearer " + j.access_token } }).catch(() => {});
+      return "dogru";
+    }
+    return r.status === 400 || r.status === 401 || r.status === 403 ? "yanlis" : "bilinmiyor";
+  } catch (e) { return "bilinmiyor"; }
+}
+/** Bütün korumalar buradadır. Dönen metin boşsa silindi; doluysa silinmedi (neden silinmediği). */
+async function verileriSil(sifre, onay) {
+  if (String(onay || "").trim().toLocaleUpperCase("tr-TR").replace(/I/g, "İ") !== "SİL") return "Onay kutusuna SİL yaz.";
+  if (!sifre) return "Şifreni yaz.";
+  if (!SB || _kapiSoz || !oturumKayitli()) return "Önce giriş yapmalısın.";
+  if (navigator.onLine === false) return "İnternet yokken silinemez (önce yedek alınması gerekiyor).";
+  const d = await sifreDogrula(sifre);
+  if (d === "yanlis") return "Şifre yanlış. Hiçbir şey silinmedi.";
+  if (d !== "dogru") return "Şifre doğrulanamadı (bağlantı sorunu). Hiçbir şey silinmedi.";
+  let yedek = false;
+  try { if (typeof yedekAl === "function") yedek = (await yedekAl("silme-oncesi")) === true; } catch (e) { yedek = false; }
+  if (!yedek) return "Yedek alınamadı. Hiçbir şey silinmedi.";
+  localStorage.removeItem(STORE_KEY); store = emptyStore(); saveStore();
+  return "";
+}
+function verileriSilAkisi() {
+  let m = null, calisiyor = false;
+  const govde = `<div class="gs-sil">
+    <p class="gs-uyari">Bütün müşteriler, borçlar, satışlar ve ürünler silinir. <b>Geri alınamaz.</b></p>
+    <p class="gs-not">Silmeden önce buluta bir yedek alınır; yedek alınamazsa hiçbir şey silinmez.</p>
+    <div class="field"><label for="gsSifre">Giriş şifren</label><input id="gsSifre" type="password" autocomplete="current-password" /></div>
+    <div class="field"><label for="gsOnay">Onay için buraya SİL yaz</label><input id="gsOnay" type="text" autocomplete="off" autocapitalize="characters" /></div>
+    <div class="gs-mesaj" id="gsMesaj" role="alert" aria-live="polite"></div>
+  </div>`;
+  m = openModal("Tüm verileri sil", govde, { okLabel: "Hepsini Sil", onOk: (ov) => {
+    if (calisiyor) return false;
+    const mesaj = ov.querySelector("#gsMesaj"), dugme = ov.querySelector(".ok");
+    calisiyor = true; dugme.disabled = true; mesaj.textContent = "Kontrol ediliyor…";
+    verileriSil(ov.querySelector("#gsSifre").value, ov.querySelector("#gsOnay").value).then((hata) => {
+      calisiyor = false; dugme.disabled = false;
+      if (hata) { mesaj.textContent = hata; return; }
+      m.close(); alert("Veriler silindi. Yedeği bulutta duruyor."); navigate("anasayfa");
+    });
+    return false;
+  } });
+  m.ov.classList.add("gs-sil-kap");
+}
+
+// Sayfa açılır açılmaz: cihazda oturum yoksa panel hiç görünmeden giriş ekranı gelir.
+if (typeof document !== "undefined" && !oturumKayitli()) kapiyiKapat("");
+
 /* ============ Sidebar menü ============ */
 const MENU = [
   { ico: "🏪", label: "Dükkan", route: "dukkan" },
@@ -3446,9 +3831,12 @@ function cayFind(id) { return store.gelenSiparisler.find((x) => x.id === id); }
 /* Çay ocağı uygulamasıyla AYNI Supabase projesi. anon/publishable anahtar public (pakete gömülür). */
 const SB_URL = "https://zchubpqbvbhcuxclirur.supabase.co";
 const SB_KEY = "sb_publishable_m5HEx3mFrjDJHBe0qfUznQ_tXkoESp3";
+/* Oturum cihazda kalıcıdır (bir kez giriş, bir daha sormaz). Bütün veri istekleri sbFetch'ten geçer:
+   oturum yokken hiçbir istek gitmez, kullanıcının jetonuyla gider (bkz. "GİRİŞ / OTURUM" bölümü). */
 const SB = (typeof window !== "undefined" && window.supabase && window.supabase.createClient)
-  ? window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } })
+  ? window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: OTURUM_ANAHTAR }, global: { fetch: sbFetch } })
   : null;
+girisBaslat();
 
 /** Supabase'den siparişleri çek; yeni olanları gelenSiparisler'e ekle. orderId ile mükerrer engeli.
  *  Satır → sipariş çevirisi araçla ortak (stkSiparisSatirdan); fiyat panelin güncel kataloğundan kurulur. */
@@ -5464,7 +5852,8 @@ function renderProfilim() {
       <div class="ptab" data-ptab="3" style="display:none">
         <h1 style="font-size:15px;margin:0 0 14px">Verilerimi Sil</h1>
         <p class="sub">Tüm ürün, müşteri, satış ve ayarları kalıcı olarak siler. Bu işlem geri alınamaz.</p>
-        <div style="margin-top:14px"><button class="btn softred lg" id="wipeBtn" type="button">🗑 Tüm Verileri Sil</button></div>
+        <p class="sub">Yanlışlıkla silinmesin diye şifren sorulur ve silmeden önce buluta yedek alınır.</p>
+        <div style="margin-top:14px"><button class="btn softred lg" id="wipeBtn" type="button">🗑 Tüm Verileri Sil…</button></div>
       </div>
     </div>
   </div></div>`;
@@ -5479,7 +5868,7 @@ function mountProfilim() {
   document.getElementById("fisForm").addEventListener("submit", (e) => { e.preventDefault(); const f = new FormData(e.target); ["fisBaslik", "fisTel", "fisAdres", "fisAltbilgi"].forEach((k) => store.settings[k] = f.get(k)); saveStore(); alert("Fiş ayarları kaydedildi ✔"); });
   document.getElementById("backupBtn").addEventListener("click", exportBackup);
   document.getElementById("restoreBtn").addEventListener("click", () => openFileImport(".json,application/json", importBackup));
-  document.getElementById("wipeBtn").addEventListener("click", () => { if (confirm("TÜM veriler (ürün, müşteri, satış...) silinecek. Emin misiniz?") && confirm("Son kez: gerçekten sil?")) { localStorage.removeItem(STORE_KEY); store = emptyStore(); saveStore(); alert("Veriler silindi."); navigate("anasayfa"); } });
+  document.getElementById("wipeBtn").addEventListener("click", verileriSilAkisi);
 }
 
 /* ============ Sidebar ============ */
@@ -5666,6 +6055,7 @@ function initTopbar() {
   userBtn.addEventListener("click", (e) => { e.stopPropagation(); dd.classList.toggle("open"); });
   document.addEventListener("click", () => dd.classList.remove("open"));
   dd.querySelectorAll("[data-route]").forEach((a) => a.addEventListener("click", () => navigate(a.dataset.route)));
+  dd.querySelectorAll("a").forEach((a) => { if (a.textContent.indexOf("Çıkış Yap") >= 0) { a.setAttribute("role", "button"); a.addEventListener("click", () => { cikisYap(); }); } });
   wireGlobalSearch();
   wireBell();
 }

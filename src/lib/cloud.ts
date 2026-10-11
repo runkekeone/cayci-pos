@@ -108,9 +108,10 @@ export async function siparisGonderBulut(order: Order): Promise<boolean> {
 }
 
 // ---- Toptancı kataloğu (babuco panelinde gerçekten satılan ürünler) ----
-// babuco kendi tüm store'unu (ürünler dahil) kv tablosuna "babuco:store" anahtarıyla
-// yedekler (bkz. babuco app.js bulutaYaz/bulutHydrate). Çay ocağı sipariş ekranı bu
-// ürün listesini okuyup katalog olarak gösterir — toptancı ne satıyorsa o görünür.
+// Toptancı paneli, sipariş ekranının ihtiyacı olan alanları (ad, grup, satış fiyatı, birim,
+// barkod) kv tablosunda herkese açık "babuco:katalog" anahtarına yayınlar. Önce o okunur.
+// Katalog henüz yayınlanmamışsa eski yol denenir: panelin tüm verisinin durduğu "babuco:store"
+// (bu anahtar veritabanı kilidi kurulunca dışarıya kapanır; o zaman yalnız katalog kalır).
 
 interface BabucoUrun {
   id: string
@@ -128,9 +129,16 @@ export async function babucoKatalogGetir(): Promise<CatalogItem[] | null> {
   const c = client()
   if (!c) return null
   try {
-    const { data, error } = await c.from('kv').select('value').eq('key', 'babuco:store').maybeSingle()
-    if (error || !data) return null
-    const urunler = (data.value as { products?: BabucoUrun[] } | null)?.products
+    let urunler: BabucoUrun[] | undefined
+    const katalog = await c.from('kv').select('value').eq('key', 'babuco:katalog').maybeSingle()
+    if (!katalog.error && katalog.data) {
+      urunler = (katalog.data.value as { urunler?: BabucoUrun[] } | null)?.urunler
+    }
+    if (!Array.isArray(urunler) || urunler.length === 0) {
+      const { data, error } = await c.from('kv').select('value').eq('key', 'babuco:store').maybeSingle()
+      if (error || !data) return null
+      urunler = (data.value as { products?: BabucoUrun[] } | null)?.products
+    }
     if (!Array.isArray(urunler) || urunler.length === 0) return null
     // Toptancının listesinde aynı ürün iki kez kayıtlı olabiliyor: biri
     // "(Koli içi 18 adet · birim fiyatı ₺21,38)", biri "(Koli içi 18 adet)".
