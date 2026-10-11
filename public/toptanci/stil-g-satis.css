@@ -224,6 +224,7 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-kalem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); }
 .gs-kalem:first-child { border-top: 0; }
 .gs-kalem-bilgi { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 15px; cursor: pointer; }
+.gs-kalem-bilgi:active { opacity: 0.65; }
 .gs-kalem-ad { font-size: 15.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
 .gs-kalem-birim { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 13.5px; color: var(--muted); }
 .gs-kalem-duz { display: inline-flex; align-items: center; gap: 3px; color: var(--brand-dark); font-weight: 600; }
@@ -300,6 +301,9 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-menu-satir, .gs-sec { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; color: var(--muted); text-align: left; font-size: 15px; cursor: pointer; }
 .gs-menu-satir:last-child { border-bottom: 0; }
 .gs-menu-satir:active { background: var(--brand-soft); }
+/* silen iş: kırmızı (yalnız burada) */
+.gs-menu-satir[data-gs-is="bosalt"] .gs-menu-ik { background: #fff0ef; color: var(--red); }
+.gs-menu-satir[data-gs-is="bosalt"] .gs-menu-orta b { color: var(--red); }
 .gs-menu-ik { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-dark); }
 .gs-menu-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .gs-menu-orta b { font-size: 15.5px; font-weight: 600; line-height: 1.25; color: var(--text); }
@@ -324,8 +328,9 @@ button.gs-mus:active { background: var(--brand-soft); }
 .gs-pick-yok { margin: 0; padding: 18px 8px; text-align: center; color: var(--muted); font-size: 15px; }
 .gs-pick-yok[hidden] { display: none; }
 
-/* ---- klavye açıkken (görünen alan kısa): sabit çubuklar ekranı yutmasın ---- */
-@media (max-width: 768px) and (max-height: 560px) {
+/* ---- klavye açıkken (görünen alan kısa): sabit çubuklar ekranı yutmasın ----
+   Eşik 500 px: klavye açıkken görünen alan ~300–460 px; klavyesiz en küçük telefonda (360×640, adres çubuğuyla) ~540 px. */
+@media (max-width: 768px) and (max-height: 500px) {
   body.pos-active .mobilbar { display: none; }
   .gs-bar { bottom: 0; padding: 6px 12px; }
   .gs-bar-btn { min-height: 48px; }
