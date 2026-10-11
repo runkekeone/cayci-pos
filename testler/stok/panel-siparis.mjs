@@ -75,6 +75,23 @@ const sade = (sale) => { const s = { ...sale }; delete s.id; delete s.tarih; ret
   await t.kapat();
 }
 
+/* ---------- 1b) Sipariş geldiğinde yazılmakta olan form silinmez ---------- */
+{
+  const dene = async (dizin) => {
+    const t = await ac(stokStore(), [], dizin);
+    await t.git("alis-olustur");
+    await t.page.fill("#aNo", "F-YARIM");
+    t.bulut.tablolar.siparisler.set("ord-aaa11", siparisSatiri("ord-aaa11", { gunOnce: 0 }));
+    await t.cek();
+    const r = await t.page.evaluate(() => [document.getElementById("aNo").value, !!document.getElementById("stkSipSerit")]);
+    await t.kapat();
+    return r;
+  };
+  const dizin = tabanPanel();
+  if (dizin) d.esit(await dene(dizin), ["", false], "taban (YANLIŞ): sipariş gelince ekran baştan çiziliyor, yarım yazılmış fatura siliniyordu (ve hiçbir işaret yoktu)");
+  d.esit(await dene(), ["F-YARIM", true], "sipariş gelince yazılmakta olan form yerinde kalıyor, şerit yine de çıkıyor");
+}
+
 /* ---------- 2) Teslim: panel ile araç AYNI satışı üretir; durum tabloya yazılır ---------- */
 {
   const sip = () => [siparisSatiri("ord-aaa11", { gunOnce: 2 })];

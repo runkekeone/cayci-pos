@@ -558,8 +558,8 @@ function mountUrunEkle() {
       Object.assign(eski, data);
     }
     else store.products.push(Object.assign({ id: genId() }, data));
-    saveStore(); editProductId = null;
-    stkMarjUyariGoster(alisDegisti ? stkMarjEtki(store, alisDegisti) : [], () => navigate("urunler"));
+    saveStore(); editProductId = null; navigate("urunler");
+    stkMarjUyariGoster(alisDegisti ? stkMarjEtki(store, alisDegisti) : []);
   });
 }
 
@@ -2192,7 +2192,8 @@ function mountAlisOlustur() {
     saveStore();
     const etki = stkMarjEtki(store, sonuc.degisen);
     if (!etki.length) alert("Alış faturası kaydedildi ✔\n" + stkHavuzAd(sonuc.kayit.hedef) + " stoğuna eklendi.");
-    stkMarjUyariGoster(etki, () => navigate("alis-faturalari"));
+    navigate("alis-faturalari");            // önce formdan çık: uyarı penceresi nasıl kapatılırsa kapatılsın aynı fatura ikinci kez kaydedilemesin
+    stkMarjUyariGoster(etki);
   });
 }
 
@@ -3101,7 +3102,9 @@ async function cayPullSupabase() {
       store.gelenSiparisler.push(o);
       degisti = true;
     }
-    if (degisti) { saveStore(); render(); }
+    // Ekranı baştan çizme: kullanıcı o an fatura/satış yazıyor olabilir (form silinir, sayfa en üste atlar).
+    // Sipariş listesi açıksa çiz; değilse üstteki şerit ve zil yeter.
+    if (degisti) { saveStore(); if (currentRoute() === "cay-ocagi") render(); else updateBell(); }
   } catch (e) { /* çevrimdışı / ağ hatası: sessiz, panel yerelle çalışır */ }
 }
 /* Siparişi panelden sil. Tablodaki satır durduğu için kimliği saklanır; yoksa 15 sn sonra "yeni" diye geri gelirdi. */
