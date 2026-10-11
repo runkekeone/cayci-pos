@@ -4,7 +4,8 @@
  * tools/babuco.cjs (panelAyar, sb) ve tools/cari/dump.cjs bunu kullanır.
  *
  * Kimlik sırası (her çalıştırmada):
- *   1) Saklı oturum dosyası (tools/.babuco-oturum.json — git'e girmez). Süresi dolduysa kendisi yeniler.
+ *   1) Saklı oturum dosyası (tools/.babuco-oturum.json — git'e girmez; orası yazılamıyorsa sistemin geçici
+ *      klasörü). Süresi dolduysa kendisi yeniler.
  *   2) BABUCO_EPOSTA + BABUCO_SIFRE ortam değişkenleri → o hesapla giriş yapar. Dosya yazılamasa da çalışır
  *      (telefon / bulut oturumları için bu yol tek başına yeterlidir).
  *   3) Hiçbiri yoksa oturumsuz (herkese açık anahtar) — veritabanı kilidi kurulmadan önceki davranış.
@@ -85,21 +86,42 @@ function ag(url, opts) {
 }
 
 /* ---------- saklı oturum dosyası ---------- */
-const oturumDosyasi = () => process.env.BABUCO_OTURUM_DOSYA || path.join(__dirname, ".babuco-oturum.json");
-function dosyaOku() {
-  try { const j = JSON.parse(fs.readFileSync(oturumDosyasi(), "utf8")); return j && typeof j === "object" ? j : {}; }
+/* Adaylar sırayla denenir: ilki yazılamıyorsa (salt-okunur depo) sıradaki. Varsayılan: tools/.babuco-oturum.json,
+   olmazsa sistemin geçici klasörü. BABUCO_OTURUM_DOSYA ile elle verilebilir (birden çok yol ; ya da : ile ayrılır).
+   Dosyada şifre YOKTUR; yalnız oturum jetonları, sunucu adresine göre ayrı ayrı durur (deneme sunucusunun
+   oturumu gerçeğinin üstüne yazmaz). */
+function oturumDosyalari() {
+  const elle = process.env.BABUCO_OTURUM_DOSYA;
+  if (elle) return elle.split(path.delimiter).filter(Boolean);
+  return [path.join(__dirname, ".babuco-oturum.json"), path.join(require("os").tmpdir(), ".babuco-oturum.json")];
+}
+function dosyaOku(d) {
+  try { const j = JSON.parse(fs.readFileSync(d, "utf8")); return j && typeof j === "object" ? j : {}; }
   catch (e) { return {}; }
 }
-/** Dosya adrese (Supabase projesine) göre ayrı tutulur: deneme sunucusunun oturumu gerçeğinin üstüne yazmaz. */
-function dosyaYaz(url, kayit) {
+function dosyaYaz(d, hepsi) {
   try {
-    const hepsi = dosyaOku();
-    if (kayit) hepsi[url] = kayit; else delete hepsi[url];
-    const hedef = oturumDosyasi(), gecici = hedef + "." + process.pid + ".tmp";
+    const gecici = d + "." + process.pid + ".tmp";
     fs.writeFileSync(gecici, JSON.stringify(hepsi), { mode: 0o600 });
-    fs.renameSync(gecici, hedef);
+    fs.renameSync(gecici, d);
     return true;
-  } catch (e) { return false; }           // salt-okunur ortam: oturum bu çalıştırmada bellekte kalır
+  } catch (e) { return false; }
+}
+/** Bu sunucu için saklı oturum (adaylar arasında en taze olan) ya da null. */
+function kayitOku(url) {
+  let en = null;
+  for (const d of oturumDosyalari()) { const k = dosyaOku(d)[url]; if (k && (!en || (k.expires_at || 0) > (en.expires_at || 0))) en = k; }
+  return en;
+}
+/** Oturumu kaydet (kayit = null → sil). Dönen: yazılan dosya ya da null (hiçbir yere yazılamadı: oturum bu çalıştırmada bellekte kalır). */
+function kayitYaz(url, kayit) {
+  let yazilan = null;
+  for (const d of oturumDosyalari()) {
+    const hepsi = dosyaOku(d);
+    if (kayit && !yazilan) { hepsi[url] = kayit; if (dosyaYaz(d, hepsi)) yazilan = d; }
+    else if (hepsi[url]) { delete hepsi[url]; dosyaYaz(d, hepsi); }      // eski kopya başka adayda kalmasın
+  }
+  return yazilan;
 }
 
 /* ---------- giriş / yenileme ---------- */
@@ -128,18 +150,18 @@ async function oturum() {
   if (_oturum !== undefined) return _oturum;
   const A = panelAyar();
   const eposta = (process.env.BABUCO_EPOSTA || "").trim(), sifre = process.env.BABUCO_SIFRE || "";
-  let k = dosyaOku()[A.url] || null;
+  let k = kayitOku(A.url);
   if (k && eposta && k.eposta && k.eposta.toLowerCase() !== eposta.toLowerCase()) k = null;   // başka hesabın oturumu
   if (k && k.access_token && k.expires_at - 60 > Date.now() / 1000) return (_oturum = k);
   if (k && k.refresh_token) {
     const y = await jetonAl("refresh_token", { refresh_token: k.refresh_token });
-    if (y) { if (!y.eposta) y.eposta = k.eposta; dosyaYaz(A.url, y); return (_oturum = y); }
-    dosyaYaz(A.url, null);
+    if (y) { if (!y.eposta) y.eposta = k.eposta; kayitYaz(A.url, y); return (_oturum = y); }
+    kayitYaz(A.url, null);
   }
   if (eposta && sifre) {
     const y = await jetonAl("password", { email: eposta, password: sifre });
     if (!y) throw new Error("Giris basarisiz: e-posta ya da sifre yanlis (BABUCO_EPOSTA / BABUCO_SIFRE).");
-    dosyaYaz(A.url, y);
+    kayitYaz(A.url, y);
     return (_oturum = y);
   }
   if (k) console.error("UYARI: sakli oturumun suresi dolmus. Yeniden giris: node tools/babuco-kimlik.cjs giris");
@@ -149,7 +171,7 @@ async function oturumYenile() {
   const A = panelAyar(), k = _oturum;
   let y = k && k.refresh_token ? await jetonAl("refresh_token", { refresh_token: k.refresh_token }) : null;
   if (!y && process.env.BABUCO_EPOSTA && process.env.BABUCO_SIFRE) y = await jetonAl("password", { email: process.env.BABUCO_EPOSTA.trim(), password: process.env.BABUCO_SIFRE });
-  if (y) { if (!y.eposta && k) y.eposta = k.eposta; dosyaYaz(A.url, y); _oturum = y; }
+  if (y) { if (!y.eposta && k) y.eposta = k.eposta; kayitYaz(A.url, y); _oturum = y; }
   return y;
 }
 
@@ -259,7 +281,7 @@ async function yazimSonrasi(pathQ, yontem, opts, veri) {
   catch (e) { console.error("UYARI: siparis katalogu guncellenemedi (" + e.message + "). Panel acilinca kendisi duzeltir."); }
 }
 
-module.exports = { panelAyar, sb, oturum, yetkiSor, katalogUrunleri, katalogOzet, katalogYayinla, oturumDosyasi };
+module.exports = { panelAyar, sb, oturum, yetkiSor, katalogUrunleri, katalogOzet, katalogYayinla, oturumDosyalari };
 
 /* ---------- komut satırı ---------- */
 function sor(soru, gizli) {
@@ -293,8 +315,8 @@ if (require.main === module) {
     const komut = (process.argv[2] || "durum").toLowerCase();
     const A = panelAyar();
     if (komut === "cikis") {
-      const vardi = !!dosyaOku()[A.url];
-      dosyaYaz(A.url, null);
+      const vardi = !!kayitOku(A.url);
+      kayitYaz(A.url, null);
       console.log(vardi ? "Sakli oturum silindi." : "Sakli oturum yoktu.");
       return;
     }
@@ -303,9 +325,9 @@ if (require.main === module) {
       const sifre = process.env.BABUCO_SIFRE || await sor("Sifre: ", true);
       const y = await jetonAl("password", { email: eposta, password: sifre });
       if (!y) throw new Error("Giris basarisiz: e-posta ya da sifre yanlis.");
-      const yazildi = dosyaYaz(A.url, y);
+      const yazildi = kayitYaz(A.url, y);
       console.log("Giris yapildi: " + y.eposta + " · " + YETKI_METNI[await yetkiSor(y.access_token)]);
-      console.log(yazildi ? "Oturum kaydedildi (" + path.basename(oturumDosyasi()) + "); arac artik sifre sormadan calisir."
+      console.log(yazildi ? "Oturum kaydedildi (" + yazildi + "); arac artik sifre sormadan calisir."
         : "UYARI: oturum dosyasi yazilamadi; her calistirmada BABUCO_EPOSTA + BABUCO_SIFRE gerekir.");
       return;
     }

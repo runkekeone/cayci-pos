@@ -139,6 +139,27 @@ for (const kip of ["kilitsiz", "kilitli"]) {
   } finally { await p.kapat(); await bulut.dur(); }
 }
 
+// ---------- internet yokken çıkış: iki kez sorar; onaylanırsa cihaz yine de temizlenir ----------
+{
+  console.log("\n— internet yokken çıkış —");
+  const bulut = await kilitliBulut({ satirlar: ornekSatirlar(), kilit: true });
+  const p = await panelAc({ bulutUrl: bulut.url });
+  try {
+    await girisFormu(p.page, TOPTANCI.eposta, TOPTANCI.sifre);
+    await p.page.waitForFunction(() => window.app.getStore().customers.length === 4);
+    bulut.kapat();
+    const once = p.diyaloglar.length;
+    await p.page.click("#userBtn"); await p.page.click("#userDropdown a:has-text('Çıkış Yap')");
+    await p.page.waitForSelector("#giris-kapi", { timeout: 20000 });
+    await p.page.waitForFunction(() => window.app && typeof window.app.getStore === "function");
+    const sorular = p.diyaloglar.slice(once).map((x) => x.mesaj);
+    d.dogru(sorular.length === 2 && /buluta gitmemiş olabilir \(internet yok\)/.test(sorular[1]), "internet yokken çıkış: ikinci kez, nedenini söyleyerek sordu");
+    d.esit(await p.page.evaluate(() => Object.keys(localStorage).filter((k) => k === "benimpos-app-v1" || k.startsWith("babuco:"))), [], "internet yokken çıkış onaylandı: cihazdaki kopya ve oturum yine de silindi");
+    bulut.ac();
+    d.esit(bulut.deger("babuco:store").customers.length, 4, "internet yokken çıkış: buluttaki veri yerinde");
+  } finally { await p.kapat(); await bulut.dur(); }
+}
+
 // ---------- kilit kurulmadan önce eski politika yalnız oturumsuz role izin veriyorsa ----------
 {
   console.log("\n— kilit öncesi: eski politika yalnız oturumsuz role açık —");

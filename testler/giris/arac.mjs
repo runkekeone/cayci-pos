@@ -92,6 +92,12 @@ try {
       d.esit(bulut.deger("babuco:katalog").urunler.find((x) => x.id === "u3").satis, 700, "kilitli: araç yeni fiyatı kataloğa da yansıttı (çay ocağı eski fiyat görmez)");
       d.dogru(bulut.istekler.filter((i) => i.yol === "/rest/v1/kv" && i.yontem !== "GET").every((i) => i.rol === "authenticated"), "kilitli: aracın bütün yazımları oturumla gitti");
 
+      // ilk dosya yeri yazılamıyorsa (salt-okunur depo) sıradaki yere kaydeder → aynı oturumda tekrar tekrar giriş yapmaz
+      const ikinci = yeniDosya(), girisSayisi = bulut.sayac.giris;
+      a = await aracCalistir(bulut.url, ["durum"], ortam(yazilamaz + path.delimiter + ikinci, kimlikli()));
+      const a2 = await aracCalistir(bulut.url, ["durum"], ortam(yazilamaz + path.delimiter + ikinci, kimlikli()));
+      d.dogru(a.kod === 0 && a2.kod === 0 && fs.existsSync(ikinci) && bulut.sayac.giris === girisSayisi + 1, "ilk dosya yeri yazılamıyorsa yedek yere kaydediyor; ikinci çalıştırmada yeniden giriş yapmıyor");
+
       // bir kez giriş → dosya; sonra şifresiz
       const dosya = yeniDosya();
       let k = await betik(bulut.url, KIMLIK, ["giris"], { BABUCO_OTURUM_DOSYA: dosya, ...kimlikli() });
