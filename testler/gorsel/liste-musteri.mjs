@@ -135,7 +135,7 @@ try {
   await page.click('[data-act="odeme"]'); await bekle(250); d.dogru(/^Ödeme Al — Kardeşler/.test(await modalBaslik(page)), "Ödeme Al penceresi açılıyor"); await modalKapat(page);
   await page.click('[data-act="ekstre"]'); await bekle(500); d.dogru(await page.evaluate(() => document.querySelectorAll(".modal-overlay").length === 1), "Hesap Özeti penceresi açılıyor (" + (await modalBaslik(page)) + ")"); await modalKapat(page);
   await page.click('[data-act="gl-diger"]'); await bekle(250);
-  d.esit(await page.evaluate(() => [...document.querySelectorAll(".modal-overlay .gl-menu-oge b")].map((b) => b.textContent)), ["Veresiye borç ekle", "Toplu sipariş", "Fiyat listesi", "Rehberden numara al", "Düzenle", "Hatırlatma gönder (WhatsApp)", "Müşteriyi sil"], "Diğer: Veresiye, Toplu sipariş, Fiyat listesi, Rehberden numara, Düzenle, Hatırlatma, Sil");
+  d.esit(await page.evaluate(() => [...document.querySelectorAll(".modal-overlay .gl-menu-oge b")].map((b) => b.textContent)), ["Veresiye borç ekle", "Toplu sipariş", "Fiyat listesi", "Canlı hesap sayfası", "Rehberden numara al", "Düzenle", "Hatırlatma gönder (WhatsApp)", "Müşteriyi sil"], "Diğer: Veresiye, Toplu sipariş, Fiyat listesi, Canlı hesap sayfası, Rehberden numara, Düzenle, Hatırlatma, Sil");
   await modalKapat(page);
   for (const [oge, baslik] of [["Veresiye borç ekle", /^Veresiye Borç Ekle — Kardeşler/], ["Toplu sipariş", /Toplu Sipariş/i], ["Fiyat listesi", /Fiyat Listesi/i], ["Düzenle", /^Müşteri Düzenle$/], ["Hatırlatma gönder", /^Hatırlatma — Kardeşler/]]) {
     await page.click('[data-act="gl-diger"]'); await bekle(250); await menuBas(page, oge);

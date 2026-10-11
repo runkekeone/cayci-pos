@@ -1,3 +1,5 @@
+// ESKİ — yerini canlı sayfa aldı (public/cari/ + tools/babuco-cari.cjs; komutlar: cari-yayinla, cari-link).
+// Artık çalıştırmaya gerek yok: hesaplar her kayıttan sonra kendiliğinden yayınlanır. Dosya yalnız geçmiş için duruyor.
 // stdin: {salt(b64), iter, items:[{tel, html}]}  ->  stdout: {anahtar-id-hex: b64(iv+ct+tag)}
 const crypto = require("crypto");
 let s = ""; process.stdin.on("data", d => s += d).on("end", () => {

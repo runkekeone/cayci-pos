@@ -119,7 +119,9 @@ Kilitten sonra araç giriş yapmadan veri okuyamaz; `Veritabani kilitli: giris y
   Kontrol: `node tools/babuco-kimlik.cjs durum`. Silmek için: `node tools/babuco-kimlik.cjs cikis`.
 - **Telefondan açılan bulut oturumlarında:** claude.ai/code → ortam seçici → ortamı düzenle → **Environment variables**:
   `BABUCO_EPOSTA` = e-postan, `BABUCO_SIFRE` = şifren. Dosyaya gerek kalmaz. Şifre hiçbir çıktıya yazılmaz.
-- Müşteri cari sayfası güncellemesi (`tools/cari/guncelle.sh`) aynı kimliği kullanır; ayrıca bir şey gerekmez.
+- Müşterilerin canlı cari sayfası (`public/cari/`) aracın her kaydından sonra aynı kimlikle kendiliğinden güncellenir; ayrıca bir şey gerekmez.
+  Kilit kurulduktan sonra **bir kez** `node tools/babuco.cjs cari-yayinla --yeni-sir --kaydet` çalıştır: müşteri kodlarının sırrı kilitten önce
+  herkese açık duruyordu; bu komut onu yeniler (o güne kadar gönderilmiş kişisel linkler değişir, telefonla giriş aynen sürer).
 
 **Doğrula:** `node tools/babuco.cjs durum` satış/müşteri sayılarını gösteriyor.
 
@@ -175,6 +177,12 @@ Sık görülenler:
 **Kapatır:** `babuco:store` (bütün müşteri, borç, satış, alış fiyatı), `babuco:yedek:*` ve diğer bütün `babuco:*` satırları
 artık yalnız izin listesindeki hesapça okunur ve yazılır. Katalog, duyurular ve ön ödeme kuralı herkesçe **okunur** ama
 yalnız senin hesabınca yazılır (kimse sahte katalog ya da duyuru yayınlayamaz). "Tüm Verileri Sil" şifre ister ve önce yedek alır.
+
+**Müşteri cari sayfası.** `babuco:cari:*` satırları (her müşterinin **şifreli** hesabı) herkesçe okunur ama yalnız senin hesabınca yazılır;
+sayfa onları müşterinin telefon numarası ya da kişisel linkiyle tarayıcıda çözer. Müşteri kodlarının üretildiği sır (`babuco:cari-sir`) özeldir.
+Bilinen sınır: telefon numarası tahmin edilebilir bir sırdır; numarayı bilen (ya da bütün cep numaralarını tek tek deneyecek kadar uğraşan) biri
+o müşterinin hesabını (aldıkları, ödemeleri, bakiyesi) görebilir. Kayıtta alış fiyatı, kâr, limit, not ve başka müşteri yoktur.
+`kilit.sql`'i bu satırlar eklenmeden önceki hâliyle çalıştırdıysan yeniden çalıştır (AYAR'ı boş bırakabilirsin); yoksa müşteriler hesabını göremez.
 
 **Kapatmaz — bilerek bu tura bırakıldı, hâlâ açık:**
 

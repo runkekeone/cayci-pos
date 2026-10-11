@@ -4,7 +4,7 @@
 //  - /rest/v1/rpc/babuco_yetkili  (kilit kuruluysa true/false, değilse 404 — gerçek sunucudaki gibi)
 //  - tools/supabase/kilit.sql'in kurallarının taklidi (kilit açıkken):
 //        özel   babuco:*            → yalnız izin listesindeki hesap okur/yazar; başkasına okuma BOŞ döner, yazma reddedilir
-//        açık   babuco:katalog, duyurular, babuco:on-siparis:policy:*  → herkes okur, yalnız yetkili yazar
+//        açık   babuco:katalog, duyurular, babuco:on-siparis:policy:*, babuco:cari:*  → herkes okur, yalnız yetkili yazar
 //        serbest bayi_puan:*, cayci-pos:*  → bugünkü gibi herkes okur/yazar (silemez)
 //        diğer  → kimseye açık değil
 //  - kilit kurulmadan önceki iki olası düzen: "acik" (herkes her şeyi) ve "yalniz-anon" (eski politika yalnız
@@ -22,7 +22,7 @@ export const YABANCI = { id: "00000000-0000-4000-8000-000000000002", eposta: "ya
 export function sinif(key) {
   if (key == null) return "bilinmeyen";
   key = String(key);
-  if (key === "babuco:katalog" || key === "duyurular" || key.startsWith("babuco:on-siparis:policy:")) return "acik";
+  if (key === "babuco:katalog" || key === "duyurular" || key.startsWith("babuco:on-siparis:policy:") || key.startsWith("babuco:cari:")) return "acik";
   if (key.startsWith("babuco:")) return "ozel";
   if (key.startsWith("bayi_puan:") || key.startsWith("cayci-pos:")) return "serbest";
   return "bilinmeyen";
@@ -151,7 +151,8 @@ export async function kilitliBulut(a = {}) {
     if (req.method === "GET" && select.includes("->")) {
       const anahtarSuz = url.searchParams.get("key") || "";
       const istenen = anahtarSuz.startsWith("eq.") ? [anahtarSuz.slice(3)] : anahtarSuz.startsWith("in.") ? anahtarSuz.slice(4, -1).split(",").map((x) => x.replace(/^"|"$/g, "")) : null;
-      const satirlar = [...gercek.values()].filter((s) => (!istenen || istenen.includes(s.key)) && izin.oku(k, s.key));
+      const benzer = anahtarSuz.startsWith("like.") ? new RegExp("^" + anahtarSuz.slice(5).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/[*%]/g, ".*") + "$") : null;
+      const satirlar = [...gercek.values()].filter((s) => (!istenen || istenen.includes(s.key)) && (!benzer || benzer.test(s.key)) && izin.oku(k, s.key));
       yanit(200, satirlar.map((s) => {
         const o = {};
         for (const parca of select.split(",").map((x) => x.trim()).filter(Boolean)) {

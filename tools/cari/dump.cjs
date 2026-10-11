@@ -1,3 +1,5 @@
+// ESKİ — yerini canlı sayfa aldı (public/cari/ + tools/babuco-cari.cjs; komutlar: cari-yayinla, cari-link).
+// Artık çalıştırmaya gerek yok: hesaplar her kayıttan sonra kendiliğinden yayınlanır. Dosya yalnız geçmiş için duruyor.
 // Buluttaki babuco:store'u bir dosyaya döker (cari hesap sayfası üreticisi için).
 // Kimlik aracınkiyle aynı: tools/babuco-kimlik.cjs (oturum varsa onunla; veritabanı kilidi kuruluyken oturum şart).
 const fs = require("fs");

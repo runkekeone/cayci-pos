@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Cari Hesap · Özgür Ticaret</title>
+<!--
+  Müşterilerin CANLI cari hesap sayfası (+ toptancının salt-okunur "patron" görünümü: #patron).
+  Tek dosyadır, bilerek: kökteki çay ocağı service worker'ı sayfa-dışı dosyaları önbellekten verdiği için ayrı
+  js/css dosyası eskiyebilirdi. Bu dosyada ve depoda müşteri verisi YOKTUR; hesap, açılış anında Supabase'in
+  herkese açık okunan "babuco:cari:…" satırından çekilir ve tarayıcıda çözülür (anahtar: kişisel linkteki kod ya da
+  telefon numarası). Sayfa hiçbir şey YAZMAZ. Yayını araç (tools/babuco-cari.cjs) ve panel (app.js) yapar.
+  İki işaretli bölüm başka dosyalardan kopyadır, elle değiştirme:  node testler/cari/ortak-blok.mjs --yaz
+-->
+<style>
+  :root { color-scheme: light; --bg:#fff; --fg:#1a1f24; --soluk:#5d6871; --cizgi:#e1e5e8; --zemin2:#f4f6f8;
+    --murekkep:#1d5a7a; --borc:#b0392a; --odeme:#23704b; --f:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  * { box-sizing:border-box }
+  html { -webkit-text-size-adjust:100% }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--f); font-size:17px; line-height:1.4 }
+  main { max-width:640px; margin:0 auto; padding:18px 16px 48px }
+  button, input { font:inherit; color:inherit }
+  h1 { margin:2px 0 0; font-size:25px; line-height:1.2; overflow-wrap:anywhere }
+  .firma { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--murekkep) }
+  .ust { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px }
+  .ust > div { min-width:0 }
+  .kucuk-btn { flex:none; min-height:44px; padding:8px 14px; border:1px solid var(--cizgi); border-radius:10px; background:var(--bg); color:var(--soluk); font-size:15px; font-weight:600; cursor:pointer }
+  .bakiye { border-radius:14px; padding:16px 18px; background:var(--zemin2); border-left:6px solid var(--borc); margin-bottom:22px }
+  .bakiye.temiz { border-left-color:var(--odeme) }
+  .etiket { display:block; font-size:15px; color:var(--soluk); font-weight:600 }
+  .tutar { display:block; font-size:40px; line-height:1.15; font-weight:800; color:var(--borc); font-variant-numeric:tabular-nums; overflow-wrap:anywhere }
+  .bakiye.temiz .tutar { color:var(--odeme) }
+  .son { display:block; margin-top:6px; font-size:15px; color:var(--soluk) }
+  h2 { margin:0 0 10px; font-size:18px }
+  .gun { border:1px solid var(--cizgi); border-radius:14px; margin-bottom:14px; overflow:hidden }
+  .gun > header { display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:10px 14px; background:var(--zemin2); border-bottom:1px solid var(--cizgi) }
+  .gun > header b { font-size:18px }
+  .gun > header span { color:var(--soluk); font-size:15px }
+  .gb { text-align:right; white-space:nowrap; color:var(--soluk); font-size:14px }
+  .gb b { display:block; color:var(--fg); font-size:17px; font-variant-numeric:tabular-nums }
+  .fis, .odeme { border-top:1px solid var(--cizgi) }
+  .gun > header + .fis, .gun > header + .odeme { border-top:0 }
+  summary, .odeme { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:58px; padding:10px 14px }
+  summary { list-style:none; cursor:pointer }
+  summary::-webkit-details-marker { display:none }
+  summary:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible { outline:3px solid var(--murekkep); outline-offset:2px }
+  .s-ad { min-width:0; font-weight:700 }
+  .s-ad::before { content:"›"; display:inline-block; width:.8em; color:var(--murekkep); font-weight:800; transition:transform .15s }
+  .odeme .s-ad::before { content:"" ; width:0 }
+  .fis[open] .s-ad::before { transform:rotate(90deg) }
+  .s-ad small { font-weight:400; font-size:15px; color:var(--soluk); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical }
+  .s-tutar { flex:none; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap }
+  .eksi { color:var(--odeme) }
+  .arti { color:var(--borc) }
+  .f-ic { padding:2px 14px 14px; background:var(--zemin2) }
+  table { width:100%; border-collapse:collapse; font-size:16px }
+  td { padding:7px 0; vertical-align:top; border-bottom:1px solid var(--cizgi) }
+  td:last-child { text-align:right; white-space:nowrap; padding-left:10px; font-variant-numeric:tabular-nums }
+  td small { display:block; color:var(--soluk); font-size:14px }
+  tr.top td { font-weight:800; font-size:17px }
+  tr.kalan td { font-weight:700; color:var(--borc); border-bottom:0 }
+  tr.odenen td { color:var(--odeme) }
+  .f-no { margin:8px 0 0; font-size:13px; color:var(--soluk) }
+  .not { font-size:14px; color:var(--soluk); margin:14px 0 0 }
+  .bos { padding:18px; border:1px dashed var(--cizgi); border-radius:14px; color:var(--soluk); text-align:center }
+  /* giriş / durum */
+  .giris { padding-top:28px; display:grid; gap:14px }
+  .giris p { margin:0; color:var(--soluk) }
+  .giris label { font-size:15px; font-weight:700 }
+  .giris input { width:100%; min-height:56px; padding:12px 14px; border:2px solid var(--cizgi); border-radius:12px; background:var(--bg); font-size:22px }
+  .giris input[type=tel] { letter-spacing:.04em; font-variant-numeric:tabular-nums }
+  .giris input:focus { outline:none; border-color:var(--murekkep) }
+  .ana-btn { display:flex; align-items:center; justify-content:center; width:100%; min-height:56px; padding:12px 16px; border:0; border-radius:12px; background:var(--murekkep); color:#fff; font-size:18px; font-weight:700; cursor:pointer; text-decoration:none; text-align:center }
+  .ana-btn.ikinci { background:var(--bg); color:var(--murekkep); border:2px solid var(--murekkep) }
+  .ana-btn.yesil { background:#1c7a45 }
+  .ana-btn:disabled { opacity:.6; cursor:wait }
+  .hata { color:var(--borc) !important; font-weight:600; min-height:1.4em }
+  .durum { padding:56px 8px; text-align:center; color:var(--soluk); display:grid; gap:16px; justify-items:center }
+  .durum b { color:var(--fg); font-size:20px }
+  .alt-link { margin-top:26px; text-align:center; font-size:14px }
+  .alt-link a { color:var(--soluk) }
+  /* patron */
+  .eylem { display:grid; gap:10px; margin:0 0 20px }
+  .ara { width:100%; min-height:52px; padding:10px 14px; border:2px solid var(--cizgi); border-radius:12px; font-size:18px; margin-bottom:12px; background:var(--bg) }
+  .liste { border:1px solid var(--cizgi); border-radius:14px; overflow:hidden }
+  .musteri { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; min-height:60px; padding:10px 14px; border:0; border-top:1px solid var(--cizgi); background:var(--bg); text-align:left; cursor:pointer }
+  .musteri:first-child { border-top:0 }
+  .musteri .m-ad { min-width:0; font-weight:700; overflow-wrap:anywhere }
+  .musteri small { display:block; font-weight:600; font-size:14px; color:var(--borc) }
+  .musteri b { flex:none; font-variant-numeric:tabular-nums; white-space:nowrap }
+  .musteri b.sifir { color:var(--soluk); font-weight:400 }
+  @media (prefers-reduced-motion: reduce) { .s-ad::before { transition:none } }
+</style>
+</head>
+<body>
+<main id="kok"><div class="durum"><b>Açılıyor…</b></div></main>
+<noscript><p style="padding:24px">Bu sayfanın çalışması için tarayıcınızda JavaScript açık olmalı.</p></noscript>
+<script>
+"use strict";
+/* Bağlantı bilgisi panelinkiyle aynıdır (public/toptanci/app.js); testler/cari/ortak-blok.mjs ayrışmayı yakalar. */
+const SB_URL = "https://zchubpqbvbhcuxclirur.supabase.co";
+const SB_KEY = "sb_publishable_m5HEx3mFrjDJHBe0qfUznQ_tXkoESp3";
+
+/* >>> CARI-ORTAK-BASLA
+   Bu blok tools/babuco-cari.cjs, public/toptanci/app.js ve public/cari/index.html içinde HARFİ HARFİNE aynıdır:
+   araç, panel ve müşteri sayfası aynı anahtarı türetsin, birbirinin yazdığını okusun diye. Bloğu BURADA düzenle,
+   sonra kopyala:  node testler/cari/ortak-blok.mjs --yaz   (--yaz'sız çalıştırınca yalnız aynı mı diye bakar).
+   Üst düzey sabit (const/let) YOK; hepsi işlev. Şifreleme WebCrypto ile (tarayıcıda da Node'da da aynı kod).
+
+   Kurgu:
+     sır   = rastgele 32 bayt; kv "babuco:cari-sir" (kilitten sonra yalnız yetkili hesap okur).
+     kod   = HMAC-SHA256(sır, "kod|" + müşteri id) → 128 bit. Kişisel link kodu "#k=" kısmında taşır (sunucuya gitmez).
+     hesap = AES-256-GCM(SHA-256(".../anahtar/h/" + kod)), satır adı SHA-256(".../id/h/" + kod) → "babuco:cari:h:<32 hex>".
+     telefon kaydı = { k: kod }, anahtarı PBKDF2-SHA256(telefonun son 10 hanesi, sabit tuz, cariSabit().tur tur)'dan;
+             satır "babuco:cari:t:<32 hex>". Telefon tahmin edilebilir bir sırdır: pahalı türetme yalnız yavaşlatır.
+     o     = HMAC(sır, içerik) özeti (64 bit): yayıncı, satırı çözmeden "içerik değişti mi" diye buna bakar.
+   Kayda YALNIZ cariHesap() içindeki alanlar girer. */
+function cariSabit() {
+  return { onek: "babuco:cari:", sirAnahtar: "babuco:cari-sir", tuz: "babuco-cari/v1/telefon", tur: 300000,
+    adres: "https://runkekeone.github.io/cayci-pos/cari/" };
+}
+function cariKripto() { return (typeof crypto !== "undefined" && crypto.subtle) ? crypto : require("crypto").webcrypto; }
+function cariBayt(metin) { return new TextEncoder().encode(String(metin)); }
+function cariB64(bayt) { const b = new Uint8Array(bayt); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+function cariB64url(bayt) { return cariB64(bayt).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function cariB64Coz(s) { const m = atob(String(s)), b = new Uint8Array(m.length); for (let i = 0; i < m.length; i++) b[i] = m.charCodeAt(i); return b; }
+function cariHex(bayt) { return Array.from(new Uint8Array(bayt), (x) => x.toString(16).padStart(2, "0")).join(""); }
+/* Telefonun son 10 hanesi ("5XXXXXXXXX"); cep numarası değilse boş. */
+function cariTel10(t) { const d = String(t || "").replace(/\D/g, ""), s = d.length >= 10 ? d.slice(-10) : ""; return s[0] === "5" ? s : ""; }
+async function cariHmac(sir, metin) {
+  const K = cariKripto().subtle;
+  const a = await K.importKey("raw", cariBayt(sir), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await K.sign("HMAC", a, cariBayt(metin)));
+}
+async function cariKod(sir, musteriId) { return cariB64url((await cariHmac(sir, "kod|" + musteriId)).slice(0, 16)); }
+async function cariOzet(sir, metin) { return cariHex((await cariHmac(sir, "ozet|" + metin)).slice(0, 8)); }
+/* Telefondan anahtar tohumu: pahalı kısım burası (müşterinin telefonunda bir kez, yayıncıda yalnız telefon değişince). */
+async function cariTelTohum(tel10) {
+  const K = cariKripto().subtle, sabit = cariSabit();
+  const a = await K.importKey("raw", cariBayt(tel10), "PBKDF2", false, ["deriveBits"]);
+  return cariB64url(await K.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: cariBayt(sabit.tuz), iterations: sabit.tur }, a, 256));
+}
+/* tur: "h" (hesap; tohum = kod) | "t" (telefon kaydı; tohum = cariTelTohum). Dönen: { key: kv satır adı, aes } */
+async function cariAnahtar(tur, tohum) {
+  const K = cariKripto().subtle;
+  const id = cariHex(new Uint8Array(await K.digest("SHA-256", cariBayt("babuco-cari/v1/id/" + tur + "/" + tohum))).slice(0, 16));
+  const ham = await K.digest("SHA-256", cariBayt("babuco-cari/v1/anahtar/" + tur + "/" + tohum));
+  return { key: cariSabit().onek + tur + ":" + id, aes: await K.importKey("raw", ham, "AES-GCM", false, ["encrypt", "decrypt"]) };
+}
+/* Şifreli metin satır adına bağlanır (başka satıra taşınan kayıt çözülmez). Dönen: base64(iv + şifreli + etiket). */
+async function cariSifrele(a, metin) {
+  const C = cariKripto(), iv = C.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await C.subtle.encrypt({ name: "AES-GCM", iv: iv, additionalData: cariBayt(a.key) }, a.aes, cariBayt(metin)));
+  const hepsi = new Uint8Array(12 + ct.length); hepsi.set(iv, 0); hepsi.set(ct, 12);
+  return cariB64(hepsi);
+}
+/* Yanlış anahtar / bozuk kayıt → fırlatır. */
+async function cariCoz(a, d) {
+  const ham = cariB64Coz(d);
+  const pt = await cariKripto().subtle.decrypt({ name: "AES-GCM", iv: ham.slice(0, 12), additionalData: cariBayt(a.key) }, a.aes, ham.slice(12));
+  return new TextDecoder().decode(pt);
+}
+/* Müşterinin göreceği hesap. YALNIZ burada sayılan alanlar kayda girer: firma adı, müşteri adı, açılış bakiyesi,
+   bakiye, fişler (no, tarih, kalem adı/adet/satış fiyatı, iskonto, toplam, nakit/kart/açık) ve ödemeler (tarih,
+   tutar, tür). Alış fiyatı, maliyet, kâr, komisyon, limit, vade, telefon, not metinleri, müşteri/ürün kimlikleri
+   ve başka müşteriler GİRMEZ. turBul = tahsilatTuru (ödemenin türü: nakit|kart|havale|iade|duzeltme). */
+function cariHesap(S, c, turBul) {
+  const N = (v) => Math.round((Number(v) || 0) * 100) / 100;
+  const sirala = (a, b) => (String(a.t) < String(b.t) ? -1 : String(a.t) > String(b.t) ? 1 : 0);
+  const st = S.settings || {};
+  let bakiye = N(c.acilis);
+  const f = (S.sales || []).filter((s) => s && s.musteriId === c.id).map((s) => {
+    const o = s.odeme || {};
+    const x = { no: String(s.belgeNo || ""), t: String(s.tarih || ""), top: N(s.toplam), nakit: N(o.nakit), kart: N(o.pos), acik: N(o.acik),
+      k: (s.items || []).map((it) => [String(it.ad || ""), Number(it.adet) || 0, N(it.fiyat)]) };
+    if (N(s.iskonto)) x.isk = N(s.iskonto);
+    if (s.odemeAdi === "İade" || x.top < 0) x.iade = 1;
+    else if (s.odemeAdi === "Havale") x.havale = 1;
+    bakiye += x.acik;
+    return x;
+  }).sort(sirala);
+  const o = (S.payments || []).filter((p) => p && p.musteriId === c.id).map((p) => {
+    const x = { t: String(p.tarih || ""), tutar: N(p.tutar), tur: String(turBul(p)) };
+    /* "Satış üstü fazla ödeme → borca sayıldı (Belge X)": yalnız belge numarası alınır; not metni kayda girmez. */
+    const m = /fazla ödeme/i.test(String(p.not || "")) ? /Belge (\d{4}-\d+)/.exec(String(p.not)) : null;
+    if (m) x.fis = m[1];
+    bakiye -= x.tutar;
+    return x;
+  }).sort(sirala);
+  return { v: 1, firma: String(st.fisBaslik || st.firmaAdi || ""), ad: String(c.ad || ""), acilis: N(c.acilis), bakiye: N(bakiye), f: f, o: o };
+}
+/* Yayın planı: buluttaki satırlarla (mevcut: [{ key, o }]) karşılaştırır; yalnız içeriği değişeni yazar, artık
+   karşılığı olmayanı (silinen müşteri, değişen/silinen telefon, değişen sır) siler. Buluta dokunmaz.
+   Dönen: { yaz: [{ key, value }], sil: [key], atlanan: [{ ad, neden }], musteri } */
+async function cariPlan(S, sir, mevcut, turBul) {
+  const sabit = cariSabit(), var_ = {}, telKaydi = {}, kalsin = {}, yaz = [], atlanan = [], telGoren = {};
+  (mevcut || []).forEach((r) => { if (r && String(r.key).indexOf(sabit.onek) === 0) var_[r.key] = typeof r.o === "string" ? r.o : ""; });
+  Object.keys(var_).forEach((k) => { if (k.indexOf(sabit.onek + "t:") === 0 && var_[k]) telKaydi[var_[k]] = k; });
+  let musteri = 0;
+  for (const c of (S.customers || [])) {
+    if (!c || !c.id) continue;
+    musteri++;
+    const kod = await cariKod(sir, c.id), a = await cariAnahtar("h", kod);
+    const metin = JSON.stringify(cariHesap(S, c, turBul)), o = await cariOzet(sir, "h|" + kod + "|" + metin);
+    kalsin[a.key] = 1;
+    if (var_[a.key] !== o) yaz.push({ key: a.key, value: { v: 1, o: o, d: await cariSifrele(a, metin) } });
+    const tel = cariTel10(c.telefon);
+    if (!tel) { atlanan.push({ ad: c.ad, neden: "cep telefonu kayıtlı değil" }); continue; }
+    if (telGoren[tel]) { atlanan.push({ ad: c.ad, neden: "numarası \"" + telGoren[tel] + "\" ile aynı" }); continue; }
+    telGoren[tel] = c.ad;
+    const ot = await cariOzet(sir, "t|" + tel + "|" + kod);
+    if (telKaydi[ot]) { kalsin[telKaydi[ot]] = 1; continue; }          // telefon kaydı güncel: pahalı türetmeye gerek yok
+    const at = await cariAnahtar("t", await cariTelTohum(tel));
+    kalsin[at.key] = 1;
+    yaz.push({ key: at.key, value: { v: 1, o: ot, d: await cariSifrele(at, JSON.stringify({ v: 1, k: kod })) } });
+  }
+  return { yaz: yaz, sil: Object.keys(var_).filter((k) => !kalsin[k]), atlanan: atlanan, musteri: musteri };
+}
+async function cariLink(sir, musteriId) { return cariSabit().adres + "#k=" + (await cariKod(sir, musteriId)); }
+/* Linki müşteriye gönderen hazır WhatsApp bağlantısı (numara panelin waNo kuralıyla; telefon yoksa kişi seçtirir). */
+function cariWa(c, firma, link) {
+  let d = String((c && c.telefon) || "").replace(/\D/g, "");
+  if (d.indexOf("0") === 0) d = "9" + d; else if (d.length === 10) d = "90" + d;
+  const metin = "Merhaba " + ((c && c.ad) || "") + ",\n" + (firma ? firma + " " : "") + "cari hesabınızı bu linkten her zaman güncel görebilirsiniz " +
+    "(bıraktığımız ürünler, ödemeleriniz, kalan bakiyeniz):\n" + link;
+  return "https://wa.me/" + d + "?text=" + encodeURIComponent(metin);
+}
+/* <<< CARI-ORTAK-BITTI */
+
+/* >>> PARA-KOPYA-BASLA
+   tools/babuco.cjs'deki para/vade işlevlerinin BİREBİR kopyası (patron listesi: borç, gecikme, limit).
+   Elle değiştirme: node testler/cari/ortak-blok.mjs --yaz */
+const pad2 = (n) => String(n).padStart(2, "0");
+const localDateStr = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+const todayStr = () => localDateStr(new Date());
+const kurus = (n) => Math.round((Number(n) || 0) * 100) / 100;
+function customerBorc(store, id) {
+  const c = store.customers.find((x) => x.id === id); if (!c) return 0;
+  let b = Number(c.acilis) || 0;
+  store.sales.forEach((s) => { if (s.musteriId === id) b += Number(s.odeme.acik) || 0; });
+  store.payments.forEach((p) => { if (p.musteriId === id) b -= Number(p.tutar) || 0; });
+  return kurus(b);
+}
+const KART_NOT_RE = /(^|[^a-zçğöşü])(pos|kart)(['’]?(la|tan|dan|ina|indan|iyla|i|a))?(?![a-zçğöşü])/;
+const HAVALE_NOT_RE = /(^|[^a-zçğöşü])(havale[a-zçğöşü]*|eft(['’][a-zçğöşü]+)?|iban(['’]?[a-zçğöşü]{1,4})?)(?![a-zçğöşü])/;
+function tahsilatTuru(p) {
+  const t = p && p.odemeTuru;
+  if (t === "nakit" || t === "kart" || t === "havale" || t === "iade" || t === "duzeltme") return t;
+  const n = String((p && p.not) || "").toLocaleLowerCase("tr-TR").replace(/ı/g, "i");
+  if (/d[üu]zeltme/.test(n) || Number(p && p.tutar) < 0) return "duzeltme";
+  if (/iade/.test(n)) return "iade";
+  if (KART_NOT_RE.test(n)) return "kart";
+  if (HAVALE_NOT_RE.test(n)) return "havale";
+  return "nakit";
+}
+const VADE_VARSAYILAN = 30;
+function genelVade(store) { const v = Number(store.settings && store.settings.varsayilanVade); return v > 0 ? Math.round(v) : VADE_VARSAYILAN; }
+function musteriVade(store, c) { const v = Number(c && c.vade); return v > 0 ? Math.round(v) : genelVade(store); }
+function gunFarki(iso, bugun) {
+  const a = new Date(localDateStr(new Date(iso)) + "T12:00:00"), b = new Date((bugun || todayStr()) + "T12:00:00");
+  return Math.round((b - a) / 86400000);
+}
+function idZamani(id) {
+  const m = /^id\d+([0-9a-z]{8})$/.exec(String(id || "")); if (!m) return null;
+  const t = parseInt(m[1], 36);
+  return (t > 1577836800000 && t < Date.now() + 86400000) ? new Date(t).toISOString() : null;
+}
+function borcYas(store, id, bugun) {
+  const c = store.customers.find((x) => x.id === id); if (!c) return null;
+  const N = (v) => Number(v) || 0, borclar = [];
+  let odenen = 0, ilk = null;
+  const gor = (t) => { if (t && (!ilk || t < ilk)) ilk = t; };
+  store.sales.forEach((s) => {
+    if (s.musteriId !== id) return; gor(s.tarih);
+    const a = N(s.odeme && s.odeme.acik);
+    if (a > 0) borclar.push({ t: s.tarih, tutar: a, belge: s.belgeNo }); else if (a < 0) odenen += -a;
+  });
+  store.payments.forEach((p) => {
+    if (p.musteriId !== id) return; gor(p.tarih);
+    const t = N(p.tutar);
+    if (t > 0) odenen += t; else if (t < 0) borclar.push({ t: p.tarih, tutar: -t, belge: "elle yazılan borç" });
+  });
+  const ac = N(c.acilis);
+  if (ac > 0) {
+    const kart = idZamani(c.id);
+    let t = ilk && kart ? (kart < ilk ? kart : ilk) : (ilk || kart);
+    if (!t) t = store.sales.reduce((m, s) => (!m || s.tarih < m ? s.tarih : m), null) || new Date().toISOString();
+    borclar.push({ t: t, tutar: ac, belge: "açılış borcu", acilis: true });
+  } else if (ac < 0) odenen += -ac;
+  borclar.sort((a, b) => (a.acilis ? -1 : b.acilis ? 1 : (a.t < b.t ? -1 : a.t > b.t ? 1 : 0)));
+  odenen = kurus(odenen);
+  const acik = [];
+  borclar.forEach((b) => {
+    const kapanan = Math.min(b.tutar, odenen); odenen = kurus(odenen - kapanan);
+    const kalan = kurus(b.tutar - kapanan);
+    if (kalan > 0.005) acik.push({ t: b.t, tutar: kalan, belge: b.belge, gun: Math.max(0, gunFarki(b.t, bugun)) });
+  });
+  const vade = musteriVade(store, c), gec = acik.filter((a) => a.gun > vade);
+  const gecikmisTutar = kurus(gec.reduce((a, x) => a + x.tutar, 0));
+  const gecikmis = gecikmisTutar > 0.5;
+  return { borc: kurus(acik.reduce((a, x) => a + x.tutar, 0) - odenen), acik: acik, avans: odenen, vade: vade, vadeOzel: Number(c.vade) > 0,
+    enEski: acik[0] || null, gecikmis: gecikmis, gecikmisTutar: gecikmis ? gecikmisTutar : 0, gecikmeGun: gecikmis ? acik[0].gun - vade : 0 };
+}
+function musteriLimit(c) { const l = Number(c && c.limit); return l > 0 ? l : 0; }
+/* <<< PARA-KOPYA-BITTI */
+
+/* ====================== sayfa ====================== */
+const kok = document.getElementById("kok");
+const para = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });        // "₺12.890,00" (panelin paraBelge'si)
+const adetFmt = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
+const TZ = "Europe/Istanbul";
+const gunFmt = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "numeric" });
+const gunAdFmt = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, weekday: "long" });
+const saatFmt = new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+const gunKodFmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const yuvarla = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const eksi = (n) => "−" + para.format(Math.abs(n));
+const KOD_SAKLI = "cari-kod";            // bu telefonda son açılan hesabın kodu (bir daha numara sorulmasın)
+const sakliOku = () => { try { return localStorage.getItem(KOD_SAKLI) || ""; } catch (e) { return ""; } };
+const sakliYaz = (k) => { try { if (k) localStorage.setItem(KOD_SAKLI, k); else localStorage.removeItem(KOD_SAKLI); } catch (e) {} };
+
+/** Tek kv satırı: { value, updated_at } | null (yok). Ağ hatasında { ag: true }, 401/403'te { yetki: true } fırlatır. */
+async function kvOku(key, jeton) {
+  let r;
+  try {
+    r = await fetch(SB_URL + "/rest/v1/kv?key=eq." + encodeURIComponent(key) + "&select=value,updated_at",
+      { headers: { apikey: SB_KEY, Authorization: "Bearer " + (jeton || SB_KEY) }, cache: "no-store" });
+  } catch (e) { throw { ag: true }; }
+  if (r.status === 401 || r.status === 403) throw { yetki: true };
+  if (!r.ok) throw { ag: true };
+  const j = await r.json().catch(() => null);
+  return Array.isArray(j) && j[0] ? j[0] : null;
+}
+
+/* ---------- müşteri: hesabı getir ---------- */
+/** → { durum: "var", hesap, guncel } | { durum: "yok" } */
+async function hesapGetir(kod) {
+  const a = await cariAnahtar("h", kod), satir = await kvOku(a.key);
+  if (!satir || !satir.value || !satir.value.d) return { durum: "yok" };
+  try {
+    const h = JSON.parse(await cariCoz(a, satir.value.d));
+    if (!h || !Array.isArray(h.f) || !Array.isArray(h.o)) return { durum: "yok" };
+    return { durum: "var", hesap: h, guncel: satir.updated_at };
+  } catch (e) { return { durum: "yok" }; }
+}
+/** → { durum: "var", kod, hesap, guncel } | { durum: "numara-yok" } | { durum: "yayin-yok" } */
+async function telefonlaGetir(tel) {
+  const a = await cariAnahtar("t", await cariTelTohum(tel)), satir = await kvOku(a.key);
+  if (!satir || !satir.value || !satir.value.d) return { durum: "numara-yok" };
+  let kod = "";
+  try { kod = String(JSON.parse(await cariCoz(a, satir.value.d)).k || ""); } catch (e) { return { durum: "numara-yok" }; }
+  const h = await hesapGetir(kod);
+  return h.durum === "var" ? Object.assign(h, { kod: kod }) : { durum: "yayin-yok" };
+}
+
+/* ---------- hesap görünümü (müşteri ve patron aynısını görür) ---------- */
+function hareketler(h) {
+  const ol = [];
+  h.f.forEach((x) => ol.push({ t: x.t, tip: "f", x: x }));
+  h.o.forEach((x) => ol.push({ t: x.t, tip: "o", x: x }));
+  ol.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : (a.tip === b.tip ? 0 : a.tip === "f" ? -1 : 1)));
+  let b = yuvarla(h.acilis);
+  ol.forEach((e) => { b = yuvarla(b + (e.tip === "f" ? e.x.acik : -e.x.tutar)); e.bakiye = b; e.gun = gunKodFmt.format(new Date(e.t)); });
+  return ol;
+}
+function fisHTML(x, acik) {
+  const iade = !!x.iade, odenen = yuvarla(x.nakit + x.kart);
+  const adet = (n) => adetFmt.format(iade ? Math.abs(n) : n);
+  const ozet = x.k.map((k) => adet(k[1]) + " × " + k[0]).join(", ");
+  const satirlar = x.k.map((k) => `<tr><td>${esc(k[0])}<small>${adet(k[1])} × ${para.format(k[2])}</small></td><td>${iade ? eksi(k[1] * k[2]) : para.format(k[1] * k[2])}</td></tr>`).join("");
+  let alt = "";
+  if (x.isk) alt += `<tr><td>İskonto</td><td>${eksi(x.isk)}</td></tr>`;
+  alt += `<tr class="top"><td>${iade ? "İade toplamı" : "Toplam"}</td><td>${iade ? eksi(x.top) : para.format(x.top)}</td></tr>`;
+  if (x.nakit) alt += `<tr class="odenen"><td>Ödenen (nakit)</td><td>${para.format(x.nakit)}</td></tr>`;
+  if (x.kart) alt += `<tr class="odenen"><td>Ödenen (${x.havale ? "havale" : "kart"})</td><td>${para.format(x.kart)}</td></tr>`;
+  if (iade) alt += `<tr class="odenen"><td>Borcunuzdan düşülen</td><td>${para.format(Math.abs(x.acik))}</td></tr>`;
+  else if (Math.abs(x.acik) > 0.005) alt += `<tr class="kalan"><td>Bu fişten kalan (hesabınıza yazılan)</td><td>${para.format(x.acik)}</td></tr>`;
+  else alt += `<tr class="odenen"><td>Bu fişten kalan</td><td>${para.format(0)} — ödendi</td></tr>`;
+  return `<details class="fis" data-no="${esc(x.no)}"${acik ? " open" : ""}>
+    <summary><span class="s-ad">${iade ? "İade (geri aldığımız ürün)" : "Bıraktığımız ürünler"}<small>${esc(ozet)}</small></span><span class="s-tutar${iade ? " eksi" : ""}">${iade ? eksi(x.top) : para.format(x.top)}</span></summary>
+    <div class="f-ic"><table>${satirlar}${alt}</table><p class="f-no">Fiş no ${esc(x.no)} · saat ${saatFmt.format(new Date(x.t))}${!iade && odenen > 0.005 && Math.abs(x.acik) > 0.005 ? " · ödenen " + para.format(odenen) : ""}</p></div>
+  </details>`;
+}
+function odemeHTML(x) {
+  const TUR = { nakit: "nakit", kart: "kart", havale: "havale" };
+  let ad, alt = "";
+  if (x.tur === "iade") { ad = "İade"; alt = "borcunuzdan düşüldü"; }
+  else if (x.tur === "duzeltme") { ad = "Hesap düzeltmesi"; alt = x.tutar < 0 ? "borcunuza eklendi" : "borcunuzdan düşüldü"; }
+  else { ad = "Ödeme alındı"; alt = (TUR[x.tur] || "") + (x.fis ? " · fazlası eski borcunuza sayıldı" : ""); }
+  return `<div class="odeme"><span class="s-ad">${ad}<small>${esc(alt)}</small></span><span class="s-tutar ${x.tutar < 0 ? "arti" : "eksi"}">${x.tutar < 0 ? "+" + para.format(-x.tutar) : eksi(x.tutar)}</span></div>`;
+}
+/** Hesabın HTML'i. acikFisler: açık tutulacak fiş numaraları (yenilemede kapanmasın). */
+function hesapHTML(h, guncel, acikFisler) {
+  const ol = hareketler(h), bakiye = yuvarla(h.bakiye);
+  const gunler = []; let son = null;
+  ol.forEach((e) => { if (!son || son.gun !== e.gun) { son = { gun: e.gun, t: e.t, liste: [] }; gunler.push(son); } son.liste.push(e); son.bakiye = e.bakiye; });
+  const odemeler = ol.filter((e) => (e.tip === "o" && e.x.tutar > 0 && (e.x.tur === "nakit" || e.x.tur === "kart" || e.x.tur === "havale")) || (e.tip === "f" && !e.x.iade && e.x.nakit + e.x.kart > 0.005));
+  const so = odemeler[odemeler.length - 1];
+  const sonOdeme = so ? gunFmt.format(new Date(so.t)) + " · " + para.format(so.tip === "o" ? so.x.tutar : so.x.nakit + so.x.kart) : "henüz ödeme yok";
+  const borclu = bakiye > 0.005, alacakli = bakiye < -0.005;
+  const gunHTML = gunler.reverse().map((g) => `<section class="gun">
+      <header><div><b>${gunFmt.format(new Date(g.t))}</b> <span>${gunAdFmt.format(new Date(g.t))}</span></div><div class="gb">Bakiye<b>${para.format(g.bakiye)}</b></div></header>
+      ${g.liste.map((e) => (e.tip === "f" ? fisHTML(e.x, acikFisler && acikFisler.indexOf(e.x.no) >= 0) : odemeHTML(e.x))).join("")}
+    </section>`).join("");
+  return `<section class="bakiye${borclu ? "" : " temiz"}" aria-label="Güncel bakiye">
+      <span class="etiket">${borclu ? "Kalan borcunuz" : alacakli ? "Alacağınız (fazla ödemeniz)" : "Borcunuz yok"}</span>
+      <b class="tutar" id="bakiyeTutar">${para.format(Math.abs(bakiye))}</b>
+      <span class="son">Son ödeme: ${sonOdeme}</span>
+    </section>
+    <h2>Hesap hareketleri</h2>
+    ${gunHTML || `<div class="bos">Henüz alışveriş ya da ödeme kaydı yok.</div>`}
+    ${Math.abs(h.acilis) > 0.005 ? `<p class="not">Hesap açılışında devreden bakiye: ${para.format(h.acilis)}</p>` : ""}
+    <p class="not">Ürünleri ve fiyatları görmek için satıra dokunun. Tutarlar Türk lirasıdır. Bir hata görürseniz lütfen bize bildirin.${guncel ? "<br>Son güncelleme: " + gunFmt.format(new Date(guncel)) + " " + saatFmt.format(new Date(guncel)) : ""}</p>`;
+}
+function baslikHTML(h, dugme) {
+  return `<div class="ust"><div><div class="firma">${esc(h.firma || "Özgür Ticaret")} · Cari hesap</div><h1 id="musteriAd">${esc(h.ad)}</h1></div>${dugme || ""}</div>`;
+}
+
+/* ---------- müşteri: ekranlar ---------- */
+let acikKod = "", sonOkuma = 0;
+function durumCiz(baslik, metin, dugme) {
+  kok.innerHTML = `<div class="durum" id="durum"><b>${esc(baslik)}</b>${metin ? `<span>${esc(metin)}</span>` : ""}${dugme || ""}</div>`;
+}
+function girisCiz(mesaj) {
+  acikKod = "";
+  kok.innerHTML = `<section class="giris" id="giris">
+      <div class="firma">Özgür Ticaret</div>
+      <h1>Cari hesabınız</h1>
+      <p>Bize kayıtlı cep telefonu numaranızı yazın; bıraktığımız ürünleri, ödemelerinizi ve kalan bakiyenizi görün.</p>
+      <form id="telForm" novalidate>
+        <div style="display:grid;gap:10px">
+          <label for="tel">Telefon numaranız</label>
+          <input id="tel" name="tel" type="tel" inputmode="numeric" autocomplete="tel" placeholder="05__ ___ __ __" maxlength="17">
+          <button class="ana-btn" id="telBtn" type="submit">Hesabımı göster</button>
+          <p class="hata" id="hata" role="alert">${esc(mesaj || "")}</p>
+        </div>
+      </form>
+      <p class="alt-link"><a href="#patron" id="patronLink">Toptancı girişi</a></p>
+    </section>`;
+  document.getElementById("telForm").addEventListener("submit", (e) => { e.preventDefault(); telefonDene(document.getElementById("tel").value); });
+}
+function agHatasiCiz(tekrar) {
+  durumCiz("İnternete bağlanılamadı", "Bağlantınızı kontrol edip tekrar deneyin.", `<button class="ana-btn" id="tekrar" type="button" style="max-width:280px">Tekrar dene</button>`);
+  document.getElementById("tekrar").addEventListener("click", tekrar);
+}
+function hesapCiz(h, guncel, kod) {
+  const acik = Array.from(kok.querySelectorAll("details.fis[open]"), (d) => d.dataset.no);
+  acikKod = kod; sonOkuma = Date.now();
+  kok.innerHTML = baslikHTML(h, `<button class="kucuk-btn" id="cikis" type="button">Çıkış</button>`) + hesapHTML(h, guncel, acik);
+  document.getElementById("cikis").addEventListener("click", () => { sakliYaz(""); if (location.hash) history.replaceState(null, "", location.pathname); girisCiz(""); });
+}
+async function telefonDene(ham) {
+  const tel = cariTel10(ham), hata = document.getElementById("hata"), btn = document.getElementById("telBtn");
+  if (!tel) { hata.textContent = "Numarayı 05xx xxx xx xx şeklinde, 11 hane olarak yazın."; return; }
+  hata.textContent = ""; btn.disabled = true; btn.textContent = "Açılıyor…";
+  try {
+    const s = await telefonlaGetir(tel);
+    if (s.durum === "var") { sakliYaz(s.kod); hesapCiz(s.hesap, s.guncel, s.kod); window.scrollTo(0, 0); return; }
+    hata.textContent = s.durum === "yayin-yok"
+      ? "Numaranız kayıtlı ama hesabınız henüz yayınlanmamış. Biraz sonra tekrar deneyin ya da bizi arayın."
+      : "Bu numaraya kayıtlı hesap bulunamadı. Numarayı kontrol edin ya da bizi arayın.";
+  } catch (e) { hata.textContent = "İnternete bağlanılamadı. Bağlantınızı kontrol edip tekrar deneyin."; }
+  btn.disabled = false; btn.textContent = "Hesabımı göster";
+}
+/** Kodla (kişisel link ya da bu telefonda saklı kod) aç. linkten=true: bulunamazsa nedenini söyle. */
+async function kodlaAc(kod, linkten) {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(kod)) { sakliYaz(""); return girisCiz(linkten ? "Bu link eksik ya da bozuk. Telefon numaranızla girebilirsiniz." : ""); }
+  durumCiz("Hesabınız açılıyor…");
+  try {
+    const s = await hesapGetir(kod);
+    if (s.durum === "var") { sakliYaz(kod); return hesapCiz(s.hesap, s.guncel, kod); }
+    if (sakliOku() === kod) sakliYaz("");
+    girisCiz(linkten ? "Bu link artık geçerli değil ya da hesabınız henüz yayınlanmamış. Telefon numaranızla deneyin ya da bizi arayın." : "");
+  } catch (e) { agHatasiCiz(() => kodlaAc(kod, linkten)); }
+}
+/* Sayfaya geri dönülünce (sekme yeniden görünür olunca) hesabı sessizce tazele: müşteri hep o anki hâli görsün. */
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible" || !acikKod || Date.now() - sonOkuma < 15000) return;
+  const kod = acikKod;
+  try { const s = await hesapGetir(kod); if (s.durum === "var" && acikKod === kod) hesapCiz(s.hesap, s.guncel, kod); } catch (e) {}
+});
+
+/* ---------- patron: toptancının salt-okunur görünümü (panelle aynı hesap; hiçbir şey yazmaz) ---------- */
+const OTURUM = "babuco:oturum";          // panelin oturum kaydı (aynı site): varsa yeniden sorulmaz
+let P = null;                            // { store, sir, secili }
+function oturumOku() { try { const o = JSON.parse(localStorage.getItem(OTURUM) || "null"); return o && o.access_token ? o : null; } catch (e) { return null; } }
+function oturumYaz(o) { try { localStorage.setItem(OTURUM, JSON.stringify(o)); } catch (e) {} }
+/** → oturum | null (kimlik reddedildi). Ağ hatasında { ag: true } fırlatır. */
+async function jetonIste(tur, govde) {
+  let r;
+  try { r = await fetch(SB_URL + "/auth/v1/token?grant_type=" + tur, { method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" }, body: JSON.stringify(govde) }); }
+  catch (e) { throw { ag: true }; }
+  if (r.status === 429) throw { cok: true };
+  if (r.status >= 400 && r.status < 500) return null;
+  if (!r.ok) throw { ag: true };
+  const j = await r.json().catch(() => null);
+  if (!j || !j.access_token) return null;
+  if (!j.expires_at) j.expires_at = Math.floor(Date.now() / 1000) + (Number(j.expires_in) || 3600);
+  return j;
+}
+async function oturumYenile(o) {
+  if (!o || !o.refresh_token) return null;
+  const y = await jetonIste("refresh_token", { refresh_token: o.refresh_token });
+  if (!y) return null;
+  if (!y.user) y.user = o.user;
+  oturumYaz(y);                          // panel de aynı kaydı kullanır: yenilenen jeton ona da geçsin
+  return y;
+}
+/** → { store, sir } | { red: true } (bu hesap veriyi göremiyor) | { suresi: true } (jeton reddedildi) */
+async function patronVeri(o) {
+  const oku = async (key) => {
+    let s = await kvOku(key, o.access_token);
+    if (!s) s = await kvOku(key).catch(() => null);      // kilit kurulmadan önceki "yalnız oturumsuz okur" düzeni
+    return s;
+  };
+  let satir;
+  try { satir = await oku("babuco:store"); } catch (e) { if (e && e.yetki) return { suresi: true }; throw e; }
+  if (!satir || !satir.value || !Array.isArray(satir.value.customers)) return { red: true };
+  let sir = null;
+  try { const s = await oku(cariSabit().sirAnahtar); sir = (s && s.value && s.value.sir) || null; } catch (e) {}
+  return { store: satir.value, sir: sir };
+}
+function patronGirisCiz(mesaj) {
+  P = null;
+  kok.innerHTML = `<section class="giris" id="patronGiris">
+      <div class="firma">Özgür Ticaret</div>
+      <h1>Toptancı girişi</h1>
+      <p>Müşteri hesaplarını görmek için panelde kullandığın e-posta ve şifreyle gir.</p>
+      <form id="pForm" novalidate>
+        <div style="display:grid;gap:10px">
+          <label for="pEposta">E-posta</label>
+          <input id="pEposta" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" style="font-size:18px">
+          <label for="pSifre">Şifre</label>
+          <input id="pSifre" type="password" autocomplete="current-password" style="font-size:18px">
+          <button class="ana-btn" id="pGir" type="submit">Giriş yap</button>
+          <p class="hata" id="hata" role="alert">${esc(mesaj || "")}</p>
+        </div>
+      </form>
+      <p class="alt-link"><a href="#" id="musteriLink">Müşteri girişi</a></p>
+    </section>`;
+  document.getElementById("pForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const eposta = document.getElementById("pEposta").value.trim(), sifre = document.getElementById("pSifre").value;
+    const hata = document.getElementById("hata"), btn = document.getElementById("pGir");
+    if (!eposta || !sifre) { hata.textContent = "E-posta ve şifreni yaz."; return; }
+    hata.textContent = ""; btn.disabled = true; btn.textContent = "Giriş yapılıyor…";
+    try {
+      const o = await jetonIste("password", { email: eposta, password: sifre });
+      if (!o) hata.textContent = "E-posta ya da şifre yanlış.";
+      else {
+        const v = await patronVeri(o);
+        if (v.store) { oturumYaz(o); return patronBasla(v); }
+        hata.textContent = "Bu hesabın müşteri hesaplarını görme izni yok.";
+      }
+    } catch (x) { hata.textContent = x && x.cok ? "Çok fazla deneme yapıldı. Birkaç dakika bekleyip tekrar dene." : "Bağlantı kurulamadı. İnternetini kontrol edip tekrar dene."; }
+    btn.disabled = false; btn.textContent = "Giriş yap";
+  });
+}
+async function patronAc() {
+  durumCiz("Hesaplar açılıyor…");
+  try {
+    let o = oturumOku();
+    if (o && (Number(o.expires_at) || 0) - 60 < Date.now() / 1000) o = await oturumYenile(o);
+    if (!o) return patronGirisCiz("");
+    let v = await patronVeri(o);
+    if (v.suresi) { o = await oturumYenile(o); if (!o) return patronGirisCiz("Oturumun kapanmış. Yeniden giriş yap."); v = await patronVeri(o); }
+    if (!v.store) return patronGirisCiz("Bu hesabın müşteri hesaplarını görme izni yok.");
+    patronBasla(v);
+  } catch (e) { agHatasiCiz(patronAc); }
+}
+function patronBasla(v) {
+  P = { store: v.store, sir: v.sir, ara: "" };
+  const m = hashOku().m;
+  if (m && P.store.customers.some((c) => c.id === m)) patronMusteriCiz(m); else patronListeCiz();
+}
+function patronListeCiz() {
+  const S = P.store, bugun = todayStr();
+  const satirlar = S.customers.map((c) => {
+    const borc = customerBorc(S, c.id), y = borcYas(S, c.id, bugun), lim = musteriLimit(c), isaret = [];
+    if (y && y.gecikmis) isaret.push(y.gecikmeGun + " gündür gecikmiş");
+    if (lim && borc > lim + 0.005) isaret.push("limit aşıldı");
+    return { c: c, borc: borc, isaret: isaret.join(" · ") };
+  }).sort((a, b) => b.borc - a.borc || String(a.c.ad).localeCompare(String(b.c.ad), "tr"));
+  const alacak = kurus(satirlar.reduce((a, x) => a + Math.max(0, x.borc), 0)), borclu = satirlar.filter((x) => x.borc > 0.005).length;
+  kok.innerHTML = `<div class="ust"><div><div class="firma">${esc(S.settings && (S.settings.fisBaslik || S.settings.firmaAdi) || "Özgür Ticaret")}</div><h1>Müşteri hesapları</h1></div></div>
+    <section class="bakiye" aria-label="Toplam alacak"><span class="etiket">Toplam alacak</span><b class="tutar" id="toplamAlacak">${para.format(alacak)}</b><span class="son">${borclu} müşteri borçlu · ${satirlar.length} müşteri</span></section>
+    <input class="ara" id="ara" type="search" placeholder="Müşteri ara" aria-label="Müşteri ara" value="${esc(P.ara)}">
+    <div class="liste" id="liste"></div>`;
+  const liste = document.getElementById("liste");
+  const ciz = () => {
+    const a = P.ara.toLocaleLowerCase("tr-TR").trim();
+    const g = satirlar.filter((x) => !a || String(x.c.ad).toLocaleLowerCase("tr-TR").indexOf(a) >= 0);
+    liste.innerHTML = g.map((x) => `<button class="musteri" type="button" data-id="${esc(x.c.id)}"><span class="m-ad">${esc(x.c.ad)}${x.isaret ? `<small>${esc(x.isaret)}</small>` : ""}</span><b class="${Math.abs(x.borc) < 0.005 ? "sifir" : ""}">${para.format(x.borc)}</b></button>`).join("") || `<div class="bos" style="border:0">Eşleşen müşteri yok.</div>`;
+  };
+  ciz();
+  document.getElementById("ara").addEventListener("input", (e) => { P.ara = e.target.value; ciz(); });
+  liste.addEventListener("click", (e) => { const b = e.target.closest("[data-id]"); if (b) { patronMusteriCiz(b.dataset.id); window.scrollTo(0, 0); } });
+}
+async function patronMusteriCiz(id) {
+  const S = P.store, c = S.customers.find((x) => x.id === id); if (!c) return patronListeCiz();
+  const h = cariHesap(S, c, tahsilatTuru);          // müşterinin sayfasına yayınlanan içeriğin AYNISI
+  const link = P.sir ? await cariLink(P.sir, c.id) : "";
+  const firma = (S.settings && (S.settings.fisBaslik || S.settings.firmaAdi)) || "";
+  const telVar = !!String(c.telefon || "").replace(/\D/g, "");
+  kok.innerHTML = baslikHTML(h, `<button class="kucuk-btn" id="geri" type="button">‹ Müşteriler</button>`) +
+    (link ? `<div class="eylem">
+        <a class="ana-btn yesil" id="waGonder" href="${esc(cariWa(c, firma, link))}" target="_blank" rel="noopener">Linkini gönder (WhatsApp)</a>
+        <button class="ana-btn ikinci" id="kopyala" type="button">Linki kopyala</button>
+        ${telVar ? "" : `<p class="not" style="margin:0">Telefonu kayıtlı değil: WhatsApp açılınca kişiyi kendin seç.</p>`}
+      </div>`
+      : `<p class="not" style="margin:0 0 16px">Kişisel link henüz hazır değil: cari sayfa bir kez yayınlanınca burada çıkar.</p>`) +
+    hesapHTML(h, "", []);
+  document.getElementById("geri").addEventListener("click", () => { patronListeCiz(); });
+  const k = document.getElementById("kopyala");
+  if (k) k.addEventListener("click", async () => {
+    let tamam = false;
+    try { await navigator.clipboard.writeText(link); tamam = true; } catch (e) {}
+    if (!tamam) { const i = document.createElement("input"); i.value = link; document.body.appendChild(i); i.select(); try { tamam = document.execCommand("copy"); } catch (e) {} i.remove(); }
+    k.textContent = tamam ? "Kopyalandı ✓" : "Kopyalanamadı";
+    setTimeout(() => { k.textContent = "Linki kopyala"; }, 2500);
+  });
+}
+
+/* ---------- açılış ---------- */
+function hashOku() {
+  const o = {};
+  location.hash.replace(/^#/, "").split("&").forEach((p) => { if (!p) return; const i = p.indexOf("="); o[i < 0 ? p : p.slice(0, i)] = i < 0 ? "1" : decodeURIComponent(p.slice(i + 1)); });
+  return o;
+}
+function basla() {
+  if (!window.crypto || !crypto.subtle) return durumCiz("Bu tarayıcıda açılamıyor", "Lütfen telefonunuzun güncel tarayıcısıyla (Chrome ya da Safari) açın.");
+  const h = hashOku();
+  if (h.patron) return patronAc();
+  if (h.k) return kodlaAc(h.k, true);
+  const sakli = sakliOku();
+  if (sakli) return kodlaAc(sakli, false);
+  girisCiz("");
+}
+window.addEventListener("hashchange", basla);
+basla();
+</script>
+</body>
+</html>

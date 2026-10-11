@@ -25,6 +25,7 @@ anahtarlar as (
   select case
            when key like 'babuco:on-siparis:policy:%' then 'babuco:on-siparis:policy:*'
            when key like 'babuco:yedek:%'             then 'babuco:yedek:*'
+           when key like 'babuco:cari:%'              then 'babuco:cari:*'
            when key like 'babuco:%'                   then key
            when key like 'cayci-pos:data:%'           then 'cayci-pos:data:*'
            when key like 'bayi\_puan:%'               then 'bayi_puan:*'

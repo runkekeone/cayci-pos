@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# ESKİ — yerini canlı sayfa aldı (public/cari/ + tools/babuco-cari.cjs; komutlar: cari-yayinla, cari-link).
+# Artık çalıştırmaya gerek yok: hesaplar her kayıttan sonra kendiliğinden yayınlanır. Dosya yalnız geçmiş için duruyor.
 # Tek link, telefonla giriş: her müşterinin hesap sayfası kendi telefon numarasından
 # türetilen anahtarla AES-GCM ile şifrelenip sayfaya gömülür. Sayfa kaynağında düz metin
 # müşteri verisi yoktur; numarayı bilmeyen başkasının hesabını açamaz.

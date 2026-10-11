@@ -1,4 +1,6 @@
 #!/bin/sh
+# ESKİ — yerini canlı sayfa aldı (public/cari/ + tools/babuco-cari.cjs; komutlar: cari-yayinla, cari-link).
+# Artık çalıştırmaya gerek yok: hesaplar her kayıttan sonra kendiliğinden yayınlanır. Dosya yalnız geçmiş için duruyor.
 # Müşteri cari hesap sayfasını (telefonla giriş) buluttaki son veriden yeniden üretir.
 # Depo kökünden: sh tools/cari/guncelle.sh <cikti.html>   → sonra Artifact ile aynı linke yayınla.
 set -e

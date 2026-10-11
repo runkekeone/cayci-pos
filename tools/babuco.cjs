@@ -47,6 +47,8 @@
  *   node babuco.js sabit-gider [ekle <ad> <tutar> | sil <ad>]   her ay net kârdan düşülen sabit gider
  *   node babuco.js tahsilat ... [--tur=nakit|kart|havale] · gider ... [--odeme=nakit|kart|havale]
  *   node babuco.js yedekler · yedek-al [dosya] · geri-yukle <tarih|yedek|dosya>   bulut yedekleri
+ *   node babuco.js cari-yayinla [--yeni-sir]   müşterilerin canlı cari sayfasını baştan yayınla  (--kaydet)
+ *   node babuco.js cari-link <musteri>         müşterinin kişisel cari linki + hazır WhatsApp bağlantısı
  *   Giriş (veritabanı kilitliyse): node tools/babuco-kimlik.cjs giris | durum | cikis
  *
  * GÜVENLİK: --kaydet verilmezse HİÇBİR ŞEY yazılmaz, sadece özet basılır.
@@ -61,6 +63,7 @@ const path = require("path");
    oturum varsa (BABUCO_EPOSTA + BABUCO_SIFRE ya da bir kez `node tools/babuco-kimlik.cjs giris`) onunla,
    yoksa bugünkü gibi herkese açık anahtarla bağlanır. Şifre hiçbir çıktıya yazılmaz. */
 const kimlik = require("./babuco-kimlik.cjs");
+const cari = require("./babuco-cari.cjs");   // müşterilerin canlı cari hesap sayfası (public/cari/) için yayın
 function panelAyar() { return kimlik.panelAyar(); }
 const _ayar = panelAyar();
 const SB_URL = _ayar.url;
@@ -121,6 +124,10 @@ async function storeYaz(store, beklenenTs) {
   const q = "kv?key=eq." + encodeURIComponent(BULUT_KEY) + "&updated_at=eq." + encodeURIComponent(beklenenTs);
   const out = await sb(q, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ value: store, updated_at: ts }) });
   if (!out || !out.length) throw new Error("CAKISMA: yazma sirasinda bulut degisti, hicbir sey yazilmadi. Tekrar dene.");
+  // Müşterilerin canlı cari sayfası: hesabı değişen müşterinin şifreli kaydı güncellenir (yalnız değişenler).
+  // Başarısız olursa kayıt bundan ETKİLENMEZ; uyarı stderr'e düşer, sonraki yazmada yeniden denenir.
+  try { await cari.yayinla(sb, store, tahsilatTuru); }
+  catch (e) { console.error("UYARI: musteri cari sayfasi guncellenemedi (" + String(e.message || e).slice(0, 120) + "). Kayit tamam; sonraki kayitta yeniden denenir (elle: node tools/babuco.cjs cari-yayinla --kaydet)."); }
   return { ts: ts, yedek: yedek };
 }
 
@@ -2124,6 +2131,37 @@ function stkSiparisKod(o) { const s = String(o.orderId || o.id || "").replace(/[
     L.push("_60g net = son 60 günde ödediği − yeni açtığı borç. Eksi ise borcu büyüyor._");
     L.push("_Gecikme = vadesini geçen borç ve kaç gündür geçtiği (ödemeler en eski borcu kapatır; vadesi yazılmamış müşteride " + genelVade(store) + " gün). ⛔ = borç limitini aşmış._");
     console.log(L.join("\n"));
+    return;
+  }
+
+  /* ---------- cari-yayinla: müşterilerin canlı cari sayfasını (public/cari/) baştan yayınla ----------
+     Her başarılı kayıttan sonra zaten kendiliğinden güncellenir; bu komut ilk yayın ve "toparla" içindir.
+     --yeni-sir: bütün kodları yenile (o güne kadar verilmiş kişisel linkler geçersiz olur; telefonla giriş sürer). */
+  if (komut === "cari-yayinla") {
+    const yeniSir = args.includes("--yeni-sir");
+    if (kaydet && yeniSir) await cari.sirSil(sb);
+    const r = await cari.yayinla(sb, store, tahsilatTuru, { prova: !kaydet });
+    console.log("Müşteri cari sayfası: " + cari.cariSabit().adres);
+    console.log((kaydet ? "Yayınlandı" : "Yayınlanacak") + ": " + r.musteri + " müşteri · " + r.yazilan + " kayıt " + (kaydet ? "yazıldı" : "yazılacak") + " · " + r.silinen + " eski kayıt " + (kaydet ? "silindi" : "silinecek") +
+      (!kaydet && (!r.sir || yeniSir) ? " (" + (yeniSir ? "kodlar yenilenecek: eski linkler geçersiz olur" : "ilk yayın") + ")" : ""));
+    if (r.atlanan.length) console.log("Telefonla GİREMEZ (kişisel linkle girer — cari-link): " + r.atlanan.map((x) => x.ad + " (" + x.neden + ")").join("; "));
+    if (!kaydet) provaUyari("cari-yayinla" + (yeniSir ? " --yeni-sir" : ""));
+    return;
+  }
+
+  /* ---------- cari-link: müşterinin kişisel linki (telefon yazmadan açılır) + hazır WhatsApp bağlantısı ---------- */
+  if (komut === "cari-link") {
+    const c = musteriBul(store, pos.slice(1).join(" "));
+    const sir = await cari.sirGetir(sb, false);
+    if (!sir) throw new Error("Cari sayfa henuz yayinlanmamis. Once: node tools/babuco.cjs cari-yayinla --kaydet");
+    const link = await cari.cariLink(sir, c.id);
+    const satir = (await cari.cariAnahtar("h", await cari.cariKod(sir, c.id))).key;
+    const var_ = await sb("kv?key=eq." + encodeURIComponent(satir) + "&select=key");
+    console.log(c.ad + " — bakiye " + money(customerBorc(store, c.id)));
+    console.log("Kişisel link (telefon yazmadan açılır): " + link);
+    console.log("WhatsApp ile gönder" + (String(c.telefon || "").replace(/\D/g, "") ? " (" + c.telefon + ")" : " (TELEFON KAYITLI DEĞİL — açılınca kişiyi kendin seç)") + ": " + cari.cariWa(c, store.settings.fisBaslik || store.settings.firmaAdi || "", link));
+    if (!cari.cariTel10(c.telefon)) console.log("Not: cep telefonu kayıtlı olmadığı için telefon numarasıyla giremez; yalnız bu linkle girer.");
+    if (!var_ || !var_.length) console.log("UYARI: bu müşterinin hesabı henüz yayınlanmamış — link şu an boş açılır. Önce: node tools/babuco.cjs cari-yayinla --kaydet");
     return;
   }
 

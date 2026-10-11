@@ -52,6 +52,8 @@ toplu-zam (--grup=|--urun=|--hepsi) (--yuzde=|--tutar=|--yeni=) [--yuvarla=5] [-
 fiyat-kontrol [--esik=10] · fiyat-gecmisi [urun]
 siparis-onayla <kod> · siparis-dagitim <kod> · siparis-teslim <kod> [--odeme=..] · siparis-kapat <kod..>|--eski=GUN
 yedekler · yedek-al [dosya] · geri-yukle <tarih|yedek|dosya>   buluttaki günlük yedekler
+cari-link <musteri>          müşterinin kişisel cari linki + hazır WhatsApp bağlantısı (müşteriye bir kez verilir)
+cari-yayinla [--yeni-sir]    canlı cari sayfayı baştan yayınla / toparla (normalde gerekmez; --yeni-sir bütün linkleri değiştirir)
 ```
 
 **Bekleyen sipariş uyarısı:** her komuttan sonra stderr'e `[!] BEKLEYEN SIPARIS …` satırı düşebilir — bunu
@@ -107,14 +109,25 @@ teslimatı yeniden anlatıp bir kalem ekletmek ister ("bir de fanta bıraktım")
 gün o müşteriye kesilmiş fiş var mı bak; varsa yeni satış açma, `kalem-ekle` ile
 mevcut belgeye ekle — yoksa bakiye iki katına çıkar.
 
-### Müşteri cari hesap linki
-Müşteriler tek linkten telefon numarasıyla girip kendi hesaplarını servis servis görür:
-**https://claude.ai/artifact/U9gQeM5RxPebtwk9CEAAKE** (herkese açık). Sayfa statik bir
-anlık görüntüdür; her müşterinin hesabı kendi telefonundan türetilen anahtarla şifreli
-gömülüdür (kaynakta düz veri yok). **Kullanıcının isteği: her `--kaydet`'ten sonra
-otomatik güncelle** — `sh tools/cari/guncelle.sh <scratchpad>/portal.html`, sonra o dosyayı
-Artifact ile `url` = yukarıdaki link olarak yayınla (link değişmez). Telefonu kartta
-olmayan müşteri giremez; çıktıdaki "atlanan" listesine bak.
+### Müşteri cari hesap linki (canlı)
+Müşteriler **https://runkekeone.github.io/cayci-pos/cari/** adresinden telefon numarasıyla (ya da kişisel
+linkleriyle, numara yazmadan) kendi hesaplarını **o anki hâliyle** görür: bıraktığımız ürünler fiş fiş, ödemeler,
+kalan bakiye. Sayfa veriyi her açılışta buluttan çeker.
+
+**Yayın kendiliğindendir — her `--kaydet`'ten sonra ayrıca bir şey YAPMA.** Araç store'u her başarıyla yazdığında
+(panel de her eşitlemesinde) hesabı değişen müşterinin şifreli kaydını günceller. Artifact yayını, `tools/cari/*.py`
+ve `guncelle.sh` artık kullanılmıyor.
+
+- Stderr'de `UYARI: musteri cari sayfasi guncellenemedi` görürsen kayıt tamamdır; sayfa bir sonraki kayıtta
+  kendiliğinden toparlanır. Hemen düzeltmek için `cari-yayinla --kaydet`.
+- Müşteriye linkini vermek için `cari-link <musteri>`: kişisel linki ve dokununca WhatsApp'ı açan hazır bağlantıyı
+  basar (gönder'e kullanıcı basar). Telefonu kartta olmayan müşteri numarayla giremez, yalnız bu linkle girer.
+- Müşterinin telefonu değişince / müşteri silinince eski kayıt bir sonraki kayıtta kendiliğinden kalkar.
+- Kayda yalnız müşterinin görmesi gerekenler girer (alış, kâr, limit, not girmez); kural `tools/babuco-cari.cjs`
+  içindeki `cariHesap`'ta. O dosyadaki ortak blok panelde ve sayfada da aynen durur: değiştirirsen
+  `node testler/cari/ortak-blok.mjs --yaz`.
+- Kullanıcının kendi bakacağı salt-okunur görünüm (bütün müşteriler + müşterinin gördüğü hesap + link gönder):
+  aynı adresin sonuna `#patron` (panelin e-posta + şifresiyle).
 
 ### Çakışma
 Araç compare-and-swap ile yazar: okuduğundan beri bulut değiştiyse yazmayı reddeder ve
@@ -127,7 +140,7 @@ ayrıca günün ilk yazmasından önce bulutta `babuco:yedek:<gün>` yedeği al�
 ### Denemeler
 `testler/` altındaki denemeler sahte bulutla çalışır, canlı veriye dokunmaz:
 `node testler/ortak/duman.mjs`, `node testler/stok/hepsi.mjs`, `node testler/senkron/hepsi.mjs`,
-`node testler/para/<ad>.mjs`, `node testler/giris/<ad>.mjs`.
+`node testler/para/<ad>.mjs`, `node testler/giris/<ad>.mjs`, `node testler/cari/hepsi.mjs`.
 
 ### Bulut oturumunda ağ izni
 Anthropic bulut oturumları varsayılan olarak dışarıya çıkamaz. Araç

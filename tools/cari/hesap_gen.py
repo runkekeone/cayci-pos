@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# ESKİ — yerini canlı sayfa aldı (public/cari/ + tools/babuco-cari.cjs; komutlar: cari-yayinla, cari-link).
+# Artık çalıştırmaya gerek yok: hesaplar her kayıttan sonra kendiliğinden yayınlanır. Dosya yalnız geçmiş için duruyor.
 # Müşteriye gönderilecek tek kişilik hesap özeti sayfası (statik anlık görüntü).
 # Kullanım: python3 hesap_gen.py store.json "<müşteri tam adı>" cikti.html
 import json, sys, html, re

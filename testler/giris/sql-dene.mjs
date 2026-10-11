@@ -47,6 +47,7 @@ const VERI = [
   ["babuco:store", ornekStore()], ["babuco:yedek:2026-10-01", { a: 1 }], ["duyurular", [{ metin: "merhaba" }]],
   ["babuco:on-siparis:policy:5550000002", { minPesinOrani: 0.4 }], ["bayi_puan:05550000002", { puan: 12 }],
   ["cayci-pos:data:u-1", { items: [] }], ["cayci-pos:users", [{ id: "u-1" }]],
+  ["babuco:cari:h:0123abcd", { v: 1, o: "ozet", d: "sifreli" }], ["babuco:cari-sir", { v: 1, sir: "gizli" }],   // müşteri cari sayfası: şifreli kayıt (açık) + kodların sırrı (özel)
 ];
 const ONCEKI_DUZENLER = {
   "satır güvenliği kapalı, politika yok": "",
@@ -87,8 +88,11 @@ async function kilitliDavranis(db, ad) {
   // dışarıdan (anon)
   d.esit((await rolle(db, "anon", "select key from public.kv where key = 'babuco:store'")).satirlar, [], ad + ": anon babuco:store'u göremez");
   d.esit((await rolle(db, "anon", "select key from public.kv order by key")).satirlar.map((r) => r.key),
-    ["babuco:katalog", "babuco:on-siparis:policy:5550000002", "bayi_puan:05550000002", "cayci-pos:data:u-1", "cayci-pos:users", "duyurular"], ad + ": anon yalnız açık + çay ocağı satırlarını görür");
-  for (const k of ["babuco:store", "babuco:katalog", "duyurular", "babuco:on-siparis:policy:5550000002", "babuco:yedek:2099-01-01", "babuco:yepyeni", "baska:anahtar", "Babuco:store"])
+    ["babuco:cari:h:0123abcd", "babuco:katalog", "babuco:on-siparis:policy:5550000002", "bayi_puan:05550000002", "cayci-pos:data:u-1", "cayci-pos:users", "duyurular"], ad + ": anon yalnız açık (şifreli cari kaydı dahil) + çay ocağı satırlarını görür");
+  d.esit((await rolle(db, "anon", "select value ->> 'd' as d from public.kv where key = 'babuco:cari:h:0123abcd'")).satirlar, [{ d: "sifreli" }], ad + ": anon şifreli cari kaydını okur (müşteri sayfası)");
+  d.esit((await rolle(db, "anon", "select key from public.kv where key = 'babuco:cari-sir'")).satirlar, [], ad + ": anon cari kodlarının sırrını göremez");
+  d.esit((await rolle(db, "anon", "update public.kv set value = '{}' where key = 'babuco:cari:h:0123abcd'")).etkilenen, 0, ad + ": anon update cari kaydı → 0 satır (okur ama yazamaz)");
+  for (const k of ["babuco:store", "babuco:katalog", "duyurular", "babuco:on-siparis:policy:5550000002", "babuco:yedek:2099-01-01", "babuco:yepyeni", "baska:anahtar", "Babuco:store", "babuco:cari:h:0123abcd", "babuco:cari:t:yeni", "babuco:cari-sir"])
     d.esit((await rolle(db, "anon", UPSERT, [k, "{}"])).hata, "42501", ad + ": anon yazamaz → " + k);
   d.esit((await rolle(db, "anon", "update public.kv set value = '{}' where key = 'babuco:store'")).etkilenen, 0, ad + ": anon update babuco:store → 0 satır");
   d.esit((await rolle(db, "anon", "update public.kv set value = '[]' where key = 'duyurular'")).etkilenen, 0, ad + ": anon update duyurular → 0 satır (okur ama yazamaz)");
@@ -107,7 +111,8 @@ async function kilitliDavranis(db, ad) {
   d.esit((await rolle(db, "anon", "select jsonb_array_length(value -> 'urunler') n from public.kv where key = 'babuco:katalog'")).satirlar, [{ n: 6 }], ad + ": anon kataloğu okur");
   d.esit((await rolle(db, "anon", "select count(*)::int n from public.siparisler")).satirlar, [{ n: 0 }], ad + ": siparisler tablosuna dokunulmadı (anon okuyor)");
   // giriş yapmış ama izin listesinde olmayan hesap = dışarıdan biri
-  d.esit((await rolle(db, YABANCI.id, "select key from public.kv where key like 'babuco:%' order by key")).satirlar.map((r) => r.key), ["babuco:katalog", "babuco:on-siparis:policy:5550000002"], ad + ": izinsiz hesap özel satırları göremez");
+  d.esit((await rolle(db, YABANCI.id, "select key from public.kv where key like 'babuco:%' order by key")).satirlar.map((r) => r.key), ["babuco:cari:h:0123abcd", "babuco:katalog", "babuco:on-siparis:policy:5550000002"], ad + ": izinsiz hesap özel satırları (store, yedek, cari sırrı) göremez");
+  d.esit((await rolle(db, YABANCI.id, UPSERT, ["babuco:cari:h:0123abcd", "{}"])).hata, "42501", ad + ": izinsiz hesap cari kaydı yazamaz");
   d.esit((await rolle(db, YABANCI.id, UPSERT, ["babuco:store", "{}"])).hata, "42501", ad + ": izinsiz hesap yazamaz");
   d.esit((await rolle(db, YABANCI.id, "delete from public.kv where key = 'babuco:store'")).etkilenen, 0, ad + ": izinsiz hesap silemez");
   d.esit((await rolle(db, YABANCI.id, "select public.babuco_yetkili() as y")).satirlar, [{ y: false }], ad + ": izinsiz hesap için babuco_yetkili() = false");
@@ -119,6 +124,9 @@ async function kilitliDavranis(db, ad) {
   for (const k of ["babuco:store", "babuco:katalog", "duyurular", "babuco:on-siparis:policy:5550000009", "babuco:yedek:2099-01-01", "bayi_puan:05550000009"])
     d.esit((await rolle(db, TOPTANCI.id, UPSERT, [k, k === "babuco:store" ? JSON.stringify(ornekStore()) : k === "babuco:katalog" ? JSON.stringify(katalog) : "{}"])).hata, undefined, ad + ": yetkili hesap yazar (upsert) → " + k);
   d.esit((await rolle(db, TOPTANCI.id, "delete from public.kv where key = 'babuco:yedek:2099-01-01'")).etkilenen, 1, ad + ": yetkili hesap eski yedeği siler");
+  d.esit((await rolle(db, TOPTANCI.id, "select value ->> 'sir' as s from public.kv where key = 'babuco:cari-sir'")).satirlar, [{ s: "gizli" }], ad + ": yetkili hesap cari sırrını okur");
+  d.esit((await rolle(db, TOPTANCI.id, UPSERT, ["babuco:cari:t:yeni", "{}"])).hata, undefined, ad + ": yetkili hesap cari kaydı yazar (upsert)");
+  d.esit((await rolle(db, TOPTANCI.id, "delete from public.kv where key = 'babuco:cari:t:yeni'")).etkilenen, 1, ad + ": yetkili hesap eski cari kaydını siler");
   d.esit((await rolle(db, TOPTANCI.id, UPSERT, ["baska:anahtar", "{}"])).hata, "42501", ad + ": yetkili hesap bile tanınmayan anahtar açamaz (varsayılan ret)");
   d.esit((await rolle(db, TOPTANCI.id, "insert into public.babuco_yetkililer (user_id) values ('" + YABANCI.id + "')")).hata, "42501", ad + ": yetkili hesap bile izin listesini uygulamadan değiştiremez");
   await db.query("delete from public.kv where key in ('bayi_puan:05550000009', 'babuco:on-siparis:policy:5550000009', 'cayci-pos:data:u-yeni')");
@@ -198,7 +206,8 @@ for (const [ad, onceki] of Object.entries(ONCEKI_DUZENLER)) {
   const db = await kur("");
   await calistir(db, kilitSql(TOPTANCI.eposta));
   const anahtarlar = ["babuco:store", "babuco:katalog", "babuco:katalogx", "babuco:yedek:2026-01-01", "babuco:on-siparis:policy:555", "babuco:on-siparis:last:555", "babuco:on-siparis:policy", "duyurular", "duyurular2",
-    "bayi_puan:0555", "bayi_puan", "bayiXpuan:0555", "cayci-pos:users", "cayci-pos:data:u1", "cayci-posx", "Babuco:store", "babuco", "", "siparisler", "kv", "babuco:"];
+    "bayi_puan:0555", "bayi_puan", "bayiXpuan:0555", "cayci-pos:users", "cayci-pos:data:u1", "cayci-posx", "Babuco:store", "babuco", "", "siparisler", "kv", "babuco:",
+    "babuco:cari:h:0123abcd", "babuco:cari:t:0123abcd", "babuco:cari:", "babuco:cari", "babuco:cari-sir", "babuco:carix:1"];
   const sql = (await db.query("select k, public.babuco_kv_sinifi(k) s from unnest($1::text[]) k", [anahtarlar])).rows;
   d.esit(sql.map((r) => r.k + "=" + r.s), anahtarlar.map((k) => k + "=" + sinif(k)), "babuco_kv_sinifi (SQL) = sinif (denemelerdeki taklit), " + anahtarlar.length + " anahtarda");
   d.esit((await db.query("select public.babuco_kv_sinifi(null) s")).rows, [{ s: "bilinmeyen" }], "boş (null) anahtar: bilinmeyen");

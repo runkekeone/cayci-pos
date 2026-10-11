@@ -92,8 +92,10 @@ revoke all on function public.babuco_yetkili() from public;
 grant execute on function public.babuco_yetkili() to anon, authenticated, service_role;
 
 -- Bir kv anahtarı hangi sınıfta?
---   'acik'    herkes okur, yalnız yetkili hesap yazar  (sipariş kataloğu, duyurular, ön ödeme kuralı)
---   'ozel'    yalnız yetkili hesap okur ve yazar       (babuco:store, babuco:yedek:* ve diğer bütün babuco:*)
+--   'acik'    herkes okur, yalnız yetkili hesap yazar  (sipariş kataloğu, duyurular, ön ödeme kuralı,
+--             müşterilerin canlı cari sayfasının ŞİFRELİ kayıtları: babuco:cari:*)
+--   'ozel'    yalnız yetkili hesap okur ve yazar       (babuco:store, babuco:yedek:*, cari kodlarının sırrı
+--             babuco:cari-sir ve diğer bütün babuco:*)
 --   'serbest' bugünkü gibi herkes okur ve yazar        (çay ocağı uygulamasının satırları)
 --   'bilinmeyen' kimseye açık değil
 -- Not: LIKE yerine starts_with kullanılır; LIKE'ta "_" tek harf joker olduğu için "bayi_puan" yanlış eşleşirdi.
@@ -106,6 +108,7 @@ as $$
   select case
     when k is null then 'bilinmeyen'
     when k = 'babuco:katalog' or k = 'duyurular' or starts_with(k, 'babuco:on-siparis:policy:') then 'acik'
+    when starts_with(k, 'babuco:cari:') then 'acik'      -- "babuco:cari-sir" buna UYMAZ (iki nokta yok): özel kalır
     when starts_with(k, 'babuco:') then 'ozel'
     when starts_with(k, 'bayi_puan:') or starts_with(k, 'cayci-pos:') then 'serbest'
     else 'bilinmeyen'
@@ -201,7 +204,7 @@ create policy babuco_kv_yetkili on public.kv
   using      ((select public.babuco_yetkili()) and public.babuco_kv_sinifi(key) in ('ozel', 'acik'))
   with check ((select public.babuco_yetkili()) and public.babuco_kv_sinifi(key) in ('ozel', 'acik'));
 
--- b) Herkese açık OKUMA: sipariş kataloğu, duyurular, ön ödeme kuralı. Yazma yok (yalnız a ile).
+-- b) Herkese açık OKUMA: sipariş kataloğu, duyurular, ön ödeme kuralı, şifreli cari kayıtları. Yazma yok (yalnız a ile).
 create policy babuco_kv_acik_okuma on public.kv
   as permissive for select to anon, authenticated
   using (public.babuco_kv_sinifi(key) = 'acik');
