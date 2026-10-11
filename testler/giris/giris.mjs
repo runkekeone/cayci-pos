@@ -135,6 +135,19 @@ for (const kip of ["kilitsiz", "kilitli"]) {
     d.dogru(await girisEkraniVar(p.page) && (await musteriSayisi(p.page)) === 0, "izinsiz hesap: içeri alınmadı, veri yok");
     d.dogru(JSON.stringify(bulut.deger("babuco:store")) === once, "izinsiz hesap: buluttaki veri değişmedi");
     d.dogru(await p.page.evaluate((a) => !localStorage.getItem(a), OTURUM_ANAHTAR), "izinsiz hesabın oturumu cihazda bırakılmadı");
+    // içerideyken izin listesinden çıkarılan hesap: bir sonraki açılışta dışarı alınır, bulut boş sanılıp yazılmaz
+    d.esit(await girisFormu(p.page, TOPTANCI.eposta, TOPTANCI.sifre), "", "yetkili hesap girdi");
+    await p.page.waitForFunction(() => window.app.getStore().customers.length === 4);
+    await bekle(1800);
+    const once2 = JSON.stringify(bulut.deger("babuco:store"));
+    bulut.durum.yetkililer.delete(TOPTANCI.id);
+    bulut.istekler.length = 0;
+    await p.page.reload();
+    await p.page.waitForSelector("#giris-kapi", { timeout: 10000 });
+    await bekle(1500);
+    d.esit(await p.page.textContent("#gkMesaj"), "Bu hesabın panele girme izni yok.", "izni sonradan kaldırılan hesap: açılışta dışarı alındı");
+    d.dogru(JSON.stringify(bulut.deger("babuco:store")) === once2, "izni kaldırılan hesap: buluttaki veri değişmedi");
+    d.esit(bulut.istekler.filter((i) => i.yol === "/rest/v1/kv" && i.yontem !== "GET").length, 0, "izni kaldırılan hesap: panel 'bulut boş' sanıp yazmayı DENEMEDİ bile (okuma cevabı bekletildi)");
     d.esit(p.hatalar, [], "izinsiz hesap: betik hatası yok");
   } finally { await p.kapat(); await bulut.dur(); }
 }

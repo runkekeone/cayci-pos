@@ -336,7 +336,8 @@ function importCustomers(text) {
  *                     - kv istekleri kullanıcının jetonuyla gider; jetonun süresi dolduysa yenilenir;
  *                     - veritabanı kilidi kurulmadan ÖNCE de çalışsın diye: kullanıcı jetonuyla boş/yetkisiz
  *                       dönen kv isteği bir kez de herkese açık anahtarla denenir (bugünkü davranış);
- *                     - yazma iki yolla da reddedilirse hesabın izni sorulur, izinsizse girişe dönülür.
+ *                     - iki yolla da boş/yetkisiz dönen özel anahtarda hesabın izni sorulur; izinsizse oturum
+ *                       kapanır ve istek yetkili girişe kadar bekler ("bulut boş" diye yorumlanamaz).
  *   Olaylar: "babuco:giris" (giriş yapıldı), "babuco:cikis" (çıkışta yerel veri silinmeden hemen önce).
  *
  * Çıkış: bu cihazdaki veri kopyası silinir (ortak telefonda borç listesi kalmasın). Oturum kendiliğinden
@@ -345,7 +346,7 @@ const OTURUM_ANAHTAR = "babuco:oturum";
 const KATALOG_KEY = "babuco:katalog";
 let _kapiSoz = null, _kapiCoz = null;    // kapı kapalıyken bekleyenlerin sözü
 let _bilerekCikis = false;               // çıkışı biz başlattıysak "oturumun kapanmış" uyarısı gösterme
-let _yetkiSoz = null;
+let _yetkiSoz = null, _yetkiSon = null;
 let _katalogSonOzet = "";                // bu sayfanın en son yayınladığı / bulutta gördüğü kataloğun özeti
 const _bekleyenOkuma = new Map();        // kapı kapalıyken aynı okuma tek istek olsun
 
@@ -423,6 +424,7 @@ async function girisDene() {
   let s;
   try { s = await SB.auth.signInWithPassword({ email: eposta, password: sifre }); } catch (e) { s = { error: e }; }
   if (s.error || !s.data || !s.data.session) { girisMesgul(false); return girisMesaj(girisHataMetni(s.error)); }
+  _yetkiSon = null;
   if ((await yetkiSor()) === "yetkisiz") { await oturumuSil(); girisMesgul(false); return girisMesaj("Bu hesabın panele girme izni yok."); }
   girisMesgul(false);
   _sonEposta = eposta;
@@ -456,16 +458,25 @@ async function yetkiSor() {
     return "bilinmiyor";
   } catch (e) { return "bilinmiyor"; }
 }
-/** Yetkiyi sor; hesap izinsizse oturumu kapatıp giriş ekranına döndür. Aynı anda tek sorgu. */
-function yetkiDenetle() {
+/** Yetkiyi sor; hesap izinsizse oturumu kapatıp giriş ekranına döndür. Aynı anda tek sorgu.
+ *  Olumlu cevap bir dakika hatırlanır (her boş okumada sunucuya sorulmasın); taze=true hatırlananı yok sayar. */
+function yetkiDenetle(taze) {
+  if (!taze && _yetkiSon && Date.now() - _yetkiSon.an < 60000) return Promise.resolve(_yetkiSon.durum);
   if (!_yetkiSoz) {
     _yetkiSoz = yetkiSor().then(async (d) => {
       _yetkiSoz = null;
+      _yetkiSon = d === "yetkili" || d === "kilitsiz" ? { durum: d, an: Date.now() } : null;
       if (d === "yetkisiz" && oturumKayitli()) { await oturumuSil(); kapiyiKapat("Bu hesabın panele girme izni yok."); }
       return d;
     });
   }
   return _yetkiSoz;
+}
+/** İstek, kilit kurulunca yalnız yetkili hesabın görebildiği bir kv anahtarını mı soruyor? */
+function ozelAnahtarIstegi(url) {
+  let m = null;
+  try { m = decodeURIComponent(url).match(/[?&]key=(?:eq|like|ilike|in)\.\(?"?(babuco:[^&,)"]*)/); } catch (e) { return false; }
+  return !!m && m[1] !== KATALOG_KEY && m[1].indexOf("babuco:on-siparis:policy:") !== 0;
 }
 async function bulutYetkiliMi() {
   if (!SB || _kapiSoz || !oturumKayitli()) return false;
@@ -532,7 +543,12 @@ async function sbIstek(url, init, yontem) {
     if (!kvMi || !(await sbAnormal(r, yontem, init))) return r;
     const r2 = await gonder(SB_KEY);                       // kilit kurulmadan önceki düzen: herkese açık anahtar
     if (!(await sbAnormal(r2, yontem, init))) return r2;
-    if (r.status === 401 || r.status === 403) yetkiDenetle();
+    // İki kimlikle de boş/yetkisiz. Özel bir anahtarsa "kayıt yok" ile "iznin yok" karışmasın: hesabın iznini sor.
+    // İzinsizse oturum kapanır ve istek, yetkili bir hesapla giriş yapılana kadar bekler (çağırana "boş" dönmez).
+    const reddedildi = r.status === 401 || r.status === 403;
+    if (reddedildi || ozelAnahtarIstegi(url)) {
+      if ((await yetkiDenetle(reddedildi)) === "yetkisiz" && tur < 2) continue;
+    }
     return r;
   }
 }

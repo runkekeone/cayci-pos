@@ -188,6 +188,7 @@ yalnız senin hesabınca yazılır (kimse sahte katalog ya da duyuru yayınlayam
   Aynı nedenle kilitten önce biri duyurulara ya da ön ödeme kurallarına bir şey yazdıysa o satır öyle kalır;
   kilitten sonra Duyurular sayfasına bir göz at.
 - **Cihazdaki kopyalar.** Giriş yapılmış telefonda verinin bir kopyası durur (internetsiz çalışabilmek için).
+  Panel adresini bugüne kadar açmış her tarayıcıda da o günkü kopya durabilir; şifre ekranı onu gizler ama silmez.
   İndirilen yedek dosyaları ve bilgisayardaki `tools/yedek/` klasörü şifresizdir.
 
 Bunların hepsi çay ocağı uygulamasına gerçek giriş (hesap başına ayrı yetki) eklenince kapanır; ayrı bir iş.
