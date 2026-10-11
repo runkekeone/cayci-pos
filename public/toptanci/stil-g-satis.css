@@ -1,1 +1,363 @@
-/* Görsel yenileme — satış ekranı. */
+/* Görsel yenileme — satış ekranı.
+   Önce telefon (390 px). Yeni sınıfların hepsi "gs-" ile başlar; renkler styles.css'teki değişkenlerden gelir.
+   Düzen: üst çubuk · müşteri · arama + ürünler (sayfa kayar) · ALTTA sabit "Sepet ve ödeme" çubuğu (alt menünün üstünde).
+   Sepet ve ödeme o çubuktan açılan pencerededir. */
+
+/* ---- sayfa kabı ---- */
+@media (max-width: 768px) {
+  /* Bu ekranda genel üst çubuk yerine ekranın kendi çubuğu var; içerik kenardan kenara (boşluğu bölümler verir). */
+  body.pos-active .topbar { display: none; }
+  body.pos-active .content, .content:has(> .gs-satis) { padding: 0; }
+}
+.gs-satis { display: flex; flex-direction: column; min-width: 0; font-size: 15px; line-height: 1.4; }
+.gs-satis button, .gs-sepet-ov button, .gs-menu button, .gs-pick button { font-family: inherit; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.gs-govde { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 0 0; }
+#gsSepetler:empty, #gsBundle:empty { display: none; }
+/* Sayfanın sonu sabit çubukların (ödeme çubuğu + alt menü) arkasında kalmasın */
+.gs-bosluk { height: calc(var(--gs-bar-h, 78px) + 16px); }
+@media (max-width: 768px) {
+  .gs-govde { padding: 12px 12px 0; }
+  .gs-bosluk { height: calc(var(--gs-bar-h, 78px) + var(--gs-mobilbar-h, 74px) + 16px); }
+}
+
+/* ---- üst çubuk (panelin üst çubuğuyla aynı zemin) ---- */
+.gs-ust {
+  display: flex; align-items: center; gap: 8px; min-height: 56px;
+  padding: calc(6px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));
+  background: var(--topbar-grad); color: #fff;
+}
+.gs-ust-ad { flex: 1; min-width: 0; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; color: #fff; }
+.gs-ust-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px; background: rgba(255, 255, 255, 0.13);
+  color: #fff; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.gs-ust-btn:active { background: rgba(255, 255, 255, 0.28); }
+@media (min-width: 769px) { .gs-ust { border-radius: var(--radius); } }
+
+/* ---- açık sepetler (yalnız birden çok sepet kullanılırken) ---- */
+.gs-sepetler-bas { margin: 0 2px 6px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.gs-sepetler-liste { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gs-sepet-sec {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; min-height: 68px; padding: 8px 12px;
+  border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text);
+  text-align: left; font-size: 15px; cursor: pointer;
+}
+.gs-sepet-sec.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 0 0 1px var(--brand); }
+.gs-ss-ad { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--muted); }
+.gs-sepet-sec.on .gs-ss-ad { color: var(--brand-dark); }
+.gs-ss-mus { max-width: 100%; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-ss-tut { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---- müşteri bloğu: ad + borç / limit / kalan / gecikme ---- */
+.gs-mus {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 60px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text);
+  text-align: left; font-size: 15px;
+}
+button.gs-mus { cursor: pointer; }
+button.gs-mus:active { background: var(--brand-soft); }
+.gs-mus.bos { border: 1.5px dashed var(--brand); color: var(--brand-dark); }
+.gs-mus.bos > .ikon { color: var(--brand-dark); }
+.gs-mus-ik { flex: 0 0 40px; align-self: flex-start; width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-dark); }
+.gs-mus-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gs-mus-orta > b { font-size: 16px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.gs-mus-alt { font-size: 13.5px; line-height: 1.4; color: var(--muted); }
+.gs-mus-alt b { font-weight: 700; color: var(--text); }
+.gs-mus-alt .pl-uyari { display: flex; align-items: flex-start; gap: 5px; margin-top: 3px; font-size: 13.5px; line-height: 1.35; font-weight: 700; color: var(--red); }
+.gs-mus-alt .pl-uyari .ikon { margin-top: 2px; }
+.gs-mus-alt .pl-uyari.sari { color: var(--accent-ink); }
+.gs-mus-deg {
+  flex: 0 0 auto; align-self: flex-start; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); color: var(--brand-dark); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.gs-mus-deg:active { background: var(--brand-soft); }
+
+/* ---- geçen sipariş şeridi ---- */
+.gs-bundle { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.gs-bundle-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-bundle-txt b { font-size: 15px; font-weight: 700; }
+.gs-bundle-txt span { font-size: 13.5px; line-height: 1.35; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gs-bundle-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 46px; padding: 0 12px;
+  border: 1.5px solid var(--brand); border-radius: 10px; background: var(--brand-soft); color: var(--brand-dark);
+  font-size: 15px; font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.gs-bundle-btn:active { background: var(--brand); color: #fff; }
+
+/* ---- arama + barkod ---- */
+.gs-ara { display: flex; align-items: stretch; gap: 8px; }
+.gs-ara-kutu {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 4px 0 12px;
+  border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--muted);
+}
+.gs-ara-kutu:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+.gs-ara-in { flex: 1; min-width: 0; height: 46px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 16px; }
+.gs-ara-in:focus-visible { box-shadow: none; }
+.gs-ara-in::placeholder { color: var(--muted); opacity: 1; }
+.gs-ara-x { flex: 0 0 44px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.gs-tara {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 50px; padding: 0 14px;
+  border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--brand-dark);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.gs-tara:active { background: var(--brand-soft); }
+
+/* ---- kategori blokları + ürün kartları (rota sihirbazı da aynı kartları kullanır) ---- */
+.gs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+@media (min-width: 769px) { .gs-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
+/* Rota sihirbazı kendi kutusunu (.prod-grid) korur; yalnız yeni kartlar sığsın diye iki sütun */
+.sihir .prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px; }
+.gs-grid-bas, .gs-kat-bas, .gs-grid-bos, .gs-kat-geri.alt { grid-column: 1 / -1; }
+.gs-grid-bas { margin: 4px 2px -2px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+.gs-grid-bos { display: flex; flex-direction: column; gap: 4px; padding: 26px 16px; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--card); text-align: center; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.gs-grid-bos b { font-size: 16px; color: var(--text); overflow-wrap: anywhere; }
+.gs-grid-bos a { color: var(--brand-dark); font-weight: 700; }
+.gs-kat-bas { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gs-kat-bas > b { flex: 1; min-width: 0; font-size: 17px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.gs-kat-geri {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 46px; padding: 0 14px 0 8px;
+  border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--brand-dark);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.gs-kat-geri:active { background: var(--brand-soft); }
+
+.gs-kat {
+  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 70px; padding: 10px;
+  border: 1.5px solid var(--k-cizgi, var(--line)); border-radius: var(--radius-md); background: var(--k-zemin, var(--card));
+  color: var(--text); text-align: left; font-size: 15px; cursor: pointer;
+}
+.gs-kat:active { transform: scale(0.98); }
+.gs-kat-ik { flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--k-renk, #6b7a86); color: #fff; }
+.gs-kat-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-kat-orta b { font-size: 15px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.gs-kat-orta small { font-size: 13px; color: #4f5d66; }
+/* Kategori renkleri: eski kartlardaki aileler (zemin + çizgi aynı), ikon kutusu aynı tonun koyusu */
+.gs-kat.k-drink { --k-zemin: #eaf3fe; --k-cizgi: #c6dcf7; --k-renk: #2f7bd0; }
+.gs-kat.k-soda  { --k-zemin: #e4f6f4; --k-cizgi: #bfe6e1; --k-renk: #14897c; }
+.gs-kat.k-meyve { --k-zemin: #fdeee4; --k-cizgi: #f6d3bb; --k-renk: #d2601a; }
+.gs-kat.k-kola  { --k-zemin: #f5ede7; --k-cizgi: #e4d3c5; --k-renk: #8a583a; }
+.gs-kat.k-gazoz { --k-zemin: #f0f6e0; --k-cizgi: #d7e6b0; --k-renk: #6a931a; }
+.gs-kat.k-toz   { --k-zemin: #f3f0fb; --k-cizgi: #d9d1ef; --k-renk: #7459c6; }
+.gs-kat.k-tea   { --k-zemin: #fdf1e2; --k-cizgi: #f1d7ab; --k-renk: #c0700f; }
+.gs-kat.k-clean { --k-zemin: #e9f8f0; --k-cizgi: #c5eada; --k-renk: #239a62; }
+.gs-kat.k-sweet { --k-zemin: #fdecf3; --k-cizgi: #f5c9dc; --k-renk: #cf4279; }
+.gs-kat.k-milk  { --k-zemin: #eff3f9; --k-cizgi: #d5dfec; --k-renk: #5f7693; }
+.gs-kat.k-paper { --k-zemin: #f3f0fb; --k-cizgi: #d9d1ef; --k-renk: #7459c6; }
+.gs-kat.k-game  { --k-zemin: #fef0e3; --k-cizgi: #f5d2aa; --k-renk: #d96a1c; }
+.gs-kat.k-serve { --k-zemin: #e9f6f2; --k-cizgi: #c8e4da; --k-renk: #1f8f80; }
+.gs-kat.k-misc  { --k-zemin: #f4f6f7; --k-cizgi: #dbe2e6; --k-renk: #6b7a86; }
+
+.gs-urun {
+  position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-width: 0; min-height: 88px;
+  padding: 11px 12px; border: 1.5px solid var(--line); border-radius: var(--radius-md); background: var(--card); color: var(--text);
+  cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: background .12s ease, border-color .12s ease;
+}
+.gs-urun:active { background: var(--brand-soft); border-color: var(--brand); }
+.gs-urun.sepette { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+.gs-urun-ad { font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.gs-urun.sepette .gs-urun-ad { padding-right: 34px; }
+.gs-urun-alt { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.gs-urun-fiyat { font-size: 16px; font-weight: 700; color: var(--brand-dark); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gs-urun-stok { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.gs-urun-stok.az { color: var(--accent-ink); font-weight: 700; }
+.gs-urun-adet {
+  position: absolute; top: 7px; right: 7px; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 15px;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff;
+  font-size: 15px; font-weight: 700; pointer-events: none;
+}
+.gs-urun-adet[hidden] { display: none; }
+.gs-urun-adet.zipla { animation: gs-zipla .22s ease-out; }
+@keyframes gs-zipla { 0% { transform: scale(0.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.gs-urun-cesit {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 3px; min-height: 44px; padding: 0 10px 0 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--brand-soft); color: var(--brand-dark);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+/* "özel" (müşteriye özel / listeden farklı fiyat) işareti */
+.gs-urun .ozel-tag, .gs-kalem .ozel-tag { font-size: 13px; font-weight: 700; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); letter-spacing: 0; vertical-align: baseline; }
+
+/* ---- rota sihirbazındaki sepet (işaretlemesi aynı): iki satır — ad / − adet + · birim fiyat · tutar ---- */
+.sihir-sepet .ss-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 2px; }
+.sihir-sepet .ss-ad { flex: 1 1 100%; font-size: 15.5px; font-weight: 700; line-height: 1.25; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.sihir-sepet .ss-adet { flex: 0 0 auto; gap: 0; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+.sihir-sepet .ss-adet b { min-width: 38px; font-family: inherit; font-size: 18px; font-weight: 700; }
+.sihir-sepet .ss-b { width: 44px; height: 44px; border: 0; border-radius: 0; background: var(--brand-soft); color: var(--brand-dark); font-size: 24px; font-weight: 600; }
+.sihir-sepet .ss-b:active { background: var(--brand); color: #fff; }
+/* fiyat kutusu dar ekranda daralır; tutar sığmazsa alt satıra iner (kesilmez, taşmaz) */
+.sihir-sepet .ss-fin { flex: 1 1 60px; width: auto; min-width: 60px; max-width: 88px; min-height: 44px; font-family: inherit; font-size: 16px; border-radius: 10px; }
+.sihir-sepet .ss-tut { flex: 1 1 auto; min-width: 0; margin-left: auto; text-align: right; font-family: inherit; font-size: 15.5px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.sihir-sepet .ss-tot { font-family: inherit; font-size: 17px; padding-top: 10px; }
+.sihir-sepet .ss-tot .ss-toplam { font-size: 20px; }
+
+/* ---- alt çubuk: toplam + "Sepet ve ödeme" (alt menünün hemen üstünde sabit) ---- */
+.gs-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 71;
+  padding: 8px calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+  background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(18, 45, 39, 0.1);
+}
+@media (max-width: 768px) {
+  .gs-bar { bottom: var(--gs-mobilbar-h, 74px); padding-bottom: 8px; }
+}
+@media (min-width: 769px) {
+  .gs-bar { left: var(--sidebar-w); }
+  body.rail .gs-bar { left: 58px; }
+}
+.gs-bar-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 10px 8px 16px;
+  border: 0; border-radius: var(--radius-md); background: var(--line-soft); color: var(--muted); text-align: left; font-size: 15px;
+}
+.gs-bar-sol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-bar-sol b { font-size: 17px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-bar-sol small { font-size: 13.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-bar-sag { flex: 0 0 auto; display: none; align-items: center; gap: 2px; }
+.gs-bar-sag b { font-size: 21px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+.gs-bar.dolu .gs-bar-btn { background: var(--brand); color: #fff; cursor: pointer; box-shadow: 0 4px 12px var(--brand-ring); }
+.gs-bar.dolu .gs-bar-btn:active { background: var(--brand-dark); }
+.gs-bar.dolu .gs-bar-sag { display: inline-flex; }
+
+/* ---- sepet ve ödeme penceresi ---- */
+.gs-sepet-ov .modal-head { padding: 8px 10px 8px 16px; }
+.gs-sepet-ov .modal-body { padding: 0 16px 6px; overscroll-behavior: contain; }
+.gs-kalemler { display: flex; flex-direction: column; }
+.gs-kalem-bos { padding: 18px 8px; text-align: center; color: var(--muted); font-size: 15px; }
+.gs-kalem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); }
+.gs-kalem:first-child { border-top: 0; }
+.gs-kalem-bilgi { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 15px; cursor: pointer; }
+.gs-kalem-bilgi:active { opacity: 0.65; }
+.gs-kalem-ad { font-size: 15.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.gs-kalem-birim { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 13.5px; color: var(--muted); }
+.gs-kalem-duz { display: inline-flex; align-items: center; gap: 3px; color: var(--brand-dark); font-weight: 600; }
+.gs-kalem-stok[hidden] { display: none; }
+.gs-kalem-stok { display: flex; align-items: flex-start; gap: 5px; font-size: 13.5px; line-height: 1.35; font-weight: 700; color: var(--accent-ink); }
+.gs-kalem-stok .ikon { margin-top: 2px; }
+.gs-kalem-sag { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.gs-adim { display: inline-flex; align-items: stretch; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+.gs-adim button { width: 46px; height: 44px; padding: 0; border: 0; background: var(--brand-soft); color: var(--brand-dark); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.gs-adim button:active { background: var(--brand); color: #fff; }
+.gs-adim button.cikar { background: #fff0ef; color: var(--red); }
+.gs-adim button.cikar:active { background: var(--red); color: #fff; }
+.gs-adim .gs-adet { width: 52px; height: 44px; padding: 0 2px; border: 0; border-radius: 0; outline: 0; background: var(--card); color: var(--text); text-align: center; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+.gs-adim .gs-adet::-webkit-outer-spin-button, .gs-adim .gs-adet::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.gs-adim .gs-adet:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+.gs-kalem-tut { font-size: 15.5px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.gs-ek { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.gs-ek-satir { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 4px 0; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; color: var(--muted); text-align: left; font-size: 15px; cursor: pointer; }
+.gs-ek-satir:last-child { border-bottom: 0; }
+.gs-ek-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gs-ek-orta b { font-size: 15px; font-weight: 600; color: var(--text); }
+.gs-ek-orta small { font-size: 13.5px; color: var(--muted); }
+.gs-ek-in { flex: 1; min-width: 0; min-height: 44px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 16px; }
+.gs-ek-in:focus-visible { box-shadow: none; }
+.gs-ek-in::placeholder { color: var(--muted); opacity: 1; }
+
+/* pencerenin sabit alt kısmı: müşteri + toplam + ödeme düğmeleri */
+.gs-sepet-alt { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--card); box-shadow: 0 -6px 16px rgba(18, 45, 39, 0.07); }
+.gs-sepet-alt .gs-mus { min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.gs-sepet-alt .gs-mus.dolu { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 10px; }
+.gs-sepet-alt .gs-mus.dolu .gs-mus-orta { display: contents; }
+.gs-sepet-alt .gs-mus.dolu .gs-mus-alt { grid-column: 1 / -1; grid-row: 2; }
+.gs-sepet-alt .gs-mus.dolu .gs-mus-deg { grid-column: 2; grid-row: 1; align-self: center; }
+.gs-sepet-alt .gs-mus.bos { min-height: 52px; padding: 4px 10px; border: 1.5px dashed var(--brand); border-radius: var(--radius); }
+.gs-sepet-alt .gs-mus-ik { flex-basis: 36px; width: 36px; height: 36px; }
+.gs-sepet-alt .gs-mus-orta > b { font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gs-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 14.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gs-top[hidden] { display: none; }
+.gs-top.ana { padding-top: 6px; border-top: 1px solid var(--line-soft); font-size: 16px; font-weight: 700; color: var(--text); }
+.gs-top.ana b { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; white-space: nowrap; }
+.gs-ode-bas { margin-bottom: -2px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.gs-ode {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 0; min-height: 58px; padding: 6px;
+  border: 1.5px solid var(--line); border-radius: var(--radius-md); background: var(--card); color: var(--text); text-align: center; cursor: pointer;
+}
+.gs-ode b { font-size: 15.5px; font-weight: 700; line-height: 1.25; }
+.gs-ode small { font-size: 13px; line-height: 1.25; color: var(--muted); }
+.gs-ode:active { background: var(--brand-soft); border-color: var(--brand); }
+.gs-ode.ana { flex-direction: row; gap: 10px; width: 100%; min-height: 60px; border-color: var(--brand); background: var(--brand); color: #fff; box-shadow: 0 4px 12px var(--brand-ring); }
+.gs-ode.ana b { font-size: 19px; font-weight: 700; }
+.gs-ode.ana:active { background: var(--brand-dark); border-color: var(--brand-dark); }
+.gs-ode-diger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.gs-ode-ozel { display: flex; flex-wrap: wrap; gap: 8px; }
+.gs-ode-ozel .gs-ode { flex: 1 1 30%; min-height: 50px; }
+
+/* ---- satır düzenleme penceresi (eski sınıflar, panelin renkleriyle) ---- */
+.gs-lm { gap: 12px; }
+.gs-lm .field { min-width: 0; margin-bottom: 0; }
+.gs-lm .field label { font-size: 13.5px; }
+.gs-lm .lm-qtyrow { justify-content: stretch; gap: 10px; }
+.gs-lm .lm-step { flex: 0 0 60px; width: 60px; height: 56px; display: inline-flex; align-items: center; justify-content: center; border-color: var(--line); }
+.gs-lm .lm-qty { flex: 1; width: auto; min-width: 0; height: 56px; font-size: 22px; }
+.gs-lm .lm-in { height: 50px; font-size: 17px; }
+.gs-lm .lm-tot { font-size: 15px; }
+.gs-lm .lm-tot b { font-family: inherit; font-size: 21px; color: var(--text); font-variant-numeric: tabular-nums; }
+.gs-lm .lm-ozel { font-size: 14px; background: var(--brand-soft); border-color: var(--line); min-height: 48px; }
+.gs-lm .lm-ozel input { width: 24px; height: 24px; }
+.gs-lm .btn.lm-ok { width: 100%; min-height: 54px; font-size: 17px; background: var(--brand); }
+.gs-lm-cikar { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 6px; padding: 0 12px; border: 0; background: transparent; color: var(--red); font-size: 15px; font-weight: 600; cursor: pointer; }
+
+/* ---- "Diğer" menüsü, stok kaynağı seçimi, müşteri seçme penceresi ---- */
+.gs-menu { display: flex; flex-direction: column; }
+.gs-menu-satir, .gs-sec { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; color: var(--muted); text-align: left; font-size: 15px; cursor: pointer; }
+.gs-menu-satir:last-child { border-bottom: 0; }
+.gs-menu-satir:active { background: var(--brand-soft); }
+/* silen iş: kırmızı (yalnız burada) */
+.gs-menu-satir[data-gs-is="bosalt"] .gs-menu-ik { background: #fff0ef; color: var(--red); }
+.gs-menu-satir[data-gs-is="bosalt"] .gs-menu-orta b { color: var(--red); }
+.gs-menu-ik { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-dark); }
+.gs-menu-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-menu-orta b { font-size: 15.5px; font-weight: 600; line-height: 1.25; color: var(--text); }
+.gs-menu-orta small { font-size: 13.5px; line-height: 1.3; color: var(--muted); }
+.gs-sec { min-height: 68px; margin-bottom: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--radius-md); }
+.gs-sec:last-child { margin-bottom: 0; }
+.gs-sec.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 0 0 1px var(--brand); }
+.gs-sec-tik { flex: 0 0 auto; color: var(--brand-dark); display: inline-flex; }
+.gs-pencere-aciklama { margin: 0 0 12px; font-size: 14.5px; line-height: 1.45; color: var(--muted); }
+.btn.gs-tam { width: 100%; justify-content: center; min-height: 50px; font-size: 16px; }
+
+.gs-pick { display: flex; flex-direction: column; gap: 10px; }
+.gs-pick-yeni { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--brand-dark); font-size: 15px; font-weight: 700; cursor: pointer; }
+.gs-pick-yeni:active { background: var(--brand-soft); }
+.gs-pick-list { list-style: none; margin: 0; padding: 0; }
+.gs-pick-list li { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft); color: var(--muted); cursor: pointer; }
+.gs-pick-list li:active { background: var(--brand-soft); }
+.gs-pl-orta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-pl-orta b { font-size: 15.5px; font-weight: 700; line-height: 1.25; color: var(--text); overflow-wrap: anywhere; }
+.gs-pl-orta small { font-size: 13.5px; color: var(--muted); }
+.gs-pl-orta small.borclu { color: var(--red); font-weight: 600; }
+.gs-pick-yok { margin: 0; padding: 18px 8px; text-align: center; color: var(--muted); font-size: 15px; }
+.gs-pick-yok[hidden] { display: none; }
+
+/* ---- klavye açıkken (görünen alan kısa): sabit çubuklar ekranı yutmasın ----
+   Eşik 500 px: klavye açıkken görünen alan ~300–460 px; klavyesiz en küçük telefonda (360×640, adres çubuğuyla) ~540 px. */
+@media (max-width: 768px) and (max-height: 500px) {
+  body.pos-active .mobilbar { display: none; }
+  .gs-bar { bottom: 0; padding: 6px 12px; }
+  .gs-bar-btn { min-height: 48px; }
+  .gs-bar-sol small { display: none; }
+  .gs-bosluk { height: calc(var(--gs-bar-h, 60px) + 12px); }
+  /* sepet penceresi: alt kısım sabit kalmaz, pencerenin tamamı birlikte kayar */
+  .gs-sepet-ov .modal { display: block; overflow-y: auto; }
+  .gs-sepet-ov .modal-body { overflow: visible; }
+  .gs-sepet-alt { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .gs-urun-adet.zipla { animation: none; } }
+
+/* "Başka ürün ekle" (pencereyi kapatır) — ek satırların ilki, panelin renginde */
+.gs-ek-satir.devam { color: var(--brand-dark); }
+.gs-ek-satir.devam .gs-ek-orta b { color: var(--brand-dark); font-weight: 700; }
+
+/* ---- çeşit / marka seçme penceresi (eski sınıflar) ---- */
+.aile-pop .aile-opt { min-height: 58px; padding: 10px 14px; border-width: 1.5px; }
+.aile-pop .aile-opt .ao-ad { font-size: 15.5px; overflow-wrap: anywhere; }
+.aile-pop .aile-opt .ao-fiyat { font-family: inherit; font-size: 16px; font-weight: 700; color: var(--brand-dark); white-space: nowrap; }
+
+/* ---- satış ekranının açtığı bütün pencereler ---- */
+.gs-pencere .modal-head h3 { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.gs-pencere .modal-head .x { flex: 0 0 auto; min-width: 44px; min-height: 44px; font-size: 26px; color: var(--muted); }
+
+/* Eşitleme bölümünün kısa bilgi notu bu ekranda ödeme çubuğunun üstüne binmesin (burada alt kısım daha yüksek) */
+@media (max-width: 768px) {
+  body.pos-active .es-bildirim { bottom: calc(var(--gs-mobilbar-h, 74px) + var(--gs-bar-h, 78px) + 10px + env(safe-area-inset-bottom)); }
+}

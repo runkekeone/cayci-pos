@@ -1883,115 +1883,115 @@ function mountSatisDetay() {
 function newCart() { return { items: [], musteriId: null, iskonto: 0, odenen: 0 }; }
 const pos = { carts: [newCart(), newCart(), newCart(), newCart(), newCart()], active: 0, cat: "ANA", personelId: null, q: "" };
 function activeCart() { return pos.carts[pos.active]; }
+/* Satış ekranı (telefon): ÜSTTE ürün seçimi, ALTTA sabit "Sepet ve ödeme" çubuğu; sepet + ödeme o çubuktan açılan pencerede.
+   Akış: müşteri seç → ürüne dokun (sepete eklenir) → Sepet ve ödeme → adet düzelt → nasıl ödendi.
+   Yeni adların hepsi gs… ile başlar (görsel yenileme / satış). Hesap yapan işlevler (finalizeSale, musteriFiyat…) aynen duruyor. */
+/* Kategori ikonları — ortak ikon tablosuna EK (tablo düzenlenmez) */
+IKON_YOLLAR.damla = 'M12 3.5c3.2 3.6 5.5 6.7 5.5 9.7a5.5 5.5 0 0 1-11 0c0-3 2.3-6.1 5.5-9.7z';
+IKON_YOLLAR.sise = 'M10 2.5h4v3.2l2 2.8V20a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 20V8.5l2-2.8zM8 13h8';
+IKON_YOLLAR.caybardak = 'M8.5 3h7c0 3.2-1.6 4.3-1.6 6.5 0 1.9 1.6 3 1.6 5.5a3.5 3.5 0 0 1-7 0c0-2.5 1.6-3.6 1.6-5.5C10.1 7.3 8.5 6.2 8.5 3zM5.5 21h13';
+IKON_YOLLAR.fincan = 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10.5h1.2a2.3 2.3 0 0 1 0 4.6H16M4 21.5h13M8.5 3v3M12.5 3v3';
+IKON_YOLLAR.oyunkart = 'M7 3h10a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 17 21H7a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 7 3zM12 8l3 4-3 4-3-4z';
+IKON_YOLLAR.tabak = 'M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z';
+IKON_YOLLAR.sprey = 'M9 10h5.5l1 3v7a1.5 1.5 0 0 1-1.5 1.5H9.5A1.5 1.5 0 0 1 8 20v-7zM10.5 10V6M9 6h5l3 1.5M9 6V4.5h3M19.5 5v.01M20.5 8v.01M19.5 11v.01';
+IKON_YOLLAR.sekerleme = 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8.5 10 4 8.5l1.5 5zM15.5 14l4.5 1.5-1.5-5z';
+IKON_YOLLAR.rulo = 'M4 9a4 5 0 1 0 8 0 4 5 0 0 0-8 0zM8 4h8a4 5 0 0 1 4 5v10h-8V9M8 9v.01';
+IKON_YOLLAR.sandalye = 'M7 3v18M7 12h10v9M7 7h5';
+IKON_YOLLAR.tencere = 'M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 10h20M9 6.5h6';
+
 function renderSatis() {
-  const usedSet = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
-  const cats = ["ANA"].concat(allGroupNames().filter((g) => usedSet.has(g)));
-  const custTabs = pos.carts.map((c, n) => `<div class="cust-tab ${n === pos.active ? "on" : ""}" data-tab="${n}">Müşteri ${n + 1} (${num2.format(c.items.reduce((s, i) => s + i.fiyat * i.adet, 0))})</div>`).join("");
-  const catTabs = cats.map((c) => `<span class="cat-tab ${c === pos.cat ? "on" : ""}" data-cat="${c}">${c === "ANA" ? "☰ Kategoriler" : esc(c)}</span>`).join("");
-  const persSel = store.personeller.length ? `<div class="field" style="margin:0"><label>Personel</label><select id="posPersonel"><option value="">— seç —</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></div>` : "";
-  return `<div class="pos2">
-      <!-- 0. Satış app-bar (mavi gradyan) — BenimPOS başlığı -->
-      <div class="satis-appbar">
-        <button class="sab-back" id="sabBack" type="button" aria-label="Geri">&#9664;</button>
-        <div class="sab-title">Satış Yap</div>
-        <div class="sab-actions">
-          <button class="sab-ico" id="sabIsk" type="button" title="İskonto uygula">&#10549;</button>
-          <button class="sab-ico" id="sabAra" type="button" title="Ürün / barkod ara">&#8853;</button>
-          <button class="sab-ico" id="sabMuh" type="button" title="Muhtelif tutar ekle"><span class="sab-num">100</span></button>
-          <button class="sab-ico" id="posYazdir" type="button" title="Yazdır">&#128424;</button>
+  const c = activeCart(), arac = stokModu === "arac";
+  return `<div class="pos2 gs-satis" id="gsSatis">
+      <!-- Üst çubuk: panelin kendi rengi. Solda ekran adı; sağda adıyla yazılı iki düğme (gerisi "Diğer"de) -->
+      <div class="gs-ust">
+        <h1 class="gs-ust-ad">Satış</h1>
+        <button class="gs-ust-btn" id="stokModBtn" type="button" aria-label="Mal ${arac ? "araçtan" : "dükkandan"} çıkıyor. Değiştirmek için dokun">${ikon(arac ? "araba" : "dukkan", 18)}<span>Stok: ${arac ? "Araç" : "Dükkan"}</span>${ikon("asagi", 14, 2.4)}</button>
+        <button class="gs-ust-btn" id="gsDiger" type="button">${ikon("ucnokta", 18, 3)}<span>Diğer</span></button>
+      </div>
+      <div class="gs-govde">
+        <!-- Birden çok sepet açıkken: hangisinde olduğun (tek sepette görünmez) -->
+        <div id="gsSepetler">${gsSepetlerHTML()}</div>
+        <!-- 1. Müşteri: ad + borç / limit / kalan / gecikme -->
+        <div id="gsMusteri" data-gs-mus="sayfa">${gsMusteriBlokHTML("sayfa")}</div>
+        <!-- Seçili müşterinin geçen siparişi (tek dokunuşla sepete) -->
+        <div id="gsBundle">${bundleBarHTML()}</div>
+        <!-- 2. Ürün seçimi: arama + barkod, altında kategoriler / ürünler -->
+        <div class="gs-ara">
+          <div class="gs-ara-kutu">${ikon("ara", 20)}<input id="prodSearch" class="gs-ara-in" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Ürün ara (ad ya da barkod)" value="${esc(pos.q || "")}" /><button class="gs-ara-x" id="prodSearchX" type="button" aria-label="Aramayı temizle" style="${pos.q ? "" : "display:none"}">${ikon("kapat", 18, 2.2)}</button></div>
+          <button class="gs-tara" id="taraFab" type="button">${ikon("tara", 20)}<span>Tara</span></button>
         </div>
+        <div class="gs-grid" id="prodGrid">${prodGridHTML()}</div>
+        <div class="gs-bosluk" aria-hidden="true"></div>
       </div>
-
-      <!-- 0b. Stok kaynağı modu + Gelişmiş çeşit modu -->
-      <div class="stok-mod-bar">
-        <span class="smb-label">Stok kaynağı</span>
-        <button class="smb-toggle ${stokModu}" id="stokModBtn" type="button">${stokModu === "arac" ? "🚗 Araç" : "🏪 Dükkan"}<span class="smb-swap">↔ değiştir</span></button>
-        <button class="smb-gelismis ${gelismisMod ? "on" : ""}" id="gelismisBtn" type="button" title="Açıkken: karta basılı tut → çeşitleri seç">⚙ Gelişmiş${gelismisMod ? " ✓" : ""}</button>
+      <!-- Satış notu sepet penceresinde yazılır; finalizeSale buradan okur -->
+      <input type="hidden" id="posNot" value="${esc(c.not || "")}" />
+      <!-- 3. Alt çubuk (alt menünün hemen üstünde sabit): toplam + tek dokunuşla sepet ve ödeme -->
+      <div class="gs-bar" id="gsBar">
+        <button class="gs-bar-btn" id="gsSepetAc" type="button">
+          <span class="gs-bar-sol"><b id="gsBarBas">Sepet boş</b><small id="gsBarAlt">Eklemek için ürüne dokun</small></span>
+          <span class="gs-bar-sag"><b id="posTutar"></b>${ikon("sag", 20, 2.4)}</span>
+        </button>
       </div>
-
-      <!-- 1. Özet çubuğu: Miktar | Brüt | İskonto | Tutar -->
-      <div class="pos-totals" id="posTotals">
-        <div class="pos-tot"><div class="l">Miktar</div><div class="v" id="posMiktar">0</div></div>
-        <div class="pos-tot"><div class="l">Brüt</div><div class="v" id="posBrut">0</div></div>
-        <div class="pos-tot"><div class="l">İskonto</div><div class="v" id="posIsk">0</div></div>
-        <div class="pos-tot brand"><div class="l">Tutar</div><div class="v" id="posTutar">0</div></div>
-      </div>
-
-      <div class="pos2-cols">
-        <!-- SOL sütun (mobilde akışta üst blok) -->
-        <div class="pos2-left">
-          <!-- 3. Müşteri pill sekmeleri -->
-          <div class="cust-tabs" id="custTabs">${custTabs}</div>
-
-          <!-- 3b. Bundle: seçili müşterinin geçen siparişi (tek dokunuş sepete) -->
-          ${bundleBarHTML()}
-
-          <!-- 4. Adisyon / sepet listesi (satıra tıkla → düzenleme penceresi) -->
-          <div class="card ades-wrap">
-            <div class="ades-head"><span>Adisyon</span><button class="ades-tara" id="taraFab" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M4 12h16"/></svg> Tara</button><span id="cartCount" class="sub">${cartCount()}</span></div>
-            <div class="ades-list" id="cartBody">${cartRowsHTML()}</div>
-          </div>
-
-          <!-- 5. Müşteri satırı + satış notu + onay kutuları -->
-          <div class="pos-meta2">
-            <div class="cust-line">
-              <span class="cust-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#3a4250" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>
-              <div class="cust-txt">
-                <b id="custName">${cartCustName() || "Müşterisiz satış"}</b>
-                <span id="custLimit">${activeCart().musteriId ? "Borç : " + money.format(customerBorc(activeCart().musteriId)) : "(Borç : 0.00  Limit : 0.00)"}</span>
-              </div>
-              <button class="cust-add" id="custPick" type="button" aria-label="Müşteri seç"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#3a4250" stroke-width="1.7"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-3.5 3.2-5.5 7-5.5"/><path d="M18 9v6M15 12h6"/></svg></button>
-            </div>
-            <div class="note-line">
-              <input id="posNot" class="note-in" placeholder="Satış notu" />
-              <span class="app-ver">Özgür Ticaret</span>
-            </div>
-          </div>
-
-          <!-- 6. Ödeme (tek satır 4 buton) -->
-          <div class="pay-grid">
-            <button class="pay-btn nakit" data-pay="nakit" type="button">Nakit</button>
-            <button class="pay-btn pos" data-pay="pos" type="button">Pos</button>
-            <button class="pay-btn acik" data-pay="acik" type="button">Açık Hesap</button>
-            <button class="pay-btn parcali" data-pay="parcali" type="button">Parçalı</button>
-          </div>
-          ${store.odemeTipleri.length ? `<div class="pay-custom">${store.odemeTipleri.map((t) => `<button class="btn soft" data-paycustom="${t.id}" type="button">${esc(t.ad)}</button>`).join("")}</div>` : ""}
-          ${persSel}
-        </div>
-
-        <!-- SAĞ sütun (mobilde akışta alt blok): kategoriler + ürünler -->
-        <div class="pos2-right">
-          <!-- 8. Ürün arama + kategori pill'leri (yapışkan) -->
-          <div class="prod-filterbar">
-            <div class="prod-search">
-              <span class="prod-search-ic">&#128269;</span>
-              <input id="prodSearch" class="prod-search-in" placeholder="Ürün ara (isim / barkod)..." value="${esc(pos.q || "")}" />
-              <button class="prod-search-x" id="prodSearchX" type="button" aria-label="Temizle" style="${pos.q ? "" : "display:none"}">&times;</button>
-            </div>
-            <div class="cat-tabs" id="catTabs">${catTabs}</div>
-          </div>
-          <!-- 9. Ürün ızgarası (kart kart) -->
-          <div class="prod-grid" id="prodGrid">${prodGridHTML()}</div>
-        </div>
-      </div>
-
     </div>`;
 }
 function cartCustName() { const id = activeCart().musteriId; const c = id && findCustomer(id); return c ? esc(c.ad) : ""; }
+/* İçinde ürün ya da müşteri olan sepetler + şu an açık olan. Tek sepet kullanılırken liste 1 elemanlıdır. */
+function gsAcikSepetler() { return pos.carts.map((c, n) => n).filter((n) => n === pos.active || pos.carts[n].items.length > 0 || !!pos.carts[n].musteriId); }
+function gsSepetTutar(c) { return Math.max(0, c.items.reduce((s, i) => s + netLine(i), 0) - (Number(c.iskonto) || 0)); }
+function gsSepetlerHTML() {
+  const acik = gsAcikSepetler();
+  if (acik.length < 2) return "";
+  return `<div class="gs-sepetler"><div class="gs-sepetler-bas">${acik.length} sepet açık — hangisine satıyorsan ona dokun</div><div class="gs-sepetler-liste">${acik.map((n) => {
+    const c = pos.carts[n], m = c.musteriId && findCustomer(c.musteriId), on = n === pos.active;
+    return `<button class="gs-sepet-sec${on ? " on" : ""}" data-tab="${n}" type="button" aria-pressed="${on}"><span class="gs-ss-ad">${on ? ikon("tik", 16, 2.8) : ""}Sepet ${n + 1}${on ? " (açık)" : ""}</span><span class="gs-ss-mus">${m ? esc(m.ad) : "Müşterisiz"}</span><span class="gs-ss-tut">${c.items.length ? money.format(gsSepetTutar(c)) : "boş"}</span></button>`;
+  }).join("")}</div></div>`;
+}
+/* Müşteri bloğu. yer: "sayfa" (ekranın üstü; custName / custLimit / custPick kimlikleri burada) | "sepet" (ödeme penceresi). */
+function gsMusteriBlokHTML(yer) {
+  const mid = activeCart().musteriId, mc = mid && findCustomer(mid);
+  const kimlik = (ad) => (yer === "sayfa" ? ` id="${ad}"` : "");
+  if (!mc) return `<button class="gs-mus bos" data-gs-muspick type="button"${kimlik("custPick")}>
+      <span class="gs-mus-ik">${ikon("kisi", 22)}</span>
+      <span class="gs-mus-orta"><b${kimlik("custName")}>Müşteri seç</b><span class="gs-mus-alt"${kimlik("custLimit")}>Seçmezsen müşterisiz satış olur</span></span>
+      ${ikon("sag", 20, 2.2)}</button>`;
+  return `<div class="gs-mus dolu">
+      ${yer === "sayfa" ? `<span class="gs-mus-ik">${ikon("kisi", 22)}</span>` : ""}
+      <span class="gs-mus-orta"><b${kimlik("custName")}>${esc(mc.ad)}</b><span class="gs-mus-alt"${kimlik("custLimit")}>${satisMusteriDurumHTML(mid, cartTotals().toplam)}</span></span>
+      <button class="gs-mus-deg" data-gs-muspick type="button"${kimlik("custPick")}>Değiştir</button></div>`;
+}
+/* Seçili stok kaynağında (araç / dükkan) bu üründen ne var; sepetteki adet onu aşıyorsa "az" (uyarı, engel değil). */
+function gsStokDurum(p, sepetAdet) {
+  const s = aktifStok(p), yer = stokModu === "arac" ? "Araçta" : "Dükkanda";
+  if ((Number(sepetAdet) || 0) > s + 0.0001) return { az: true, kisa: s > 0 ? yer + " " + num2.format(s) + " var" : yer + " yok", uzun: s > 0 ? yer + " yalnız " + num2.format(s) + " var" : yer + " yok görünüyor" };
+  return { az: false, kisa: s > 0 ? yer + " " + num2.format(s) : yer + " yok", uzun: "" };
+}
+function gsSepetAdet(urunId) { return activeCart().items.reduce((a, i) => a + (i.urunId === urunId ? Number(i.adet) || 0 : 0), 0); }
+/* Sepet satırı (ödeme penceresinde): solda ad + birim fiyat (dokun → fiyat/iskonto penceresi), sağda − [adet] + ve satır tutarı.
+   Adet kutusuna doğrudan yazılır (10 koli için 10 kez dokunmak gerekmesin). */
+function gsKalemStok(it) { const p = it.urunId && findProduct(it.urunId); const d = p ? gsStokDurum(p, gsSepetAdet(it.urunId)) : null; return d && d.az ? d.uzun : ""; }
+function gsAzaltIc(adet) { return adet <= 1 ? ikon("cop", 20) : ikon("eksi", 20, 2.6); }
 function cartRowsHTML() {
   const items = activeCart().items;
-  if (!items.length) return `<div class="ades-empty">Sepet boş — üründen ekleyin.</div>`;
+  if (!items.length) return `<div class="gs-kalem-bos">Sepet boş.</div>`;
   return items.map((it, idx) => {
-    const isk = Number(it.iskyuzde) || 0;
+    const isk = Number(it.iskyuzde) || 0, adet = Number(it.adet) || 0;
     const p = it.urunId && findProduct(it.urunId);
     const ozel = p && Number(it.fiyat) !== (Number(p.satis) || 0);
-    return `<div class="ades-row" data-line="${idx}" role="button" tabindex="0">
-    <div class="ades-qty">${num2.format(Number(it.adet) || 0)} ×</div>
-    <div class="ades-mid">
-      <div class="ades-name">${esc(it.ad)}</div>
-      <div class="ades-unit">${money.format(Number(it.fiyat) || 0)}${ozel ? ` <span class="ozel-tag">özel</span>` : ""}${isk ? ` · %${num2.format(isk)} isk` : ""}</div>
+    const stok = gsKalemStok(it);
+    return `<div class="gs-kalem" data-line="${idx}">
+    <button class="gs-kalem-bilgi" data-lineac type="button" aria-label="${esc(it.ad)} — fiyatı ya da iskontoyu düzelt">
+      <span class="gs-kalem-ad">${esc(it.ad)}</span>
+      <span class="gs-kalem-birim">${money.format(Number(it.fiyat) || 0)}${ozel ? ` <span class="ozel-tag">özel</span>` : ""}${isk ? ` · %${num2.format(isk)} iskonto` : ""}<span class="gs-kalem-duz">${ikon("kalem", 14)}düzelt</span></span>
+      <span class="gs-kalem-stok" data-lstok${stok ? "" : " hidden"}>${ikon("dikkat", 15, 2.2)}<span>${stok}</span></span>
+    </button>
+    <div class="gs-kalem-sag">
+      <div class="gs-adim">
+        <button class="${adet <= 1 ? "cikar" : ""}" data-lazalt="${idx}" type="button" aria-label="${adet <= 1 ? "Sepetten çıkar" : "Bir azalt"}">${gsAzaltIc(adet)}</button>
+        <input class="gs-adet" data-ladet="${idx}" type="number" inputmode="decimal" step="any" min="0" value="${adet}" aria-label="Adet" />
+        <button data-lart="${idx}" type="button" aria-label="Bir artır">${ikon("arti", 20, 2.6)}</button>
+      </div>
+      <div class="gs-kalem-tut" data-tut="${idx}">${money.format(netLine(it))}</div>
     </div>
-    <div class="ades-tot" data-tut="${idx}">${money.format(netLine(it))}</div>
   </div>`;
   }).join("");
 }
@@ -2015,9 +2015,33 @@ function aileGetir(ad) {
   if (/\bsu\b/.test(n) && !/suyu|soda|ayran|kola/.test(n)) return "Su";
   return null;
 }
+/* Ürün kartı (satış ekranı + rota sihirbazı aynı kartı kullanır): ad, bu müşteriye uygulanacak fiyat, seçili kaynaktaki stok,
+   sepetteyse köşede adedi. Dokununca sepete 1 eklenir. */
 function posSoloCard(p) {
   const cesit = gelismisMod && varyantKardesler(p).length > 1;
-  return `<div class="prod-card${cesit ? " has-var" : ""}" data-add="${p.id}">${cesit ? `<span class="var-badge">⋮ çeşit</span>` : ""}<span class="p-name">${esc(p.ad)}</span><span class="p-price">${money.format(Number(p.satis) || 0)}</span></div>`;
+  const adet = gsSepetAdet(p.id), stok = gsStokDurum(p, adet);
+  return `<div class="gs-urun${adet > 0 ? " sepette" : ""}" data-add="${p.id}" role="button">
+    <span class="gs-urun-ad">${esc(p.ad)}</span>
+    <span class="gs-urun-alt"><span class="gs-urun-fiyat" data-gs-fiyat>${gsFiyatHTML(p)}</span><span class="gs-urun-stok${stok.az ? " az" : ""}" data-gs-stok>${stok.kisa}</span></span>
+    ${cesit ? `<button class="gs-urun-cesit" data-cesit="${p.id}" type="button">Çeşitler${ikon("sag", 14, 2.4)}</button>` : ""}
+    <span class="gs-urun-adet" data-gs-adet${adet > 0 ? "" : " hidden"}>${adet > 0 ? num2.format(adet) : ""}</span>
+  </div>`;
+}
+/* Kartta görünen fiyat = dokununca sepete yazılacak fiyat (seçili müşterinin özel fiyatı varsa o, "özel" işaretiyle). */
+function gsFiyatHTML(p) { const liste = Number(p.satis) || 0, fiyat = musteriFiyat(p.id, liste); return money.format(fiyat) + (fiyat !== liste ? ` <span class="ozel-tag">özel</span>` : ""); }
+/* Kartlardaki "sepette kaç tane" işaretini, fiyatı ve stok yazısını sepete göre tazeler (ızgarayı yeniden kurmadan). */
+function gsRozetSync() {
+  document.querySelectorAll("#prodGrid [data-add]").forEach((el) => {
+    const p = findProduct(el.dataset.add); if (!p) return;
+    const n = gsSepetAdet(p.id), roz = el.querySelector("[data-gs-adet]"), stk = el.querySelector("[data-gs-stok]");
+    el.classList.toggle("sepette", n > 0);
+    if (roz) {
+      const yeni = n > 0 ? num2.format(n) : "";
+      if (roz.textContent !== yeni) { roz.textContent = yeni; roz.hidden = !(n > 0); roz.classList.remove("zipla"); if (n > 0) { void roz.offsetWidth; roz.classList.add("zipla"); } }
+    }
+    if (stk) { const d = gsStokDurum(p, n); stk.textContent = d.kisa; stk.classList.toggle("az", d.az); }
+    const fy = el.querySelector("[data-gs-fiyat]"); if (fy) { const h = gsFiyatHTML(p); if (fy._h !== h) { fy.innerHTML = h; fy._h = h; } }
+  });
 }
 // Müşterinin son siparişindeki (hâlâ mevcut) ürünler — bundle önerisi
 function musteriSonSiparis(id) {
@@ -2028,17 +2052,17 @@ function musteriSonSiparis(id) {
   sales[0].items.forEach((it) => { if (it.urunId && !seen.has(it.urunId) && findProduct(it.urunId)) { seen.add(it.urunId); out.push({ urunId: it.urunId, ad: it.ad }); } });
   return out;
 }
-// Seçili müşteri varsa "son sipariş" bundle çubuğu
+// Seçili müşteri varsa "geçen sipariş" şeridi. Ürünlerin hepsi zaten sepetteyse görünmez (eklenecek bir şey kalmamıştır).
 function bundleBarHTML() {
-  const id = activeCart().musteriId;
+  const c = activeCart(), id = c.musteriId;
   if (!id) return "";
   const items = musteriSonSiparis(id);
   if (!items.length) return "";
-  const c = findCustomer(id);
+  if (items.every((i) => c.items.some((x) => x.urunId === i.urunId))) return "";
   const adlar = items.slice(0, 4).map((i) => esc(i.ad)).join(", ") + (items.length > 4 ? " +" + (items.length - 4) : "");
-  return `<div class="bundle-bar">
-    <div class="bundle-txt"><b>🔁 ${esc(c ? c.ad : "Müşteri")} — geçen sipariş</b><span>${items.length} ürün · ${adlar}</span></div>
-    <button class="btn ok bundle-add" id="bundleAdd" type="button">＋ Sepete Ekle</button>
+  return `<div class="gs-bundle">
+    <div class="gs-bundle-txt"><b>Geçen sipariş · ${items.length} ürün</b><span>${adlar}</span></div>
+    <button class="gs-bundle-btn" id="bundleAdd" type="button">${ikon("arti", 18, 2.6)}<span>Sepete ekle</span></button>
   </div>`;
 }
 // Bundle'ı sepete uygula (her ürün adet 1; zaten varsa dokunma)
@@ -2051,62 +2075,66 @@ function bundleUygula() {
   });
   refreshPOS();
 }
-// Kategori görseli: ada göre emoji + renk sınıfı
+// Kategori görseli: ada göre çizgi ikon (ikon() adı) + renk sınıfı
 function katGorsel(name) {
   const n = ocrNorm(name);
-  if (/okey/.test(n)) return { ic: "🀄", cls: "k-game" };
-  if (/oyun|eglence/.test(n)) return { ic: "🃏", cls: "k-game" };
-  if (/servis ekip|bardak|tabak|kasik/.test(n)) return { ic: "🍽️", cls: "k-serve" };
-  if (/caylar|\bcay\b/.test(n)) return { ic: "🍵", cls: "k-tea" };
-  if (/kahve|yan urun|granul|3u1|3ü1/.test(n)) return { ic: "☕", cls: "k-tea" };
-  if (/toz icecek/.test(n)) return { ic: "🧃", cls: "k-drink" };
-  if (/meyve suyu/.test(n)) return { ic: "🧃", cls: "k-drink" };
-  if (/gazoz/.test(n)) return { ic: "🥤", cls: "k-drink" };
-  if (/gazli|kola|cola|fanta/.test(n)) return { ic: "🥤", cls: "k-drink" };
-  if (/ayran/.test(n)) return { ic: "🥛", cls: "k-milk" };
-  if (/soda/.test(n)) return { ic: "🥤", cls: "k-drink" };
-  if (/\bsu\b/.test(n)) return { ic: "💧", cls: "k-drink" };
-  if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "🧽", cls: "k-clean" };
-  if (/sicak icecek|sahlep|salep/.test(n)) return { ic: "🍵", cls: "k-tea" };
-  if (/soguk icecek|mesrubat|icecek|kola|gazoz|meyve suyu|ayran|enerji|maden/.test(n)) return { ic: "🥤", cls: "k-drink" };
-  if (/servis|bardak|fincan|tabak/.test(n)) return { ic: "🍽️", cls: "k-serve" };
-  if (/seker|gida|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "🍬", cls: "k-sweet" };
-  if (/sut|yogurt|peynir|kahvalt|tereyag/.test(n)) return { ic: "🥛", cls: "k-milk" };
-  if (/kagit|hijyen|pecete|mendil/.test(n)) return { ic: "🧻", cls: "k-paper" };
-  if (/kirtasiye/.test(n)) return { ic: "✏️", cls: "k-paper" };
-  if (/mobilya|dis mekan|bahce/.test(n)) return { ic: "🪑", cls: "k-misc" };
-  if (/teknik|guvenlik/.test(n)) return { ic: "🔧", cls: "k-misc" };
-  if (/mutfak|ekipman/.test(n)) return { ic: "🍳", cls: "k-misc" };
-  return { ic: "📦", cls: "k-misc" };
+  if (/okey/.test(n)) return { ic: "oyunkart", cls: "k-game" };
+  if (/oyun|eglence/.test(n)) return { ic: "oyunkart", cls: "k-game" };
+  if (/servis ekip|bardak|tabak|kasik/.test(n)) return { ic: "tabak", cls: "k-serve" };
+  if (/caylar|\bcay\b/.test(n)) return { ic: "caybardak", cls: "k-tea" };
+  if (/kahve|yan urun|granul|3u1|3ü1/.test(n)) return { ic: "fincan", cls: "k-kola" };
+  if (/toz icecek/.test(n)) return { ic: "bardak", cls: "k-toz" };
+  if (/meyve suyu/.test(n)) return { ic: "bardak", cls: "k-meyve" };
+  if (/gazoz/.test(n)) return { ic: "sise", cls: "k-gazoz" };
+  if (/gazli|kola|cola|fanta/.test(n)) return { ic: "sise", cls: "k-kola" };
+  if (/ayran/.test(n)) return { ic: "bardak", cls: "k-milk" };
+  if (/soda/.test(n)) return { ic: "sise", cls: "k-soda" };
+  if (/\bsu\b/.test(n)) return { ic: "damla", cls: "k-drink" };
+  if (/temizlik|deterjan|sabun|camasir|bulasik|dezenfektan/.test(n)) return { ic: "sprey", cls: "k-clean" };
+  if (/sicak icecek|sahlep|salep/.test(n)) return { ic: "fincan", cls: "k-tea" };
+  if (/soguk icecek|mesrubat|icecek|kola|gazoz|meyve suyu|ayran|enerji|maden/.test(n)) return { ic: "sise", cls: "k-drink" };
+  if (/servis|bardak|fincan|tabak/.test(n)) return { ic: "tabak", cls: "k-serve" };
+  if (/seker|gida|sekerleme|cikolata|biskuvi|bisküvi|atistir|gofret|cips/.test(n)) return { ic: "sekerleme", cls: "k-sweet" };
+  if (/sut|yogurt|peynir|kahvalt|tereyag/.test(n)) return { ic: "bardak", cls: "k-milk" };
+  if (/kagit|hijyen|pecete|mendil/.test(n)) return { ic: "rulo", cls: "k-paper" };
+  if (/kirtasiye/.test(n)) return { ic: "kalem", cls: "k-paper" };
+  if (/mobilya|dis mekan|bahce/.test(n)) return { ic: "sandalye", cls: "k-misc" };
+  if (/teknik|guvenlik/.test(n)) return { ic: "ayar", cls: "k-misc" };
+  if (/mutfak|ekipman/.test(n)) return { ic: "tencere", cls: "k-misc" };
+  return { ic: "kutu", cls: "k-misc" };
 }
-// Kategori-önce görünüm: kategori kartları (tıkla → o kategorinin ürünleri)
+// Kategori blokları (renkli, iri): dokun → o kategorinin ürünleri
 function catGridHTML() {
   const used = new Set(store.products.filter((p) => p.gorunur !== false).map((p) => p.grup || "GRUPSUZ ÜRÜN"));
   const cats = allGroupNames().filter((g) => used.has(g));
-  if (!cats.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">Kategori yok. <a href="#/urun-ekle">Ürün ekleyin</a>.</div>`;
+  if (!cats.length) return `<div class="gs-grid-bos"><b>Kategori yok</b><span><a href="#/urun-ekle">Ürün ekleyin</a>.</span></div>`;
   return cats.map((c) => {
     const n = store.products.filter((p) => p.gorunur !== false && (p.grup || "GRUPSUZ ÜRÜN") === c).length;
     const g = katGorsel(c);
-    return `<button class="cat-card ${g.cls}" data-catopen="${esc(c)}" type="button"><span class="cc-ic" aria-hidden="true">${g.ic}</span><span class="cc-name">${esc(c)}</span><span class="cc-count">${n} ürün</span></button>`;
+    return `<button class="gs-kat ${g.cls}" data-catopen="${esc(c)}" type="button"><span class="gs-kat-ik" aria-hidden="true">${ikon(g.ic, 22)}</span><span class="gs-kat-orta"><b>${esc(c)}</b><small>${n} ürün</small></span></button>`;
   }).join("");
 }
+/* Izgaranın içeriği (satış ekranı ve rota sihirbazı ortak):
+   arama varsa → BÜTÜN ürünlerde arama sonucu · kategori seçiliyse → "‹ Kategoriler" + o kategorinin ürünleri ·
+   hiçbiri yoksa → (varsa) sık satılanlar + kategori blokları. */
 function prodGridHTML() {
   const q = ocrNorm(pos.q || "");
-  // Arama yoksa ve ANA'daysak: ön ekran = ana ürünler; yoksa kategori kartları
-  if (pos.cat === "ANA" && !q) {
-    const ana = store.products.filter((p) => p.gorunur !== false && p.anaUrun);
-    if (ana.length) return ana.map(posSoloCard).join("");
-    return catGridHTML();
-  }
-  let list = store.products.filter((p) => p.gorunur !== false);
-  if (pos.cat !== "ANA") list = list.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
+  const gorunur = store.products.filter((p) => p.gorunur !== false);
   if (q) {
     const qr = (pos.q || "").trim().toLocaleLowerCase("tr");
-    list = list.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
+    const list = gorunur.filter((p) => ocrNorm(p.ad).includes(q) || String(p.barkod || "").toLocaleLowerCase("tr").includes(qr));
+    if (!list.length) return `<div class="gs-grid-bos"><b>“${esc((pos.q || "").trim())}” bulunamadı</b><span>Aramaya uyan ürün yok. Adını daha kısa yaz ya da aramayı silip kategoriden seç.</span></div>`;
+    return `<div class="gs-grid-bas">Arama sonucu · ${list.length} ürün</div>` + list.map(posSoloCard).join("");
   }
-  if (!list.length) return `<div style="grid-column:1/-1;color:var(--muted);padding:20px;text-align:center">${q ? "Aramaya uyan ürün yok." : `Bu kategoride ürün yok. <a href="#/urun-ekle">Ürün ekleyin</a>.`}</div>`;
+  if (pos.cat === "ANA") {
+    const ana = gorunur.filter((p) => p.anaUrun);
+    return (ana.length ? `<div class="gs-grid-bas">Sık satılanlar</div>` + ana.map(posSoloCard).join("") + `<div class="gs-grid-bas">Kategoriler</div>` : "") + catGridHTML();
+  }
+  const list = gorunur.filter((p) => (p.grup || "GRUPSUZ ÜRÜN") === pos.cat);
+  const geri = `<div class="gs-kat-bas"><button class="gs-kat-geri" data-catopen="ANA" type="button">${ikon("sol", 18, 2.6)}<span>Kategoriler</span></button><b>${esc(pos.cat)}</b></div>`;
+  if (!list.length) return geri + `<div class="gs-grid-bos"><b>Bu kategoride ürün yok</b><span><a href="#/urun-ekle">Ürün ekleyin</a>.</span></div>`;
   // Her ürün ayrı kart (marka/model gruplama YOK — her marka ayrı listelenir).
-  return list.map(posSoloCard).join("");
+  return geri + list.map(posSoloCard).join("") + (list.length > 8 ? `<button class="gs-kat-geri alt" data-catopen="ANA" type="button">${ikon("sol", 18, 2.6)}<span>Kategorilere dön</span></button>` : "");
 }
 /* Aile kutusuna dokununca: marka seçim popup'ı */
 function openAilePopup(title) {
@@ -2121,55 +2149,97 @@ function netLine(it) { const t = (Number(it.fiyat) || 0) * (Number(it.adet) || 0
 function cartCount() { const c = activeCart(); return `${c.items.length} (${num2.format(c.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))})`; }
 function cartTotals() { const c = activeCart(); const brut = c.items.reduce((s, i) => s + netLine(i), 0); const toplam = Math.max(0, brut - (Number(c.iskonto) || 0)); return { brut, toplam, odenen: Number(c.odenen) || 0, ustu: Math.max(0, (Number(c.odenen) || 0) - toplam) }; }
 function rebuildCart() { const cb = document.getElementById("cartBody"); if (cb) cb.innerHTML = cartRowsHTML(); wireCartRow(); }
+/* Sepet değişince ekrandaki her özet buradan tazelenir: alt çubuk, sepet penceresi, müşteri durumu, geçen sipariş şeridi,
+   açık sepetler, kartlardaki adet işaretleri. (Hesap cartTotals / limit-vade yardımcılarında; burada yalnız gösterim.) */
 function syncTotals() {
-  const t = cartTotals(); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-  set("posTutar", money.format(t.toplam)); set("posOdenen", num2.format(t.odenen)); set("posUstu", num2.format(t.ustu));
-  const cc0 = activeCart(); set("posMiktar", num2.format(cc0.items.reduce((s, i) => s + (Number(i.adet) || 0), 0))); set("posBrut", money.format(t.brut)); set("posIsk", "%" + num2.format(Number(cc0.iskonto) || 0));
-  const cc = document.getElementById("cartCount"); if (cc) cc.textContent = cartCount();
-  const sbc = document.getElementById("sepetBarCount"); if (sbc) sbc.textContent = cartCount();
-  const sbt = document.getElementById("sepetBarTotal"); if (sbt) sbt.textContent = money.format(t.toplam);
-  document.querySelectorAll("[data-tab]").forEach((el) => { const n = Number(el.dataset.tab); el.textContent = `Müşteri ${n + 1} (${num2.format(pos.carts[n].items.reduce((s, i) => s + netLine(i), 0))})`; el.classList.toggle("on", n === pos.active); });
-  const cl = document.getElementById("custLabel"); if (cl) cl.value = cartCustName();
-  const cs = document.getElementById("custSearch"); if (cs) cs.value = cartCustName();
-  const cn = document.getElementById("custName"); if (cn) cn.textContent = cartCustName() || "Müşterisiz satış";
-  const lim = document.getElementById("custLimit");
-  if (lim) {
-    const mid = activeCart().musteriId, mc = mid && findCustomer(mid);
-    if (mc) lim.innerHTML = satisMusteriDurumHTML(mid, t.toplam); else lim.textContent = "(Borç : 0.00  Limit : 0.00)";
-  }
+  const t = cartTotals(), c = activeCart(); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const dolu = c.items.length > 0, adet = c.items.reduce((s, i) => s + (Number(i.adet) || 0), 0);
+  const ozet = c.items.length + " ürün · " + num2.format(adet) + " adet";
+  const cok = gsAcikSepetler().length > 1, isk = Number(c.iskonto) || 0;
+  // alt çubuk
+  set("posTutar", dolu ? money.format(t.toplam) : "");
+  set("gsBarBas", dolu ? "Sepet ve ödeme" : (cok ? "Sepet " + (pos.active + 1) + " boş" : "Sepet boş"));
+  set("gsBarAlt", dolu ? (cok ? "Sepet " + (pos.active + 1) + " · " : "") + ozet : "Eklemek için ürüne dokun");
+  const bar = document.getElementById("gsBar"); if (bar) bar.classList.toggle("dolu", dolu);
+  const ac = document.getElementById("gsSepetAc"); if (ac) ac.disabled = !dolu;
+  // sepet penceresi (açıksa)
+  set("gsSepetToplam", money.format(t.toplam));
+  set("posBrut", money.format(t.brut)); set("posIsk", "−" + money.format(isk));
+  ["gsTopAra", "gsTopIsk"].forEach((id) => { const e = document.getElementById(id); if (e) e.hidden = !isk; });
+  set("gsIskAlt", isk ? money.format(isk) + " düşülüyor — değiştirmek için dokun" : "Yok — eklemek için dokun");
+  // müşteri (ad + borç / limit / kalan / gecikme), geçen sipariş, açık sepetler
+  document.querySelectorAll("[data-gs-mus]").forEach((el) => { el.innerHTML = gsMusteriBlokHTML(el.dataset.gsMus); });
+  const bd = document.getElementById("gsBundle"); if (bd) bd.innerHTML = bundleBarHTML();
+  const sp = document.getElementById("gsSepetler"); if (sp) sp.innerHTML = gsSepetlerHTML();
+  const pn = document.getElementById("posNot"); if (pn) pn.value = c.not || "";
+  gsRozetSync();
+  if (!dolu) gsSepetKapat();   // ödenecek bir şey kalmadı
 }
 function syncRow(idx) { const it = activeCart().items[idx]; if (!it) return; const cell = document.querySelector(`[data-tut="${idx}"]`); if (cell) cell.textContent = money.format(netLine(it)); syncTotals(); }
 function refreshPOS() { rebuildCart(); syncTotals(); }
+/* Sepet satırı: − / + ve adet kutusu adedi pencere açmadan değiştirir (1'deyken − satırı çıkarır);
+   ada dokununca fiyat / iskonto penceresi açılır. */
 function wireCartRow() {
-  document.querySelectorAll(".ades-row[data-line]").forEach((row) => {
-    const open = () => openLineModal(Number(row.dataset.line));
-    row.onclick = open;
-    row.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+  document.querySelectorAll(".gs-kalem[data-line]").forEach((row) => {
+    const idx = Number(row.dataset.line);
+    row.querySelectorAll("[data-lineac]").forEach((b) => { b.onclick = () => openLineModal(idx); });
+    const art = row.querySelector("[data-lart]"); if (art) art.onclick = () => gsAdetDegis(idx, 1);
+    const az = row.querySelector("[data-lazalt]"); if (az) az.onclick = () => gsAdetDegis(idx, -1);
+    const inp = row.querySelector("[data-ladet]");
+    if (inp) {
+      inp.onfocus = () => { try { inp.select(); } catch (e) {} };
+      inp.onchange = () => gsAdetYaz(idx, inp.value);
+      inp.onkeydown = (e) => { if (e.key === "Enter") inp.blur(); };
+    }
   });
 }
-/* Adisyon satırına tıklanınca açılan düzenleme penceresi — mevcut data-inc/dec/qty/price/isk/rem hook'larını modal içinde çalıştırır */
+function gsAdetDegis(idx, fark) {
+  const c = activeCart(), it = c.items[idx]; if (!it) return;
+  const yeni = kurus((Number(it.adet) || 0) + fark);
+  if (yeni <= 0) { c.items.splice(idx, 1); refreshPOS(); return; }
+  it.adet = yeni; gsSatirTazele(idx);
+}
+/* Adet kutusuna yazılan sayı: boş / anlamsızsa eski adet geri gelir, 0 satırı çıkarır. */
+function gsAdetYaz(idx, deger) {
+  const c = activeCart(), it = c.items[idx]; if (!it) return;
+  const v = String(deger).trim() === "" ? NaN : Number(String(deger).replace(",", "."));
+  if (!isFinite(v) || v < 0) { gsSatirTazele(idx); return; }
+  if (v === 0) { c.items.splice(idx, 1); refreshPOS(); return; }
+  it.adet = v; gsSatirTazele(idx);
+}
+/* Satırı YENİDEN KURMADAN tazeler (adet, tutar, − / çöp, stok uyarısı) — yazarken klavye kapanmasın, dokunuş yutulmasın. */
+function gsSatirTazele(idx) {
+  const it = activeCart().items[idx], row = document.querySelector(`.gs-kalem[data-line="${idx}"]`);
+  if (!it || !row) { refreshPOS(); return; }
+  const adet = Number(it.adet) || 0;
+  const inp = row.querySelector("[data-ladet]"); if (inp && Number(inp.value) !== adet) inp.value = adet;
+  const az = row.querySelector("[data-lazalt]"); if (az) { az.classList.toggle("cikar", adet <= 1); az.innerHTML = gsAzaltIc(adet); az.setAttribute("aria-label", adet <= 1 ? "Sepetten çıkar" : "Bir azalt"); }
+  const st = row.querySelector("[data-lstok]"); if (st) { const m = gsKalemStok(it); st.hidden = !m; st.lastElementChild.textContent = m; }
+  syncRow(idx);
+}
+/* Sepet satırına dokununca açılan düzenleme penceresi — data-inc/dec/qty/price/isk/rem/ok kancaları wireLineModal'da */
 function openLineModal(idx) {
   const it = activeCart().items[idx];
   if (!it) return;
-  // Yerel taslak — Onayla'ya basılmadan sepete işlenmez (X / dışarı tıkla = iptal).
+  // Yerel taslak — Tamam'a basılmadan sepete işlenmez (X / dışarı tıkla = iptal).
   const tmp = { adet: Number(it.adet) || 0, fiyat: Number(it.fiyat) || 0, iskyuzde: Number(it.iskyuzde) || 0 };
   const satirTop = () => { const t = tmp.fiyat * tmp.adet; return t * (1 - (Number(tmp.iskyuzde) || 0) / 100); };
-  const body = `<div class="line-modal">
-      <div class="lm-qtyrow">
-        <button class="lm-step" data-dec type="button" aria-label="Azalt">−</button>
-        <input class="lm-qty" data-qty type="number" step="0.01" inputmode="decimal" value="${tmp.adet}" />
-        <button class="lm-step" data-inc type="button" aria-label="Arttır">+</button>
+  const body = `<div class="line-modal gs-lm">
+      <div class="field"><label>Adet</label>
+        <div class="lm-qtyrow">
+          <button class="lm-step" data-dec type="button" aria-label="Azalt">${ikon("eksi", 24, 2.6)}</button>
+          <input class="lm-qty" data-qty type="number" step="0.01" inputmode="decimal" value="${tmp.adet}" />
+          <button class="lm-step" data-inc type="button" aria-label="Arttır">${ikon("arti", 24, 2.6)}</button>
+        </div>
       </div>
-      <div class="field"><label>Birim Fiyat (₺)</label><input class="lm-in" data-price type="number" step="0.01" inputmode="decimal" value="${tmp.fiyat}" /></div>
+      <div class="field"><label>Birim fiyat (₺)</label><input class="lm-in" data-price type="number" step="0.01" inputmode="decimal" value="${tmp.fiyat}" /></div>
       <div class="field"><label>İskonto (%)</label><input class="lm-in" data-isk type="number" step="0.01" inputmode="decimal" value="${tmp.iskyuzde || ""}" placeholder="0" /></div>
-      <div class="lm-tot">Satır Toplamı <b data-tut>${money.format(satirTop())}</b></div>
-      ${(() => { const mid = activeCart().musteriId, mc = mid && findCustomer(mid); return (mc && it.urunId) ? `<label class="lm-ozel"><input type="checkbox" data-ozelkaydet /> <span>Bu fiyatı <b>${esc(mc.ad)}</b> için kaydet — sonraki satışlarda otomatik uygulanır</span></label>` : ""; })()}
-      <div class="lm-actions">
-        <button class="btn lm-del" data-rem type="button">🗑 Sil</button>
-        <button class="btn ok lm-ok" data-ok type="button">✓ Onayla</button>
-      </div>
+      <div class="lm-tot">Satır toplamı <b data-tut>${money.format(satirTop())}</b></div>
+      ${(() => { const mid = activeCart().musteriId, mc = mid && findCustomer(mid); return (mc && it.urunId) ? `<label class="lm-ozel"><input type="checkbox" data-ozelkaydet /> <span>Bu fiyatı <b>${esc(mc.ad)}</b> için kaydet — sonraki satışlarda kendiliğinden uygulanır</span></label>` : ""; })()}
+      <button class="btn ok lm-ok" data-ok type="button">${ikon("tik", 20, 2.6)} Tamam</button>
+      <button class="gs-lm-cikar" data-rem type="button">${ikon("cop", 18)}<span>Bu ürünü sepetten çıkar</span></button>
     </div>`;
-  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => wireLineModal(ov, idx, tmp, satirTop, () => m.close()) });
+  const m = openModal(esc(it.ad), body, { noFoot: true, onMount: (ov) => { ov.classList.add("gs-pencere"); wireLineModal(ov, idx, tmp, satirTop, () => m.close()); } });
 }
 function wireLineModal(ov, idx, tmp, satirTop, close) {
   const qtyEl = ov.querySelector("[data-qty]");
@@ -2321,33 +2391,41 @@ function wireProdCards() {
     el.onclick = () => { if (el._lpFired) { el._lpFired = false; return; } addToCart(el.dataset.add); };
     if (gelismisMod) longPress(el, () => varyantPopup(el.dataset.add)); // basılı tut → çeşit seç
   });
+  // "Çeşitler" düğmesi: basılı tutmayı bilmeyen de çeşit penceresine tek dokunuşla ulaşsın
+  document.querySelectorAll("[data-cesit]").forEach((el) => { el.onclick = (e) => { e.stopPropagation(); varyantPopup(el.dataset.cesit); }; });
   document.querySelectorAll("[data-fam]").forEach((el) => el.onclick = () => openAilePopup(el.dataset.fam));
-  document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; posGridYenile(); });
+  document.querySelectorAll("[data-catopen]").forEach((el) => el.onclick = () => { pos.cat = el.dataset.catopen; posGridYenile(true); });
 }
-// Ürün/kategori ızgarasını sayfayı en üste atmadan tazele (partial). Kategori seçili + arama yoksa
-// kategori kartları; aksi halde ürün LİSTESİ (list-mode).
-function posGridYenile() {
+// Ürün/kategori ızgarasını sayfayı en üste atmadan tazele (partial).
+// basaGetir: kategori değişti — liste aşağı kaydırılmışken açıldıysa yeni listenin başı görünsün.
+function posGridYenile(basaGetir) {
   const g = document.getElementById("prodGrid");
   if (g) { g.innerHTML = prodGridHTML(); wireProdCards(); }
   document.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("on", x.dataset.cat === pos.cat));
   const psx = document.getElementById("prodSearchX"); if (psx) psx.style.display = pos.q ? "" : "none";
+  if (g && basaGetir === true) { const r = g.getBoundingClientRect(); if (r.top < 0) window.scrollBy(0, r.top - 12); }
 }
 function openCustPicker() {
-  const listHTML = store.customers.length ? `<ul class="pick-list">${store.customers.map((c) => `<li data-pick="${c.id}">${esc(c.ad)} <small>· borç ${money.format(customerBorc(c.id))}</small></li>`).join("")}</ul>` : `<p class="sub">Kayıtlı müşteri yok.</p>`;
-  openModal("Müşteri Seç", `<input class="pick-search" id="pickSearch" placeholder="Müşteri ara..." />${listHTML}<div style="margin-top:10px"><button class="btn soft" id="pickYeni" type="button">＋ Yeni Müşteri</button></div>`, {
+  const liste = store.customers.slice().sort((a, b) => String(a.ad || "").localeCompare(String(b.ad || ""), "tr"));
+  const satir = (c) => { const b = customerBorc(c.id); return `<li data-pick="${c.id}" role="button" tabindex="0"><span class="gs-pl-orta"><b>${esc(c.ad)}</b><small class="${b > 0.005 ? "borclu" : ""}">${Math.abs(b) > 0.005 ? "Borç: " + money.format(b) : "Borcu yok"}</small></span>${ikon("sag", 18, 2.2)}</li>`; };
+  const listHTML = liste.length ? `<ul class="gs-pick-list">${liste.map(satir).join("")}</ul><p class="gs-pick-yok" id="pickYok" hidden>Bu ada uyan müşteri yok.</p>` : `<p class="gs-pick-yok">Kayıtlı müşteri yok.</p>`;
+  openModal("Müşteri seç", `<div class="gs-pick"><div class="gs-ara-kutu">${ikon("ara", 20)}<input class="gs-ara-in" id="pickSearch" type="text" inputmode="search" autocomplete="off" placeholder="Müşteri ara" /></div><button class="gs-pick-yeni" id="pickYeni" type="button">${ikon("arti", 18, 2.6)}<span>Yeni müşteri</span></button>${listHTML}</div>`, {
     noFoot: true,
     onMount: (ov) => {
+      ov.classList.add("gs-pencere");
       ov.querySelectorAll("[data-pick]").forEach((li) => li.addEventListener("click", () => { activeCart().musteriId = li.dataset.pick; repriceCart(); ov.remove(); render(); }));
-      const s = ov.querySelector("#pickSearch"); s.addEventListener("input", () => { const q = s.value.toLowerCase(); ov.querySelectorAll("[data-pick]").forEach((li) => { li.style.display = li.textContent.toLowerCase().includes(q) ? "" : "none"; }); });
+      const s = ov.querySelector("#pickSearch"), yok = ov.querySelector("#pickYok");
+      s.addEventListener("input", () => { const q = ocrNorm(s.value); let n = 0; ov.querySelectorAll("[data-pick]").forEach((li) => { const uyar = !q || ocrNorm(li.querySelector("b").textContent).includes(q); li.style.display = uyar ? "" : "none"; if (uyar) n++; }); if (yok) yok.hidden = n > 0; });
       ov.querySelector("#pickYeni").addEventListener("click", () => { ov.remove(); openYeniMusteri(() => openCustPicker()); });
     },
   });
 }
-/* Muhtelif tutar penceresi — app-bar ▣100 ikonundan açılır (mevcut #muhInput/#muhEkle mantığı) */
+/* Muhtelif tutar penceresi — "Diğer" menüsünden açılır (#muhInput/#muhEkle mantığı aynı) */
 function openMuhModal() {
-  openModal("Muhtelif Tutar", `<div class="field"><label>Serbest Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn ok" id="muhEkle" type="button" style="width:100%;justify-content:center;min-height:46px">Ekle</button>`, {
+  openModal("Muhtelif tutar ekle", `<p class="gs-pencere-aciklama">Listede olmayan ürün için serbest tutar. Sepete “Muhtelif Ürün” diye eklenir.</p><div class="field"><label>Tutar (₺)</label><input id="muhInput" type="number" step="0.01" inputmode="decimal" placeholder="0" /></div><button class="btn gs-tam" id="muhEkle" type="button">Sepete ekle</button>`, {
     noFoot: true,
     onMount: (ov) => {
+      ov.classList.add("gs-pencere");
       const muhIn = ov.querySelector("#muhInput"), muhBtn = ov.querySelector("#muhEkle");
       const addMuh = () => { const v = Number(muhIn.value); if (!v) { alert("Tutar girin."); return; } activeCart().items.push({ urunId: null, ad: "Muhtelif Ürün", barkod: "", kdv: 0, fiyat: v, adet: 1, iskyuzde: 0, not: "" }); refreshPOS(); ov.remove(); };
       muhBtn.addEventListener("click", addMuh);
@@ -2356,44 +2434,183 @@ function openMuhModal() {
     },
   });
 }
-/* Genel iskonto penceresi — app-bar ⤵ ikonundan açılır (mevcut #iskGenel mantığı) */
+/* Genel iskonto penceresi — sepet penceresindeki "İskonto" satırından ya da "Diğer" menüsünden açılır (#iskGenel mantığı aynı) */
 function openIskModal() {
-  openModal("Genel İskonto", `<div class="field"><label>Genel İskonto (₺)</label><input id="iskGenel" type="number" step="0.01" inputmode="decimal" value="${activeCart().iskonto || ""}" placeholder="0" /></div>`, {
+  openModal("İskonto", `<p class="gs-pencere-aciklama">Sepetin toplamından düşülecek tutar. Kaldırmak için boş bırak.</p><div class="field"><label>İskonto tutarı (₺)</label><input id="iskGenel" type="number" step="0.01" inputmode="decimal" value="${activeCart().iskonto || ""}" placeholder="0" /></div>`, {
     okLabel: "Uygula",
     onOk: (ov) => { const isk = ov.querySelector("#iskGenel"); activeCart().iskonto = Number(isk.value) || 0; syncTotals(); },
-    onMount: (ov) => { const i = ov.querySelector("#iskGenel"); if (i) { i.focus(); try { i.select(); } catch (e) {} } },
+    onMount: (ov) => { ov.classList.add("gs-pencere"); const i = ov.querySelector("#iskGenel"); if (i) { i.focus(); try { i.select(); } catch (e) {} } },
   });
 }
+
+/* ---- "Diğer" menüsü: üst çubuktaki eski dört ikonun (iskonto, ara, muhtelif, yazdır) ve geri okunun yaptıkları + nadir ayarlar ---- */
+function gsDigerMenu() {
+  const satir = (kimlik, ik, baslik, alt) => `<button class="gs-menu-satir" data-gs-is="${kimlik}" type="button"><span class="gs-menu-ik">${ikon(ik, 22)}</span><span class="gs-menu-orta"><b>${baslik}</b>${alt ? `<small>${alt}</small>` : ""}</span>${ikon("sag", 18, 2.2)}</button>`;
+  const isk = Number(activeCart().iskonto) || 0, arac = stokModu === "arac";
+  const body = `<div class="gs-menu">` +
+    satir("iskonto", "etiket", "İskonto uygula", isk ? "Şu an " + money.format(isk) + " düşülüyor" : "Sepetin toplamından tutar düş") +
+    satir("muhtelif", "arti", "Muhtelif tutar ekle", "Listede olmayan ürün için serbest tutar") +
+    satir("sepet", "sepet", "Başka sepet aç", "Bu sepet beklesin, araya başka müşteri girsin") +
+    satir("stok", arac ? "araba" : "dukkan", "Mal nereden çıkıyor: " + (arac ? "Araç" : "Dükkan"), "Satılan mal bu stoktan düşer") +
+    satir("gelismis", "izgara", "Çeşit seçimi: " + (gelismisMod ? "Açık" : "Kapalı"), "Açıkken üründe “Çeşitler” düğmesi çıkar") +
+    satir("tara", "tara", "Barkod tara", "Kamerayla okut, ürün sepete eklensin") +
+    satir("yazdir", "yazici", "İrsaliye yazdır", "Satış kaydedilince sorulur") +
+    ((activeCart().items.length || activeCart().musteriId) ? satir("bosalt", "cop", "Sepeti boşalt", "Ürünleri ve seçili müşteriyi kaldır") : "") +
+    satir("ana", "ev", "Ana ekrana dön", "") + `</div>`;
+  const m = openModal("Diğer işlemler", body, { noFoot: true, onMount: (ov) => {
+    ov.classList.add("gs-pencere");
+    ov.querySelectorAll("[data-gs-is]").forEach((b) => { b.onclick = () => { m.close(); gsDigerIs(b.dataset.gsIs); }; });
+  } });
+}
+function gsDigerIs(kimlik) {
+  if (kimlik === "iskonto") openIskModal();
+  else if (kimlik === "muhtelif") openMuhModal();
+  else if (kimlik === "sepet") gsYeniSepet();
+  else if (kimlik === "stok") gsStokSec();
+  else if (kimlik === "gelismis") { gelismisModAyarla(!gelismisMod); if (gelismisMod) alert("Çeşit seçimi açık: çeşidi olan üründe “Çeşitler” düğmesi çıkar; ürüne BASILI TUTUNCA da aynı pencere açılır. Normal dokunma ürünü ekler."); render(); }
+  else if (kimlik === "tara") taraBaslat();
+  else if (kimlik === "yazdir") alert("Satış tamamlanınca irsaliye yazdırılır.");
+  else if (kimlik === "bosalt") gsSepetBosalt();
+  else if (kimlik === "ana") navigate("anasayfa");
+}
+function gsSepetBosalt() {
+  const c = activeCart(), n = c.items.length;
+  if (!n && !c.musteriId) return;
+  if (!confirm((n ? "Sepetteki " + n + " ürün silinsin mi?" : "Seçili müşteri kaldırılsın mı?") + (n && c.musteriId ? "\nSeçili müşteri de kaldırılır." : ""))) return;
+  pos.carts[pos.active] = newCart(); gsSepetKapat(); render();
+}
+/* Stok kaynağı: tek dokunuşla körlemesine değişmesin diye iki seçenekli pencere (hangisi seçili, belli). */
+function gsStokSec() {
+  const sec = (k, ik, ad, alt) => `<button class="gs-sec${stokModu === k ? " on" : ""}" data-gs-stoksec="${k}" type="button" aria-pressed="${stokModu === k}"><span class="gs-menu-ik">${ikon(ik, 22)}</span><span class="gs-menu-orta"><b>${ad}</b><small>${alt}</small></span>${stokModu === k ? `<span class="gs-sec-tik">${ikon("tik", 20, 2.8)}</span>` : ""}</button>`;
+  const m = openModal("Mal nereden çıkıyor?", `<div class="gs-menu">${sec("arac", "araba", "Araçtan", "Satılan mal araç stoğundan düşer")}${sec("dukkan", "dukkan", "Dükkandan", "Satılan mal dükkan stoğundan düşer")}</div>`, { noFoot: true, onMount: (ov) => {
+    ov.classList.add("gs-pencere");
+    ov.querySelectorAll("[data-gs-stoksec]").forEach((b) => { b.onclick = () => { stokModuAyarla(b.dataset.gsStoksec); m.close(); render(); }; });
+  } });
+}
+/* İkinci (üçüncü…) sepet: boş bir sepete geçer. Açık sepetler üstte şerit olarak görünür; boşalan sepet şeritten kendiliğinden düşer. */
+function gsYeniSepet() {
+  const su = activeCart();
+  if (!su.items.length && !su.musteriId) { alert("Bu sepet zaten boş.\nÖnce buna ürün ekle; araya başka müşteri girerse o zaman ikinci sepeti aç."); return; }
+  const bos = pos.carts.findIndex((c, n) => n !== pos.active && !c.items.length && !c.musteriId);
+  if (bos < 0) { alert("En çok " + pos.carts.length + " sepet açılabilir. Önce birini bitir ya da boşalt."); return; }
+  pos.active = bos; render();
+}
+
+/* ---- Sepet ve ödeme penceresi (alt çubuktan açılır) ---- */
+function gsSepetAcik() { return document.getElementById("gsSepetOv"); }
+function gsSepetKapat() { const ov = gsSepetAcik(); if (ov) ov.remove(); }
+function gsSepetAc() {
+  if (!activeCart().items.length || gsSepetAcik()) return;
+  openModal("Sepet ve ödeme", `<div class="gs-sepet" id="gsSepetGovde"></div>`, { noFoot: true, onMount: (ov) => {
+    ov.id = "gsSepetOv"; ov.classList.add("gs-sepet-ov", "gs-pencere"); ov._acildi = Date.now();
+    const alt = document.createElement("div"); alt.className = "gs-sepet-alt"; alt.id = "gsSepetAlt";
+    ov.querySelector(".modal").appendChild(alt);
+    // Açıldıktan hemen sonraki dokunuş sayılmaz: alt çubuğa çift dokunan, ikinci dokunuşla yanlışlıkla satış kaydetmesin / satır silmesin
+    ov.addEventListener("click", (e) => { if (Date.now() - ov._acildi < 450) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    ov.addEventListener("click", gsSepetTik);
+    ov.addEventListener("input", (e) => { if (e.target.id === "gsSatisNot") { activeCart().not = e.target.value; const pn = document.getElementById("posNot"); if (pn) pn.value = e.target.value; } });
+    ov.addEventListener("change", (e) => { if (e.target.id === "posPersonel") pos.personelId = e.target.value || null; });
+  } });
+  gsSepetCiz();
+}
+/* Pencerenin içini sepete göre (yeniden) kurar. Müşteri değişince / sepet değişince de çağrılır; kapalıysa bir şey yapmaz. */
+function gsSepetCiz() {
+  const ov = gsSepetAcik(); if (!ov) return;
+  const c = activeCart(), govde = document.getElementById("gsSepetGovde"), alt = document.getElementById("gsSepetAlt");
+  if (!govde || !alt) return;
+  const bas = ov.querySelector(".modal-head h3"); if (bas) bas.textContent = gsAcikSepetler().length > 1 ? "Sepet " + (pos.active + 1) + " ve ödeme" : "Sepet ve ödeme";
+  const persSel = store.personeller.length ? `<label class="gs-ek-satir">${ikon("kisiler", 20)}<select id="posPersonel" class="gs-ek-in" aria-label="Personel"><option value="">Personel seçilmedi</option>${store.personeller.map((p) => `<option value="${p.id}" ${pos.personelId === p.id ? "selected" : ""}>${esc(p.ad)}</option>`).join("")}</select></label>` : "";
+  govde.innerHTML = `
+    <div class="gs-kalemler" id="cartBody">${cartRowsHTML()}</div>
+    <div class="gs-ek">
+      <button class="gs-ek-satir devam" id="gsDevam" type="button">${ikon("arti", 20, 2.4)}<span class="gs-ek-orta"><b>Başka ürün ekle</b></span></button>
+      <button class="gs-ek-satir" id="gsIskBtn" type="button">${ikon("etiket", 20)}<span class="gs-ek-orta"><b>İskonto</b><small id="gsIskAlt"></small></span>${ikon("sag", 18, 2.2)}</button>
+      <label class="gs-ek-satir">${ikon("kalem", 20)}<input id="gsSatisNot" class="gs-ek-in" type="text" autocomplete="off" placeholder="Satış notu (isteğe bağlı)" value="${esc(c.not || "")}" /></label>
+      ${persSel}
+    </div>`;
+  alt.innerHTML = `
+    <div data-gs-mus="sepet"></div>
+    <div class="gs-top" id="gsTopAra" hidden><span>Ara toplam</span><span id="posBrut"></span></div>
+    <div class="gs-top" id="gsTopIsk" hidden><span>İskonto</span><span id="posIsk"></span></div>
+    <div class="gs-top ana"><span>Toplam</span><b id="gsSepetToplam"></b></div>
+    <div class="gs-ode-bas">Nasıl ödendi?</div>
+    <button class="gs-ode ana" data-pay="nakit" type="button">${ikon("para", 24, 2)}<b>Nakit</b></button>
+    <div class="gs-ode-diger">
+      <button class="gs-ode" data-pay="pos" type="button"><b>Kart</b><small>POS cihazı</small></button>
+      <button class="gs-ode" data-pay="acik" type="button"><b>Açık hesap</b><small>borca yaz</small></button>
+      <button class="gs-ode" data-pay="parcali" type="button"><b>Parçalı</b><small>nakit + kart</small></button>
+    </div>
+    ${store.odemeTipleri.length ? `<div class="gs-ode-ozel">${store.odemeTipleri.map((t) => `<button class="gs-ode" data-paycustom="${t.id}" type="button"><b>${esc(t.ad)}</b></button>`).join("")}</div>` : ""}`;
+  wireCartRow(); syncTotals();
+}
+function gsSepetTik(e) {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-gs-muspick")) openCustPicker();
+  else if (t.id === "gsIskBtn") openIskModal();
+  else if (t.id === "gsDevam") gsSepetKapat();
+  else if (t.dataset.pay) gsOde(t.dataset.pay, null);
+  else if (t.dataset.paycustom) gsOde(null, t.dataset.paycustom);
+}
+/* Ödeme düğmesi: eski düğmelerle AYNI çağrı (finalizeSale(tür) / finalizeCustom(id)). Satış kaydedildiyse pencere kapanır;
+   vazgeçildiyse (limit onayı "İptal", müşteri seçilmemiş…) sepet ve pencere olduğu gibi kalır.
+   Pencere açıldıktan hemen sonraki dokunuş sayılmaz: alt çubuğa çift dokunan yanlışlıkla satış kaydetmesin. */
+function gsOde(tur, ozelId) {
+  const ov = gsSepetAcik();
+  if (ov && Date.now() - (ov._acildi || 0) < 450) return;
+  const once = store.sales.length;
+  if (ozelId) finalizeCustom(ozelId); else finalizeSale(tur);
+  if (store.sales.length > once) {
+    gsSepetKapat();
+    // sıradaki satış baştan başlasın: kategoriler, boş arama, ekranın en üstü (müşteri seçimi)
+    pos.cat = "ANA"; pos.q = "";
+    if (currentRoute() === "satis") render();
+  }
+}
+/* Alt çubuğun yeri: alt menü çubuğunun (başka bölümün) gerçek yüksekliği ölçülür — sabit sayı varsayılmaz. */
+function gsOlc() {
+  const kok = document.documentElement, mb = document.querySelector(".mobilbar"), bar = document.getElementById("gsBar");
+  if (!bar) return;
+  const mbH = mb && getComputedStyle(mb).display !== "none" ? Math.round(mb.getBoundingClientRect().height) : 0;
+  kok.style.setProperty("--gs-mobilbar-h", mbH + "px");
+  kok.style.setProperty("--gs-bar-h", Math.round(bar.getBoundingClientRect().height) + "px");
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", gsOlc);
+  // Satış ekranından çıkılınca (alt menü, geri tuşu) açık kalmış sepet penceresi başka ekranın üstünde kalmasın
+  window.addEventListener("hashchange", () => { if (currentRoute() !== "satis") gsSepetKapat(); });
+}
+
 function mountSatis() {
   wireProdCards(); wireCartRow();
-  document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { pos.active = Number(el.dataset.tab); render(); }));
-  document.querySelectorAll("[data-cat]").forEach((el) => el.addEventListener("click", () => { pos.cat = el.dataset.cat; posGridYenile(); }));
-  /* Tek-akışlı düzen: mobil bottom-sheet kaldırıldı (fiş akış içinde) */
-  document.querySelectorAll("[data-pay]").forEach((el) => el.addEventListener("click", () => finalizeSale(el.dataset.pay)));
-  document.querySelectorAll("[data-paycustom]").forEach((el) => el.addEventListener("click", () => finalizeCustom(el.dataset.paycustom)));
-  const pick = document.getElementById("custPick"); if (pick) pick.addEventListener("click", openCustPicker);
-  const bAdd = document.getElementById("bundleAdd"); if (bAdd) bAdd.addEventListener("click", bundleUygula);
-  const smBtn = document.getElementById("stokModBtn"); if (smBtn) smBtn.addEventListener("click", () => { stokModuAyarla(stokModu === "arac" ? "dukkan" : "arac"); render(); });
-  const gmBtn = document.getElementById("gelismisBtn"); if (gmBtn) gmBtn.addEventListener("click", () => { gelismisModAyarla(!gelismisMod); if (gelismisMod) alert("Gelişmiş mod açık: bir ürüne BASILI TUT → aynı çeşidin diğer markaları/varyasyonları açılır. Normal dokunma = ürünü ekler."); render(); });
-  const pers = document.getElementById("posPersonel"); if (pers) pers.addEventListener("change", () => { pos.personelId = pers.value || null; });
-  const bar = document.getElementById("barInput"), ara = document.getElementById("barAra");
-  const doBar = () => { const code = bar.value.trim(); if (!code) return; const p = store.products.find((x) => x.barkod === code); if (p) { addToCart(p.id); bar.value = ""; } else alert("Bu barkodla ürün yok."); };
-  if (bar) bar.addEventListener("keydown", (e) => { if (e.key === "Enter") doBar(); });
-  if (ara) ara.addEventListener("click", doBar);
-  const yz = document.getElementById("posYazdir"); if (yz) yz.addEventListener("click", () => alert("Satış tamamlanınca irsaliye yazdırılır."));
-  document.querySelectorAll("[data-soon]").forEach((el) => el.addEventListener("click", () => alert("Bu özellik yakında.")));
-  /* Satış app-bar ikonları — pencere aç / mevcut inputa odaklan */
-  const focusEl = (id) => { const el = document.getElementById(id); if (el) { el.focus(); if (el.select) try { el.select(); } catch (e) {} el.scrollIntoView({ block: "center", behavior: "smooth" }); } };
-  const sBack = document.getElementById("sabBack"); if (sBack) sBack.addEventListener("click", () => navigate("anasayfa"));
-  const sIsk = document.getElementById("sabIsk"); if (sIsk) sIsk.addEventListener("click", openIskModal);
-  const sAra = document.getElementById("sabAra"); if (sAra) sAra.addEventListener("click", () => focusEl("barInput"));
-  const sMuh = document.getElementById("sabMuh"); if (sMuh) sMuh.addEventListener("click", openMuhModal);
-  const taraBtn = document.getElementById("taraFab"); if (taraBtn) taraBtn.addEventListener("click", taraBaslat);
+  const tik = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+  // müşteri bloğu / geçen sipariş / açık sepetler syncTotals'da yeniden yazılır → dinleyici kabın üstünde
+  tik("gsMusteri", (e) => { if (e.target.closest("[data-gs-muspick]")) openCustPicker(); });
+  tik("gsBundle", (e) => { if (e.target.closest("#bundleAdd")) { bundleUygula(); gsSepetAc(); } });
+  tik("gsSepetler", (e) => { const b = e.target.closest("[data-tab]"); if (b) { pos.active = Number(b.dataset.tab); render(); } });
+  tik("stokModBtn", gsStokSec);
+  tik("gsDiger", gsDigerMenu);
+  tik("gsSepetAc", gsSepetAc);
+  tik("taraFab", taraBaslat);
   const psearch = document.getElementById("prodSearch");
   const psx = document.getElementById("prodSearchX");
-  if (psearch) psearch.addEventListener("input", () => { pos.q = psearch.value; posGridYenile(); });
+  if (psearch) {
+    psearch.addEventListener("input", () => { pos.q = psearch.value; posGridYenile(); });
+    // Barkod yazıp (ya da el okuyucusuyla okutup) Enter: tam eşleşen ürün sepete eklenir, kutu temizlenir
+    psearch.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      const code = psearch.value.trim(), p = code && store.products.find((x) => x.gorunur !== false && String(x.barkod || "") === code);
+      if (p) { addToCart(p.id); pos.q = ""; psearch.value = ""; posGridYenile(); } else psearch.blur();
+    });
+    // Klavye açılınca görünen alan yarıya iner: arama satırını ekranın üstüne al ki sonuçlar klavyenin üstünde kalsın
+    psearch.addEventListener("focus", () => setTimeout(() => {
+      const k = psearch.closest(".gs-ara"); if (!k || document.activeElement !== psearch) return;
+      const r = k.getBoundingClientRect(); if (r.top > 16 || r.top < 0) window.scrollBy(0, r.top - 8);
+    }, 320));
+  }
   if (psx) psx.addEventListener("click", () => { pos.q = ""; if (psearch) { psearch.value = ""; psearch.focus(); } posGridYenile(); });
   syncTotals();
+  gsSepetCiz();      // pencere açıkken ekran yeniden çizildiyse (müşteri değişti) içi de tazelensin
+  gsOlc(); if (typeof requestAnimationFrame === "function") requestAnimationFrame(gsOlc);
 }
 
 /* Yazdırma */
@@ -2901,10 +3118,10 @@ function satisMusteriDurumHTML(id, sepetTutar) {
   if (d.limit) h += " · Limit: " + money.format(d.limit) + (d.kalan >= 0 ? " · Kalan: <b>" + money.format(d.kalan) + "</b>" : "");
   else h += " · Limit yok";
   const u = [];
-  if (d.limit && d.kalan < -0.005) u.push(ikon("dikkat", 18) + " Limit " + money.format(-d.kalan) + " aşılmış");
-  else if (d.limit && Number(sepetTutar) > 0 && d.borc + Number(sepetTutar) > d.limit + 0.005) u.push(ikon("dikkat", 18) + " Bu sepet borca yazılırsa limit " + money.format(kurus(d.borc + Number(sepetTutar) - d.limit)) + " aşılır");
-  if (y && y.gecikmis) u.push(ikon("saat", 18) + " " + money.format(y.gecikmisTutar) + " borcu " + y.gecikmeGun + " gündür gecikmiş");
-  return h + u.map((x) => `<em class="pl-uyari">${esc(x)}</em>`).join("");
+  if (d.limit && d.kalan < -0.005) u.push(["dikkat", "", "Limit " + money.format(-d.kalan) + " aşılmış"]);
+  else if (d.limit && Number(sepetTutar) > 0 && d.borc + Number(sepetTutar) > d.limit + 0.005) u.push(["dikkat", " sari", "Bu sepet borca yazılırsa limit " + money.format(kurus(d.borc + Number(sepetTutar) - d.limit)) + " aşılır"]);
+  if (y && y.gecikmis) u.push(["saat", "", money.format(y.gecikmisTutar) + " borcu " + y.gecikmeGun + " gündür gecikmiş"]);
+  return h + u.map((x) => `<em class="pl-uyari${x[1]}">${ikon(x[0], 15, 2.2)}<span>${esc(x[2])}</span></em>`).join("");
 }
 /* Listelerde ad/borç yanına konan küçük işaretler. */
 function musteriRozetHTML(id) {
@@ -6434,6 +6651,7 @@ function renderServisAktif() {
 }
 function servisSepetGuncelle() {
   const el = document.getElementById("sihirSepet"); if (el) { el.innerHTML = servisSepetHTML(); servisSepetWire(); }
+  gsRozetSync();   // ürün kartlarındaki "sepette kaç tane" işareti
 }
 function servisSepetWire() {
   document.querySelectorAll("#sihirSepet [data-ssp]").forEach((b) => b.onclick = () => { const it = activeCart().items[Number(b.dataset.ssp)]; if (it) it.adet = (Number(it.adet) || 0) + 1; servisSepetGuncelle(); });
