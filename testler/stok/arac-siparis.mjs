@@ -24,7 +24,9 @@ const SATIS = JSON.stringify({ musteri: "Deneme Kıraathanesi", kalemler: [{ uru
   const taban = tabanArac();
   if (taban) {
     const eski = await arac(b.url, ["satis", SATIS], { arac: taban });
-    d.esit(yeni.stdout, eski.stdout, "satis stdout'u taban sürümle HARFİ HARFİNE aynı");
+    // Birleştirmeden sonra fişte para bölümünün "Stok eksiye düşüyor" notu da çıkar; o satır dışında aynı olmalı.
+    const stokNotsuz = yeni.stdout.split("\n").filter((s) => !/^ℹ \*\*Stok eksiye düşüyor\*\*/.test(s)).join("\n");
+    d.esit(stokNotsuz, eski.stdout, "satis stdout'u taban sürümle (stok notu dışında) HARFİ HARFİNE aynı");
     d.esit(eski.stderr, "", "taban (YOKTU): bekleyen sipariş için hiçbir uyarı yoktu");
     const eskiListe = await arac(b.url, ["siparisler"], { arac: taban });
     d.dogru(/Gelen siparis yok/.test(eskiListe.stdout), "taban (YANLIŞ): panel açılmadıysa tablodaki siparişleri hiç görmüyordu");
