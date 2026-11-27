@@ -727,8 +727,8 @@ async function cariCoz(a, d) {
 }
 /* Müşterinin göreceği hesap. YALNIZ burada sayılan alanlar kayda girer: firma adı, müşteri adı, açılış bakiyesi,
    bakiye, fişler (no, tarih, kalem adı/adet/satış fiyatı, iskonto, toplam, nakit/kart/açık) ve ödemeler (tarih,
-   tutar, tür). Alış fiyatı, maliyet, kâr, komisyon, limit, vade, telefon, not metinleri, müşteri/ürün kimlikleri
-   ve başka müşteriler GİRMEZ. turBul = tahsilatTuru (ödemenin türü: nakit|kart|havale|iade|duzeltme). */
+   tutar, tür) ve özel fiyatlar (fy). Alış fiyatı, maliyet, kâr, komisyon, limit, vade, telefon, not metinleri,
+   müşteri kimliği ve başka müşteriler GİRMEZ; ürün kimliği yalnız fy'de, herkese açık katalogla eşleşmek için. turBul = tahsilatTuru (ödemenin türü: nakit|kart|havale|iade|duzeltme). */
 function cariHesap(S, c, turBul) {
   const N = (v) => Math.round((Number(v) || 0) * 100) / 100;
   const sirala = (a, b) => (String(a.t) < String(b.t) ? -1 : String(a.t) > String(b.t) ? 1 : 0);
@@ -752,7 +752,34 @@ function cariHesap(S, c, turBul) {
     bakiye -= x.tutar;
     return x;
   }).sort(sirala);
-  return { v: 1, firma: String(st.fisBaslik || st.firmaAdi || ""), ad: String(c.ad || ""), acilis: N(c.acilis), bakiye: N(bakiye), f: f, o: o };
+  /* fy: müşterinin fiyatları (önden sipariş sayfası müşteriye kendi fiyatını gösterir) — herkese açık katalogdaki
+     ürün kimliği → fiyat. Fiyat ailesi (aynı altKategori + aynı liste fiyatı) bir birimdir. Öncelik: bu müşteriye
+     bu aileden EN SON satılan fiyat (sahadaki gerçek fiyat; hediye/0 ve iade sayılmaz), yoksa kartındaki özel fiyat
+     (ailedeki bir kardeşinki de olur). Yalnız fiyat girer; alış/maliyet girmez. */
+  const oz = c.ozelFiyatlar || {}, fy = {}, sonFiyat = {};
+  const urunler = (S.products || []).filter((p) => p && p.id && p.gorunur !== false);
+  const urunBy = {};
+  (S.products || []).forEach((p) => { if (p && p.id) urunBy[p.id] = p; });
+  const aileAnahtar = (p) => (p.altKategori ? "a|" + p.altKategori + "|" + N(p.satis) : "u|" + p.id);
+  const ozel = (p) => (oz[p.id] != null && oz[p.id] !== "" && N(oz[p.id]) > 0) ? N(oz[p.id]) : null;
+  (S.sales || []).filter((s) => s && s.musteriId === c.id && N(s.toplam) > 0 && s.odemeAdi !== "İade")
+    .sort((a, b) => (String(a.tarih) < String(b.tarih) ? -1 : 1))
+    .forEach((s) => (s.items || []).forEach((it) => {
+      const p = urunBy[it.urunId];
+      if (p && N(it.fiyat) > 0) sonFiyat[aileAnahtar(p)] = N(it.fiyat);
+    }));
+  urunler.forEach((p) => {
+    let v = sonFiyat[aileAnahtar(p)];
+    if (v == null) v = ozel(p);
+    if (v == null && p.altKategori) {
+      const k = urunler.find((x) => x !== p && aileAnahtar(x) === aileAnahtar(p) && ozel(x) != null);
+      if (k) v = ozel(k);
+    }
+    if (v != null) fy[String(p.id)] = v;
+  });
+  const h = { v: 1, firma: String(st.fisBaslik || st.firmaAdi || ""), ad: String(c.ad || ""), acilis: N(c.acilis), bakiye: N(bakiye), f: f, o: o };
+  if (Object.keys(fy).length) h.fy = fy;
+  return h;
 }
 /* Yayın planı: buluttaki satırlarla (mevcut: [{ key, o }]) karşılaştırır; yalnız içeriği değişeni yazar, artık
    karşılığı olmayanı (silinen müşteri, değişen/silinen telefon, değişen sır) siler. Buluta dokunmaz.

@@ -1,4 +1,5 @@
-// Araç (tools/babuco-cari.cjs), panel (public/toptanci/app.js) ve müşteri sayfası (public/cari/index.html) cari
+// Araç (tools/babuco-cari.cjs), panel (public/toptanci/app.js), müşteri sayfası (public/cari/index.html) ve önden
+// sipariş sayfası (public/on-siparis/cari-ortak.js) cari
 // hesabı AYNI kodla üretsin/çözsün diye ortak işlevler üç dosyada HARFİ HARFİNE aynı blok olarak durur. Sayfa ayrıca
 // aracın para/vade işlevlerinin (patron listesi: borç, gecikme, limit) birebir kopyasını taşır. Bu deneme ayrışmayı yakalar.
 //   node testler/cari/ortak-blok.mjs          → aynı mı?
@@ -9,7 +10,7 @@ import { DEPO, denetci } from "../ortak/panel.mjs";
 
 const BAS = "/* >>> CARI-ORTAK-BASLA", SON = "/* <<< CARI-ORTAK-BITTI */";
 const PBAS = "/* >>> PARA-KOPYA-BASLA", PSON = "/* <<< PARA-KOPYA-BITTI */";
-const yol = { arac: path.join(DEPO, "tools/babuco-cari.cjs"), anaArac: path.join(DEPO, "tools/babuco.cjs"), panel: path.join(DEPO, "public/toptanci/app.js"), sayfa: path.join(DEPO, "public/cari/index.html") };
+const yol = { arac: path.join(DEPO, "tools/babuco-cari.cjs"), anaArac: path.join(DEPO, "tools/babuco.cjs"), panel: path.join(DEPO, "public/toptanci/app.js"), sayfa: path.join(DEPO, "public/cari/index.html"), siparis: path.join(DEPO, "public/on-siparis/cari-ortak.js") };
 const oku = (y) => fs.readFileSync(y, "utf8").split("\r\n").join("\n");
 const blok = (metin, bas, son) => { const a = metin.indexOf(bas), b = metin.indexOf(son); return a < 0 || b < 0 ? null : metin.slice(a, b + son.length); };
 
@@ -43,15 +44,17 @@ if (process.argv.includes("--yaz")) {
   if (!kaynak) throw new Error("araçta ortak blok yok");
   yerlestir(yol.panel, BAS, SON, kaynak);
   yerlestir(yol.sayfa, BAS, SON, kaynak);
+  yerlestir(yol.siparis, BAS, SON, kaynak);
   yerlestir(yol.sayfa, PBAS, PSON, paraBlok());
   console.log("ortak blok panele ve sayfaya, para işlevleri sayfaya yazıldı (" + kaynak.split("\n").length + " satır)");
 }
 
 const d = denetci("cari-ortak-blok");
-const A = blok(oku(yol.arac), BAS, SON), P = blok(oku(yol.panel), BAS, SON), S = blok(oku(yol.sayfa), BAS, SON);
+const A = blok(oku(yol.arac), BAS, SON), P = blok(oku(yol.panel), BAS, SON), S = blok(oku(yol.sayfa), BAS, SON), O = blok(oku(yol.siparis), BAS, SON);
 d.dogru(!!A && !!P && !!S, "ortak blok üç dosyada da var");
 d.dogru(A === P, "araçtaki ve paneldeki cari bloğu harfi harfine aynı");
 d.dogru(A === S, "araçtaki ve müşteri sayfasındaki cari bloğu harfi harfine aynı");
+d.dogru(A === O, "araçtaki ve önden sipariş sayfasındaki cari bloğu harfi harfine aynı");
 d.dogru(!!A && !/^(const|let|var)\s/m.test(A), "ortak blokta üst düzey const/let yok");
 d.dogru(blok(oku(yol.sayfa), PBAS, PSON) === paraBlok(), "sayfadaki para/vade işlevleri araçtakilerin birebir kopyası (" + PARA_ADLAR.length + " parça)");
 const al = (metin, ad) => (metin.match(new RegExp(ad + ' = "([^"]+)"')) || [])[1];
