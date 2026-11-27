@@ -34,12 +34,13 @@ try {
   d.dogru(/0 kayıt yazıldı · 0 eski kayıt silindi/.test(tekrar.cikti), "değişiklik yokken yeniden yayın hiçbir satırı yazmaz");
 
   console.log("— (e) kayıtlarda yalnız izinli alanlar");
-  const TEPE = ["v", "firma", "ad", "acilis", "bakiye", "f", "o"], FIS = ["no", "t", "top", "nakit", "kart", "acik", "k", "isk", "iade", "havale"], ODE = ["t", "tutar", "tur", "fis"];
+  const TEPE = ["v", "firma", "ad", "acilis", "bakiye", "f", "o", "fy"], FIS = ["no", "t", "top", "nakit", "kart", "acik", "k", "isk", "iade", "havale"], ODE = ["t", "tutar", "tur", "fis"];
   const s0 = store();
   for (const c of s0.customers) {
     const k = await hesapCoz(bulut, c.id), h = k.hesap;
     const fazla = Object.keys(h).filter((x) => !TEPE.includes(x)).concat(...h.f.map((x) => Object.keys(x).filter((y) => !FIS.includes(y))), ...h.o.map((x) => Object.keys(x).filter((y) => !ODE.includes(y))));
     d.esit(fazla, [], c.ad + ": kayıtta izinli alanlar dışında alan yok");
+    d.dogru(Object.entries(h.fy || {}).every(([id, v]) => s0.products.some((p) => p.id === id) && typeof v === "number" && v > 0), c.ad + ": fy yalnız katalogdaki ürün kimliği → satış fiyatı");
     d.dogru(!/alis|maliyet|kar\b|kâr|komisyon|limit|vade|"not"|telefon|adres|urunId|musteriId/i.test(k.metin), c.ad + ": alış, maliyet, kâr, komisyon, limit, vade, not, telefon alan adı yok");
     d.dogru(!GIZLI.some((g) => k.metin.includes(g)) && !k.metin.includes("Gizli Sokak") && !k.metin.includes("havale attı") && !k.metin.includes("Manuel borç"), c.ad + ": satış/ödeme/müşteri notlarının metni yok");
     d.dogru(!s0.customers.some((x) => x.id !== c.id && (k.metin.includes(x.ad) || (x.telefon && k.metin.includes(x.telefon)))) && !(c.telefon && k.metin.includes(c.telefon)), c.ad + ": başka müşterinin adı / telefon numarası yok");
