@@ -141,7 +141,7 @@
     if (!row || !row.d) return null;
     const account = JSON.parse(await cariCoz(h, row.d));
     const sales = (account.f || []).filter((s) => !s.iade && Array.isArray(s.k) && s.k.length).sort((a, b) => String(a.t) < String(b.t) ? -1 : 1);
-    return { ad: String(account.ad || ""), fy: account.fy || {}, son: sales[sales.length - 1] || null, kod };
+    return { ad: String(account.ad || ""), fy: account.fy || {}, satislar: sales, kod };
   }
 
   function applyCustomerPrices() {
@@ -181,37 +181,51 @@
 
   /* Seçili başlıktaki ürünler satır satır; aynı ailedekiler tek satırda, dokununca çeşitleri açılır.
      Arama yapılınca başlık fark etmez, eşleşen çeşitler açık gelir. */
-  function renderProducts() {
-    const query = $("#search").value.trim().toLocaleLowerCase("tr-TR");
-    const matches = (product) => !query || `${product.name} ${product.variant}`.toLocaleLowerCase("tr-TR").includes(query);
-    const visible = catalog.filter((product) => (query || product.salesCategory === selectedCategory) && matches(product));
+  /* Ürünleri satırlara böler: aynı ailedekiler tek satır (sıra korunur). */
+  function buildRows(products) {
     const rows = [], byFamily = new Map();
-    visible.forEach((product) => {
+    products.forEach((product) => {
       if (!product.family) { rows.push({ product }); return; }
       if (!byFamily.has(product.family)) { const row = { family: FAMILIES.find((f) => f.id === product.family), items: [] }; byFamily.set(product.family, row); rows.push(row); }
       byFamily.get(product.family).items.push(product);
     });
-    const html = rows.map((row) => {
-      if (row.product || row.items.length === 1) {
-        const product = row.product || row.items[0];
-        return `<article class="row"><div class="row-main"><h3>${escapeHtml(product.title)}</h3>${product.detail ? `<p class="product-detail">${escapeHtml(product.detail)}</p>` : ""}<p class="price">${money.format(product.price)}${unitText(product)}</p></div>${stepper(product)}</article>`;
-      }
-      const open = !!query || openFamilies.has(row.family.id);
-      const picked = row.items.reduce((sum, p) => sum + qtyOf(p.id), 0);
-      const samePrice = row.items.every((p) => p.price === row.items[0].price);
-      const variants = open ? `<div class="variants">${row.items.map((product) => `<div class="variant"><div class="row-main"><h4>${escapeHtml(product.variant)}</h4>${samePrice ? "" : `<p class="price small">${money.format(product.price)}${unitText(product)}</p>`}</div>${stepper(product)}</div>`).join("")}</div>` : "";
-      return `<article class="row family ${open ? "open" : ""}"><button class="family-head" type="button" data-family="${escapeHtml(row.family.id)}" aria-expanded="${open}"><div class="row-main"><h3>${escapeHtml(row.family.title)}</h3><p class="price">${priceRange(row.items)}${unitText(row.items[0])}</p><p class="product-detail">${row.items.length} çeşit</p></div><span class="family-side">${picked ? `<b class="picked">${picked}</b>` : ""}<span class="chevron" aria-hidden="true"></span></span></button>${variants}</article>`;
-    }).join("");
-    $("#catalogStatus").textContent = query ? `“${$("#search").value.trim()}” için ${visible.length} ürün` : "";
-    $("#products").innerHTML = html || `<p class="empty-search">Aramanızla eşleşen ürün yok.</p>`;
-    document.querySelectorAll("#products [data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
-    document.querySelectorAll("#products [data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
-    document.querySelectorAll("#products [data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
-    document.querySelectorAll("#products [data-family]").forEach((button) => button.addEventListener("click", () => {
+    return rows;
+  }
+  function rowHtml(row, forceOpen, scope) {
+    if (row.product || row.items.length === 1) {
+      const product = row.product || row.items[0];
+      const title = row.product || product.variant === "Standart" ? product.title : `${row.family.title} · ${product.variant}`;
+      return `<article class="row"><div class="row-main"><h3>${escapeHtml(title)}</h3>${product.detail ? `<p class="product-detail">${escapeHtml(product.detail)}</p>` : ""}<p class="price">${money.format(product.price)}${unitText(product)}</p></div>${stepper(product)}</article>`;
+    }
+    const key = scope + ":" + row.family.id;
+    const open = forceOpen || openFamilies.has(key);
+    const picked = row.items.reduce((sum, p) => sum + qtyOf(p.id), 0);
+    const samePrice = row.items.every((p) => p.price === row.items[0].price);
+    const variants = open ? `<div class="variants">${row.items.map((product) => `<div class="variant"><div class="row-main"><h4>${escapeHtml(product.variant)}</h4>${samePrice ? "" : `<p class="price small">${money.format(product.price)}${unitText(product)}</p>`}</div>${stepper(product)}</div>`).join("")}</div>` : "";
+    return `<article class="row family ${open ? "open" : ""}"><button class="family-head" type="button" data-family="${escapeHtml(key)}" aria-expanded="${open}"><div class="row-main"><h3>${escapeHtml(row.family.title)}</h3><p class="price">${priceRange(row.items)}${unitText(row.items[0])}</p><p class="product-detail">${row.items.length} çeşit</p></div><span class="family-side">${picked ? `<b class="picked">${picked}</b>` : ""}<span class="chevron" aria-hidden="true"></span></span></button>${variants}</article>`;
+  }
+  function bindRows(container) {
+    container.querySelectorAll("[data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
+    container.querySelectorAll("[data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
+    container.querySelectorAll("[data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
+    container.querySelectorAll("[data-family]").forEach((button) => button.addEventListener("click", () => {
       const id = button.dataset.family;
       if (openFamilies.has(id)) openFamilies.delete(id); else openFamilies.add(id);
       renderProducts();
     }));
+  }
+
+  /* Seçili başlıktaki ürünler satır satır; aynı ailedekiler tek satırda, dokununca çeşitleri açılır.
+     Arama yapılınca başlık fark etmez, eşleşen çeşitler açık gelir. */
+  function renderProducts() {
+    const query = $("#search").value.trim().toLocaleLowerCase("tr-TR");
+    const matches = (product) => !query || `${product.name} ${product.variant}`.toLocaleLowerCase("tr-TR").includes(query);
+    const visible = catalog.filter((product) => (query || product.salesCategory === selectedCategory) && matches(product));
+    const html = buildRows(visible).map((row) => rowHtml(row, !!query, "k")).join("");
+    $("#catalogStatus").textContent = query ? `“${$("#search").value.trim()}” için ${visible.length} ürün` : "";
+    $("#products").innerHTML = html || `<p class="empty-search">Aramanızla eşleşen ürün yok.</p>`;
+    bindRows($("#products"));
+    renderQuickOrder();
   }
 
   function add(id, qty) {
@@ -317,31 +331,36 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  /* Son sipariş: müşterinin sistemdeki son fişi; yoksa bu telefondan verilen son ön sipariş. */
-  function lastOrderLines() {
-    if (customer && customer.son) {
-      const lines = customer.son.k.map(([name, qty]) => {
-        const product = catalog.find((p) => nameKey(p.name) === nameKey(name)) || catalog.find((p) => nameKey(p.title) === nameKey(name));
-        return product ? { product, qty: Number(qty) || 1 } : null;
-      }).filter(Boolean);
-      if (lines.length) return { date: customer.son.t, lines };
+  /* Sık aldıklarınız: müşterinin fişlerinde en çok geçen ürünler (adet değil, kaç fişte geçtiği; eşitlikte en
+     yenisi). Aile ürünleri tek satırda toplanır. Müşteri tanınmadıysa bu telefondan verilen son ön sipariş. */
+  const QUICK_LIMIT = 6;
+  function frequentProducts() {
+    const score = new Map();
+    const bump = (product, when) => {
+      const s = score.get(product.id) || { product, count: 0, last: "" };
+      s.count += 1; if (String(when) > s.last) s.last = String(when);
+      score.set(product.id, s);
+    };
+    const byName = (name) => catalog.find((p) => nameKey(p.name) === nameKey(name)) || catalog.find((p) => nameKey(p.title) === nameKey(name));
+    if (customer && customer.satislar && customer.satislar.length) {
+      customer.satislar.forEach((sale) => {
+        const seen = new Set();
+        sale.k.forEach(([name]) => { const p = byName(name); if (p && !seen.has(p.id)) { seen.add(p.id); bump(p, sale.t); } });
+      });
+    } else {
+      const previous = loadLastOrder();
+      (previous && Array.isArray(previous.lines) ? previous.lines : []).forEach((line) => { const p = catalog.find((x) => x.id === line.catalogItemId); if (p) bump(p, previous.date); });
     }
-    const previous = loadLastOrder();
-    const lines = previous && Array.isArray(previous.lines) ? previous.lines.map((line) => {
-      const product = catalog.find((p) => p.id === line.catalogItemId);
-      return product ? { product, qty: Number(line.qty) || 1 } : null;
-    }).filter(Boolean) : [];
-    return lines.length ? { date: previous.date, lines } : null;
+    return [...score.values()].sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1)).map((s) => s.product);
   }
 
   function renderQuickOrder() {
-    const last = phone ? lastOrderLines() : null;
-    $("#quickOrders").hidden = !last;
-    if (!last) return;
-    $("#quickOrderDate").textContent = new Date(last.date).toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
-    $("#quickProducts").innerHTML = `<button class="repeat-order" type="button" id="repeatOrder">Aynısını sepete ekle</button>` + last.lines.map(({ product, qty }) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${qty} × ${escapeHtml(product.variant ? `${FAMILIES.find((f) => f.id === product.family).title.replace(/^Ori /, "")} · ${product.variant}` : (product.title || product.name))}</span><b>${money.format(product.price)}</b></button>`).join("");
-    document.querySelectorAll("[data-quick-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.quickAdd)));
-    $("#repeatOrder").addEventListener("click", () => { last.lines.forEach(({ product, qty }) => add(product.id, qty)); openCart(true); });
+    const products = phone ? frequentProducts() : [];
+    const rows = buildRows(products).slice(0, QUICK_LIMIT);
+    $("#quickOrders").hidden = rows.length === 0;
+    if (!rows.length) return;
+    $("#quickProducts").innerHTML = rows.map((row) => rowHtml(row, false, "s")).join("");
+    bindRows($("#quickProducts"));
   }
 
   /* Sekmeler aynı sayfada geçer: "Sipariş ver" katalog, "Hesabım" gömülü cari hesap (kişisel kodla, numara sormadan). */
