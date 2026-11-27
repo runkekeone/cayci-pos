@@ -7,14 +7,14 @@
     <meta name="description" content="Özgür Ticaret önden sipariş" />
     <title>Özgür Ticaret | Sipariş</title>
     <link rel="icon" href="logo.png?v=1" />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <div class="brand"><img src="logo.png?v=1" alt="Özgür Ticaret" /><span>Özgür Ticaret</span></div>
+        <div class="brand"><img src="logo.png?v=1" alt="Özgür Ticaret" /></div>
         <button class="cart-button" id="cartButton" type="button" aria-label="Sepeti aç">
-          Sepet <span id="cartCount">0</span>
+          Sepet <span id="cartCount" hidden>0</span>
         </button>
       </header>
 
@@ -35,14 +35,14 @@
       </section>
 
       <section class="catalog" id="catalog" hidden>
-        <p class="welcome" id="welcome" hidden></p>
+        <div class="welcome" id="welcome" hidden></div>
         <p class="notice" id="priceNotice" hidden></p>
         <section class="quick-orders" id="quickOrders" hidden>
           <div class="section-head"><div><p class="eyebrow">Hızlı sipariş</p><h2>Son siparişiniz</h2></div><span id="quickOrderDate"></span></div>
           <div class="quick-grid" id="quickProducts"></div>
         </section>
         <div class="catalog-tools">
-          <label class="search"><span>Ürün ara</span><input id="search" type="search" placeholder="Ürün veya kategori ara" /></label>
+          <label class="search"><span class="sr-only">Ürün ara</span><input id="search" type="search" placeholder="Ürün ara" /></label>
           <div class="category-scroll" id="categories" aria-label="Kategoriler"></div>
         </div>
         <div class="catalog-status" id="catalogStatus"></div>
@@ -58,9 +58,9 @@
         <textarea id="note" rows="2" placeholder="Teslimatla ilgili notunuz"></textarea>
         <p class="payment-label">Ödeme türü</p>
         <div class="payment-options" id="paymentOptions">
-          <button type="button" class="payment-option selected" data-payment="nakit"><b>Nakit</b><small>Teslimde nakit</small></button>
-          <button type="button" class="payment-option" data-payment="kart"><b>Kart</b><small>Teslimde kartla</small></button>
-          <button type="button" class="payment-option" data-payment="acik"><b>Açık hesap</b><small>Cari hesaba yazılır</small></button>
+          <button type="button" class="payment-option selected" data-payment="nakit"><span class="radio" aria-hidden="true"></span><b>Nakit</b><small>Teslimde nakit</small></button>
+          <button type="button" class="payment-option" data-payment="kart"><span class="radio" aria-hidden="true"></span><b>Kart</b><small>Teslimde kartla</small></button>
+          <button type="button" class="payment-option" data-payment="acik"><span class="radio" aria-hidden="true"></span><b>Açık hesap</b><small>Cari hesaba yazılır</small></button>
         </div>
         <div class="totals" id="totals"></div>
         <button class="primary submit-order" id="submitOrder" type="button">Siparişi gönder</button>
@@ -91,6 +91,6 @@
     <script src="../toptanci/vendor/supabase.js"></script>
     <script src="catalog.js"></script>
     <script src="cari-ortak.js?v=1"></script>
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
   </body>
 </html>

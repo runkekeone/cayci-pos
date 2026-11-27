@@ -7,7 +7,10 @@
   const SERVIS_GUNLERI = [1, 4];
   const SERVIS_SON_SAAT = 12;
 
-  const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
+  /* Fiyat yazımı: "60 ₺", kuruş varsa "62,50 ₺". */
+  const tamSayi = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+  const kurusSayi = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money = { format: (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return (Number.isInteger(v) ? tamSayi.format(v) : kurusSayi.format(v)) + " ₺"; } };
   const cart = new Map();
   /* Sekiz başlık (telefonda yana kayan tek satır). */
   const CATEGORY_ORDER = ["su-soda", "ayran-mesrubat", "cay", "sicak", "atistirmalik", "temizlik", "oyun", "diger"];
@@ -155,6 +158,8 @@
       selectedCategory = button.dataset.category;
       $("#search").value = "";
       renderCategories(); renderProducts();
+      const active = document.querySelector(".category.active");
+      if (active) active.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     }));
   }
 
@@ -213,13 +218,21 @@
     const item = cart.get(id) || { ...product, qty: 0 };
     item.qty += qty || 1;
     cart.set(id, item);
-    renderCart(); renderProducts();
+    renderCart(); renderProducts(); bump();
+  }
+  /* Ürün eklenince alttaki sepet bandı kısa bir tepki verir (tek efekt). */
+  function bump() {
+    const dock = $("#cartDock");
+    dock.classList.remove("bump");
+    void dock.offsetWidth;
+    dock.classList.add("bump");
   }
 
   function changeQty(id, delta) {
     const item = cart.get(id);
     if (!item) return;
     item.qty += delta;
+    if (delta > 0) bump();
     if (item.qty <= 0) cart.delete(id);
     else cart.set(id, item);
     renderCart(); renderProducts();
@@ -229,12 +242,13 @@
     const items = currentItems();
     const quantity = items.reduce((sum, item) => sum + item.qty, 0);
     $("#cartCount").textContent = String(quantity);
+    $("#cartCount").hidden = quantity === 0;
     $("#dockCount").textContent = String(quantity);
     $("#dockTotal").textContent = money.format(total());
     $("#cartDock").hidden = items.length === 0;
     $("#emptyCart").hidden = items.length > 0;
     $("#checkout").hidden = items.length === 0;
-    $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div><h3>${escapeHtml(item.title || item.name)}</h3><p>${item.detail ? `${escapeHtml(item.detail)} · ` : ""}${money.format(item.price)} / ${escapeHtml(item.unit)}</p></div><div class="quantity"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">−</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artır">+</button></div></div>`).join("");
+    $("#cartLines").innerHTML = items.map((item) => `<div class="cart-line"><div class="row-main"><h3>${escapeHtml(item.variant ? `${FAMILIES.find((f) => f.id === item.family).title} · ${item.variant}` : (item.title || item.name))}</h3><p>${item.qty} × ${money.format(item.price)} = <b>${money.format(item.price * item.qty)}</b></p></div><div class="stepper"><button type="button" data-minus="${escapeHtml(item.id)}" aria-label="Azalt">−</button><span>${item.qty}</span><button type="button" data-plus="${escapeHtml(item.id)}" aria-label="Artır">+</button></div></div>`).join("");
     const upfrontRows = payment === "acik" && minimumUpfrontRate > 0
       ? `<div class="total-row"><span>Teslimde en az ödeme (%${minimumUpfrontRate * 100})</span><b>${money.format(minimumUpfront())}</b></div><div class="total-row"><span>Açık hesaba yazılacak</span><b>${money.format(openBalance())}</b></div>` : "";
     $("#totals").innerHTML = `${upfrontRows}<div class="total-row grand-total"><span>Toplam</span><span>${money.format(total())}</span></div>`;
@@ -278,6 +292,7 @@
     $("#catalog").hidden = true;
     $("#quickOrders").hidden = true;
     $("#welcome").hidden = true;
+    document.body.classList.remove("ordering");
     $("#priceNotice").hidden = true;
     $("#receipt").hidden = true;
     openCart(false);
@@ -309,7 +324,7 @@
     $("#quickOrders").hidden = !last;
     if (!last) return;
     $("#quickOrderDate").textContent = new Date(last.date).toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
-    $("#quickProducts").innerHTML = `<button class="repeat-order" type="button" id="repeatOrder">Aynısını sepete ekle</button>` + last.lines.map(({ product, qty }) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${qty} × ${escapeHtml(product.title || product.name)}</span><b>${money.format(product.price)}</b></button>`).join("");
+    $("#quickProducts").innerHTML = `<button class="repeat-order" type="button" id="repeatOrder">Aynısını sepete ekle</button>` + last.lines.map(({ product, qty }) => `<button class="quick-product" type="button" data-quick-add="${escapeHtml(product.id)}"><span>${qty} × ${escapeHtml(product.variant ? `${FAMILIES.find((f) => f.id === product.family).title.replace(/^Ori /, "")} · ${product.variant}` : (product.title || product.name))}</span><b>${money.format(product.price)}</b></button>`).join("");
     document.querySelectorAll("[data-quick-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.quickAdd)));
     $("#repeatOrder").addEventListener("click", () => { last.lines.forEach(({ product, qty }) => add(product.id, qty)); openCart(true); });
   }
@@ -325,13 +340,16 @@
     $("#phoneError").hidden = true;
     const button = $("#startButton");
     button.disabled = true;
-    button.textContent = "Hesabınız açılıyor…";
+    button.classList.add("loading");
+    button.innerHTML = `<span class="spinner" aria-hidden="true"></span>Hesabınız açılıyor`;
     try { customer = await loadCustomer(digits); } catch (error) { console.warn("Müşteri kaydı okunamadı", error); customer = null; }
     button.disabled = false;
+    button.classList.remove("loading");
     button.textContent = "Devam et";
+    document.body.classList.add("ordering");
     applyCustomerPrices();
     $("#welcome").hidden = !customer;
-    if (customer) $("#welcome").textContent = `Hoş geldiniz, ${customer.ad}. Fiyatlar size özel fiyatlarınızdır.`;
+    if (customer) $("#welcome").innerHTML = `<b>Merhaba, ${escapeHtml(customer.ad)}</b><span>Fiyatlar size özeldir.</span>`;
     $("#priceNotice").hidden = !!customer;
     $("#priceNotice").textContent = "Numaranız kayıtlarımızda bulunamadı. Liste fiyatları gösteriliyor; siparişiniz yine bize ulaşır, fiyatı teslimde hesabınıza göre yazılır.";
     $("#phoneCard").hidden = true;
@@ -415,6 +433,11 @@
   $("#submitOrder").addEventListener("click", submitOrder);
   $("#newOrder").addEventListener("click", startNewOrder);
   $("#closeReceipt").addEventListener("click", startNewOrder);
+  /* Arama + başlıklar yapışınca altına ince gölge. */
+  window.addEventListener("scroll", () => {
+    const tools = document.querySelector(".catalog-tools");
+    if (tools) tools.classList.toggle("stuck", tools.getBoundingClientRect().top <= 0 && window.scrollY > 0);
+  }, { passive: true });
   applyCustomerPrices();
   renderCategories(); renderProducts(); renderCart();
   loadLiveCatalog();
