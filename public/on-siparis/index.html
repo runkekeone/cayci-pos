@@ -7,7 +7,7 @@
     <meta name="description" content="Özgür Ticaret önden sipariş" />
     <title>Özgür Ticaret | Sipariş</title>
     <link rel="icon" href="logo.png?v=1" />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <main class="shell">
@@ -17,7 +17,7 @@
           Sepet <span id="cartCount" hidden>0</span>
         </button>
       </header>
-      <nav class="tabs" aria-label="Sayfalar"><span class="tab active" aria-current="page">Sipariş ver</span><a class="tab" id="accountLink" href="../cari/">Hesabım</a></nav>
+      <nav class="tabs" aria-label="Bölümler"><button class="tab active" type="button" data-tab="order" aria-current="page">Sipariş ver</button><button class="tab" type="button" data-tab="account">Hesabım</button></nav>
 
       <section class="intro">
         <p class="eyebrow">Önden sipariş</p>
@@ -48,6 +48,10 @@
         </div>
         <div class="catalog-status" id="catalogStatus"></div>
         <div class="product-list" id="products"></div>
+      </section>
+      <section class="account-panel" id="accountPanel" hidden>
+        <p class="notice" id="accountNotice" hidden></p>
+        <iframe id="accountFrame" title="Cari hesabınız" hidden></iframe>
       </section>
     </main>
 
@@ -92,6 +96,6 @@
     <script src="../toptanci/vendor/supabase.js"></script>
     <script src="catalog.js"></script>
     <script src="cari-ortak.js?v=1"></script>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
   </body>
 </html>

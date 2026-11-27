@@ -6,6 +6,8 @@
   /* Servis günleri (0 = pazar): pazartesi ve perşembe. Öğleden önce verilen sipariş aynı günün servisine yazılır. */
   const SERVIS_GUNLERI = [1, 4];
   const SERVIS_SON_SAAT = 12;
+  /* Bu telefonda hatırlanan numara: link bir dahaki açılışta numara sormadan girer. */
+  const TEL_KEY = "babuco:on-siparis:tel";
 
   /* Fiyat yazımı: "60 ₺", kuruş varsa "62,50 ₺". */
   const tamSayi = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
@@ -278,7 +280,18 @@
     renderCart();
   }
 
+  /* Sipariş gönderildikten sonra: sepet boşalır, müşteri girişli kalır. */
+  function newOrder() {
+    cart.clear();
+    $("#note").value = "";
+    $("#receipt").hidden = true;
+    renderProducts(); renderCart();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /* Çıkış: hatırlanan numara silinir, giriş ekranına dönülür. */
   function startNewOrder() {
+    try { localStorage.removeItem(TEL_KEY); } catch { /* özel pencere */ }
     cart.clear();
     phone = "";
     customer = null;
@@ -293,7 +306,8 @@
     $("#quickOrders").hidden = true;
     $("#welcome").hidden = true;
     document.body.classList.remove("ordering");
-    $("#accountLink").href = "../cari/";
+    $("#accountFrame").removeAttribute("src");
+    setTab("order");
     $("#priceNotice").hidden = true;
     $("#receipt").hidden = true;
     openCart(false);
@@ -330,6 +344,32 @@
     $("#repeatOrder").addEventListener("click", () => { last.lines.forEach(({ product, qty }) => add(product.id, qty)); openCart(true); });
   }
 
+  /* Sekmeler aynı sayfada geçer: "Sipariş ver" katalog, "Hesabım" gömülü cari hesap (kişisel kodla, numara sormadan). */
+  let pendingTab = location.hash === "#hesap" ? "account" : "order";
+  function setTab(tab) {
+    pendingTab = tab;
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      const on = button.dataset.tab === tab;
+      button.classList.toggle("active", on);
+      if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
+    });
+    document.body.classList.toggle("tab-account", tab === "account");
+    const loggedIn = !!phone;
+    $("#accountPanel").hidden = tab !== "account" || !loggedIn;
+    $("#catalog").hidden = tab !== "order" || !loggedIn;
+    if (tab === "account" && loggedIn) {
+      const frame = $("#accountFrame");
+      const has = !!(customer && customer.kod);
+      $("#accountNotice").hidden = has;
+      $("#accountNotice").textContent = "Bu numarayla kayıtlı bir hesap bulamadık. Hesabınızı görmek için bize ulaşın.";
+      frame.hidden = !has;
+      const src = has ? `../cari/?gomulu=1#k=${encodeURIComponent(customer.kod)}` : "";
+      if (has && frame.getAttribute("src") !== src) frame.setAttribute("src", src);
+    }
+    history.replaceState(null, "", tab === "account" ? "#hesap" : location.pathname + location.search);
+    window.scrollTo({ top: 0 });
+  }
+
   async function begin() {
     const digits = phoneDigits($("#phone").value);
     if (digits.length !== 10 || !digits.startsWith("5")) {
@@ -348,15 +388,16 @@
     button.classList.remove("loading");
     button.textContent = "Devam et";
     document.body.classList.add("ordering");
+    try { localStorage.setItem(TEL_KEY, digits); } catch { /* özel pencere */ }
     applyCustomerPrices();
-    $("#welcome").hidden = !customer;
-    if (customer) $("#welcome").innerHTML = `<b>Merhaba, ${escapeHtml(customer.ad)}</b><span>Fiyatlar size özeldir.</span>`;
+    $("#welcome").hidden = false;
+    $("#welcome").innerHTML = `<div><b>${customer ? `Merhaba, ${escapeHtml(customer.ad)}` : escapeHtml(formatPhone(digits))}</b><span>${customer ? "Fiyatlar size özeldir." : "Numaranızla giriş yaptınız."}</span></div><button class="logout" type="button" id="logout">Çıkış</button>`;
+    $("#logout").addEventListener("click", startNewOrder);
     $("#priceNotice").hidden = !!customer;
-    /* "Hesabım" sekmesi: müşteri tanındıysa cari sayfası kişisel kodla, numara sormadan açılır. */
-    $("#accountLink").href = customer && customer.kod ? `../cari/#k=${encodeURIComponent(customer.kod)}` : "../cari/";
     $("#priceNotice").textContent = "Numaranız kayıtlarımızda bulunamadı. Liste fiyatları gösteriliyor; siparişiniz yine bize ulaşır, fiyatı teslimde hesabınıza göre yazılır.";
     $("#phoneCard").hidden = true;
     $("#catalog").hidden = false;
+    setTab(pendingTab);
     renderProducts();
     renderQuickOrder();
     renderCart();
@@ -434,8 +475,9 @@
     renderCart();
   });
   $("#submitOrder").addEventListener("click", submitOrder);
-  $("#newOrder").addEventListener("click", startNewOrder);
-  $("#closeReceipt").addEventListener("click", startNewOrder);
+  $("#newOrder").addEventListener("click", newOrder);
+  $("#closeReceipt").addEventListener("click", newOrder);
+  document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
   /* Arama + başlıklar yapışınca altına ince gölge. */
   window.addEventListener("scroll", () => {
     const tools = document.querySelector(".catalog-tools");
@@ -444,4 +486,9 @@
   applyCustomerPrices();
   renderCategories(); renderProducts(); renderCart();
   loadLiveCatalog();
+  setTab(pendingTab);
+  try {
+    const saved = localStorage.getItem(TEL_KEY);
+    if (saved && /^5\d{9}$/.test(saved)) { $("#phone").value = formatPhone(saved); begin(); }
+  } catch { /* özel pencere */ }
 })();
