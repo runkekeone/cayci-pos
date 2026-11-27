@@ -333,7 +333,7 @@
 
   /* Sık aldıklarınız: müşterinin fişlerinde en çok geçen ürünler (adet değil, kaç fişte geçtiği; eşitlikte en
      yenisi). Aile ürünleri tek satırda toplanır. Müşteri tanınmadıysa bu telefondan verilen son ön sipariş. */
-  const QUICK_LIMIT = 6;
+  const QUICK_LIMIT = 8;
   function frequentProducts() {
     const score = new Map();
     const bump = (product, when) => {
@@ -354,14 +354,16 @@
     return [...score.values()].sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1)).map((s) => s.product);
   }
 
+  /* Kutucuklar yana kayan tek sırada (aşağı uzamaz); her kutuda ürün, fiyat ve sayaç. */
   function renderQuickOrder() {
-    const products = phone ? frequentProducts() : [];
-    const rows = buildRows(products).slice(0, QUICK_LIMIT);
-    $("#quickOrders").hidden = rows.length === 0;
-    if (!rows.length) return;
-    $("#quickProducts").innerHTML = rows.map((row) => rowHtml(row, false, "s")).join("");
+    const products = (phone ? frequentProducts() : []).slice(0, QUICK_LIMIT);
+    $("#quickOrders").hidden = products.length === 0;
+    if (!products.length) return;
+    const shortName = (p) => (p.family === "toz" ? `Toz İçecek · ${p.variant}` : p.title);
+    $("#quickProducts").innerHTML = products.map((p) => `<div class="tile"><span class="tile-name">${escapeHtml(shortName(p))}</span><span class="tile-price">${money.format(p.price)}${unitText(p)}</span>${stepper(p)}</div>`).join("");
     bindRows($("#quickProducts"));
   }
+
 
   /* Sekmeler aynı sayfada geçer: "Sipariş ver" katalog, "Hesabım" gömülü cari hesap (kişisel kodla, numara sormadan). */
   let pendingTab = location.hash === "#hesap" ? "account" : "order";
