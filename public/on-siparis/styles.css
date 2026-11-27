@@ -208,3 +208,14 @@ body.tab-account .cart-dock { display:none !important; }
 .quick-orders { margin:0 0 18px; padding:0; border:0; background:none; }
 .quick-orders .section-head { margin:4px 0 10px; }
 .quick-orders .section-head h2 { font-size:17px; color:var(--ink); }
+
+/* --- Sık aldıklarınız: yana kayan kutucuklar --- */
+.tile-scroll { display:flex; gap:8px; overflow-x:auto; margin:0 -15px; padding:2px 15px 6px; scroll-snap-type:x proximity; scroll-padding:0 15px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.tile-scroll::-webkit-scrollbar { display:none; }
+.tile { flex:0 0 148px; display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--paper); scroll-snap-align:start; }
+.tile-name { font-size:14px; font-weight:600; line-height:1.25; min-height:36px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.tile-price { font-size:14px; font-weight:700; color:var(--brand); }
+.tile-price .unit { display:inline; margin-left:3px; font-size:11px; font-weight:400; color:var(--muted); }
+.tile .add { width:100%; height:40px; border-radius:9px; margin-top:auto; }
+.tile .stepper { margin-top:auto; justify-content:space-between; }
+.tile .stepper button { width:36px; height:34px; }
