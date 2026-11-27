@@ -203,3 +203,8 @@ body.tab-account .cart-dock { display:none !important; }
 .account-panel { padding-top:12px; }
 .account-panel iframe { display:block; width:calc(100% + 30px); margin:0 -15px; height:calc(100dvh - 150px); min-height:480px; border:0; background:#fff; }
 .account-panel iframe[hidden] { display:none; }
+
+/* --- Sık aldıklarınız --- */
+.quick-orders { margin:0 0 18px; padding:0; border:0; background:none; }
+.quick-orders .section-head { margin:4px 0 10px; }
+.quick-orders .section-head h2 { font-size:17px; color:var(--ink); }
