@@ -192,3 +192,14 @@ body.ordering .catalog { padding-top:14px; }
 .tab { flex:1; display:grid; place-items:center; min-height:42px; border-radius:9px; color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; }
 .tab.active { background:var(--paper); color:var(--brand); box-shadow:0 1px 3px rgba(22,33,58,.1); }
 .topbar { border-bottom:0; }
+
+/* --- Tek sayfa: sekmeler + gömülü hesap --- */
+.tab { border:0; background:none; font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+.welcome { flex-direction:row; align-items:center; justify-content:space-between; gap:12px; }
+.welcome > div { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.logout { flex:0 0 auto; min-height:38px; padding:0 12px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--muted); font-size:14px; font-weight:600; }
+body.tab-account .intro { display:none; }
+body.tab-account .cart-dock { display:none !important; }
+.account-panel { padding-top:12px; }
+.account-panel iframe { display:block; width:calc(100% + 30px); margin:0 -15px; height:calc(100dvh - 150px); min-height:480px; border:0; background:#fff; }
+.account-panel iframe[hidden] { display:none; }
