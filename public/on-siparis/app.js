@@ -139,7 +139,7 @@
     if (!row || !row.d) return null;
     const account = JSON.parse(await cariCoz(h, row.d));
     const sales = (account.f || []).filter((s) => !s.iade && Array.isArray(s.k) && s.k.length).sort((a, b) => String(a.t) < String(b.t) ? -1 : 1);
-    return { ad: String(account.ad || ""), fy: account.fy || {}, son: sales[sales.length - 1] || null };
+    return { ad: String(account.ad || ""), fy: account.fy || {}, son: sales[sales.length - 1] || null, kod };
   }
 
   function applyCustomerPrices() {
@@ -293,6 +293,7 @@
     $("#quickOrders").hidden = true;
     $("#welcome").hidden = true;
     document.body.classList.remove("ordering");
+    $("#accountLink").href = "../cari/";
     $("#priceNotice").hidden = true;
     $("#receipt").hidden = true;
     openCart(false);
@@ -351,6 +352,8 @@
     $("#welcome").hidden = !customer;
     if (customer) $("#welcome").innerHTML = `<b>Merhaba, ${escapeHtml(customer.ad)}</b><span>Fiyatlar size özeldir.</span>`;
     $("#priceNotice").hidden = !!customer;
+    /* "Hesabım" sekmesi: müşteri tanındıysa cari sayfası kişisel kodla, numara sormadan açılır. */
+    $("#accountLink").href = customer && customer.kod ? `../cari/#k=${encodeURIComponent(customer.kod)}` : "../cari/";
     $("#priceNotice").textContent = "Numaranız kayıtlarımızda bulunamadı. Liste fiyatları gösteriliyor; siparişiniz yine bize ulaşır, fiyatı teslimde hesabınıza göre yazılır.";
     $("#phoneCard").hidden = true;
     $("#catalog").hidden = false;

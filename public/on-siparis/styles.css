@@ -186,3 +186,9 @@ body.ordering .catalog { padding-top:14px; }
   .payment-option { min-height:54px; }
   .payment-option small { display:block; margin:0; }
 }
+
+/* --- Sekmeler: Sipariş ver | Hesabım --- */
+.tabs { display:flex; gap:4px; max-width:640px; margin:12px 0 0; padding:4px; border-radius:12px; background:#e9ecf2; }
+.tab { flex:1; display:grid; place-items:center; min-height:42px; border-radius:9px; color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; }
+.tab.active { background:var(--paper); color:var(--brand); box-shadow:0 1px 3px rgba(22,33,58,.1); }
+.topbar { border-bottom:0; }
