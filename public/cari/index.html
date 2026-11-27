@@ -27,6 +27,9 @@
   .firma { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--murekkep) }
   .ust { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px }
   .ust > div { min-width:0 }
+  .sekmeler { display:flex; gap:4px; max-width:640px; margin:12px auto 0; padding:4px; border-radius:12px; background:var(--zemin2); width:calc(100% - 32px) }
+  .sekme { flex:1; display:grid; place-items:center; min-height:42px; border-radius:9px; color:var(--soluk); font-size:15px; font-weight:600; text-decoration:none }
+  .sekme.secili { background:var(--bg); color:var(--fg); box-shadow:0 1px 3px rgba(0,0,0,.08) }
   .kucuk-btn { flex:none; min-height:44px; padding:8px 14px; border:1px solid var(--cizgi); border-radius:10px; background:var(--bg); color:var(--soluk); font-size:15px; font-weight:600; cursor:pointer }
   .bakiye { border-radius:14px; padding:16px 18px; background:var(--zemin2); border-left:6px solid var(--borc); margin-bottom:22px }
   .bakiye.temiz { border-left-color:var(--odeme) }
@@ -133,6 +136,7 @@
 </style>
 </head>
 <body>
+<nav class="sekmeler" aria-label="Sayfalar"><span class="sekme secili" aria-current="page">Hesabım</span><a class="sekme" href="../on-siparis/">Sipariş ver</a></nav>
 <main id="kok"><div class="durum"><b>Açılıyor…</b></div></main>
 <noscript><p style="padding:24px">Bu sayfanın çalışması için tarayıcınızda JavaScript açık olmalı.</p></noscript>
 <script>
