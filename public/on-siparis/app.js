@@ -9,21 +9,46 @@
 
   const money = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
   const cart = new Map();
-  const CATEGORY_ORDER = ["Tumu", "Su", "Soda", "Ayran", "Caylar & Kahve", "Mesrubatlar", "Atistirmalik", "Temizlik", "Oyun", "Yan Urunler"];
-  const categoryLabel = (category) => ({ Tumu: "Tüm ürünler", Su: "Su", Soda: "Soda", Ayran: "Ayran", "Caylar & Kahve": "Çay & Kahve", Mesrubatlar: "Meşrubat", Atistirmalik: "Atıştırmalık", Temizlik: "Temizlik", Oyun: "Oyun", "Yan Urunler": "Diğer" }[category] || category);
+  /* Sekiz başlık (telefonda yana kayan tek satır). */
+  const CATEGORY_ORDER = ["su-soda", "ayran-mesrubat", "cay", "sicak", "atistirmalik", "temizlik", "oyun", "diger"];
+  const categoryLabel = (category) => ({ "su-soda": "Su & Soda", "ayran-mesrubat": "Ayran & Meşrubat", cay: "Çay", sicak: "Sıcak İçecekler", atistirmalik: "Atıştırmalık", temizlik: "Temizlik", oyun: "Oyun & Malzemeleri", diger: "Diğer" }[category] || category);
   function salesCategory(product) {
     const group = String(product.category || "");
     const name = String(product.name || "").toLocaleLowerCase("tr-TR");
-    if (group === "Su") return "Su";
-    if (group === "Sodalar") return "Soda";
-    if (name.includes("ayran")) return "Ayran";
-    if (group === "Atıştırmalık") return "Atistirmalik";
-    if (group === "Temizlik" || group === "Kağıt & Hijyen") return "Temizlik";
-    if (group === "Oyun Kağıtları" || /okey|yazboz/.test(name)) return "Oyun";
-    if (["Çaylar", "Kahve & Yan Ürünler", "Sıcak İçecekler", "Toz İçecekler"].includes(group)) return "Caylar & Kahve";
-    if (group === "Soğuk İçecekler" || /aroma|coca-cola|çamlıca|fanta|sarıyer/.test(name)) return "Mesrubatlar";
-    return "Yan Urunler";
+    if (group === "Su" || group === "Sodalar") return "su-soda";
+    if (/ayran|aroma|coca-cola|fanta|gazoz|sarıyer|sprite|kavanoz/.test(name) || group === "Soğuk İçecekler") return "ayran-mesrubat";
+    if (group === "Çaylar" || /küp şeker/.test(name)) return "cay";
+    if (group === "Toz İçecekler" || group === "Sıcak İçecekler" || (group === "Kahve & Yan Ürünler" && !/kıskaç/.test(name))) return "sicak";
+    if (group === "Atıştırmalık") return "atistirmalik";
+    if (group === "Temizlik" || group === "Kağıt & Hijyen") return "temizlik";
+    if (group === "Oyun Kağıtları" || group === "Kırtasiye" || /okey|yazboz/.test(name)) return "oyun";
+    return "diger";
   }
+  /* Çeşitli ürünler tek satırda toplanır; dokununca çeşitleri açılır. label: çeşidin kısa adı. */
+  const FAMILIES = [
+    { id: "su", title: "Mavizade Su", test: /^Mavizade /i, label: (n) => n.replace(/^Mavizade /i, "") },
+    { id: "sade-soda", title: "Sade Soda", test: /Sade Soda$/i, label: (n) => n.replace(/ Sade Soda$/i, "") },
+    { id: "meyveli-soda", title: "Limonlu & Meyveli Soda", test: /(Elmalı|Mango|Karadut|Portakal|Mandalina|Limonlu|Ananas) Soda$/i, label: (n) => n.replace(/ Soda$/i, "") },
+    { id: "toz", title: "Ori Toz İçecek", test: /^Ori .+ Toz İçecek$/i, label: (n) => n.replace(/^Ori /i, "").replace(/ Toz İçecek$/i, "") },
+    { id: "aroma", title: "Aroma Meyve Suyu", test: /^Aroma /i, label: (n) => n.replace(/^Aroma /i, "") },
+    { id: "filiz", title: "Filiz Çay 5 kg", test: /Filiz Çay 5 kg$/i, label: (n) => n.replace(/ Filiz Çay 5 kg$/i, "") },
+    { id: "oyun-kagidi", title: "Oyun Kağıdı", test: /Oyun Kağıdı$/i, label: (n) => n.replace(/ ?Oyun Kağıdı$/i, "") || "Standart" },
+    { id: "okey", title: "Okey Takımı", test: /Okey Takımı$/i, label: (n) => n.replace(/ Okey Takımı$/i, "") },
+    { id: "yazboz", title: "Yazboz", test: /Yazboz$/i, label: (n) => n.replace(/ ?Yazboz$/i, "") || "Standart" },
+    { id: "kek-top", title: "Eti Kek Top", test: /^Eti Kek Top /i, label: (n) => n.replace(/^Eti Kek Top /i, "") },
+    { id: "kek-pop", title: "Eti Kek Pop", test: /^Eti Kek Pop /i, label: (n) => n.replace(/^Eti Kek Pop /i, "") },
+    { id: "eti-cin", title: "Eti Cin", test: /^Eti Cin /i, label: (n) => n.replace(/^Eti Cin /i, "") },
+    { id: "rondo", title: "Ülker Rondo", test: /^Ülker Rondo /i, label: (n) => n.replace(/^Ülker Rondo /i, "") },
+    { id: "biskrem", title: "Ülker Biskrem Rulo", test: /^Ülker Biskrem /i, label: (n) => n.replace(/^Ülker Biskrem /i, "").replace(/ Rulo$/i, "") },
+    { id: "ikram", title: "Ülker İkram", test: /^Ülker İkram /i, label: (n) => n.replace(/^Ülker İkram /i, "") },
+    { id: "kraker", title: "Ülker Çubuk Kraker", test: /Çubuk Kraker$/i, label: (n) => n.replace(/^Ülker /i, "").replace(/ ?Çubuk Kraker$/i, "") || "Klasik" },
+    { id: "kutu", title: "Kutu İçecekler (koli)", test: /( Kutu|Red Bull|Enerji İçeceği|Express Black|Coffee Latte)$/i, label: (n) => n.replace(/ Kutu$/i, "") },
+    { id: "kola", title: "Coca-Cola & Fanta", test: /^(Coca-Cola|Fanta)$/i, label: (n) => n },
+    { id: "gazoz", title: "Çamlıca Gazoz", test: /^Çamlıca Gazoz/i, label: (n) => n.replace(/^Çamlıca Gazoz ?/i, "") || "Standart" },
+    { id: "tabak", title: "Çay Tabağı", test: /^Çay Tabağı/i, label: (n) => n.replace(/^Çay Tabağı ?/i, "") || "Standart" },
+    { id: "kalem", title: "Kalem", test: /Kalem( 60'lı)?$/i, label: (n) => n },
+  ];
+  const familyOf = (title) => FAMILIES.find((f) => f.test.test(title)) || null;  // sıra önemli: ilk uyan aile
   function productCopy(name) {
     const match = String(name || "").match(/^(.*?)\s*\(([^)]*)\)\s*$/);
     if (!match) return { title: String(name || ""), detail: "" };
@@ -37,9 +62,12 @@
   let catalog = [];
   function buildCatalog(list) {
     const map = new Map();
-    list.filter((product) => product.active !== false && product.name).forEach((product) => {
+    list.filter((product) => product.active !== false && product.name && Number(product.price) > 0).forEach((product) => {
       const copy = productCopy(product.name);
       const prepared = { ...product, ...copy, listPrice: Number(product.price) || 0, salesCategory: salesCategory(product) };
+      const family = familyOf(prepared.title);
+      prepared.family = family ? family.id : "";
+      prepared.variant = family ? family.label(prepared.title) : "";
       const key = `${prepared.salesCategory}|${prepared.title}`.toLocaleLowerCase("tr-TR");
       const previous = map.get(key);
       // Aynı ürünün açıklamasız kopyası varsa, paket bilgisini taşıyan kaydı göster.
@@ -54,7 +82,8 @@
     : null;
   let phone = "";
   let customer = null;          // { ad, fy, son } — telefon müşteri kaydıyla eşleşirse
-  let selectedCategory = "Su";
+  let selectedCategory = "su-soda";
+  const openFamilies = new Set();
   let payment = "nakit";
   let minimumUpfrontRate = 0;
 
@@ -124,23 +153,58 @@
     $("#categories").innerHTML = CATEGORY_ORDER.map((category) => `<button class="category ${category === selectedCategory ? "active" : ""}" data-category="${escapeHtml(category)}" type="button">${escapeHtml(categoryLabel(category))}</button>`).join("");
     document.querySelectorAll("[data-category]").forEach((button) => button.addEventListener("click", () => {
       selectedCategory = button.dataset.category;
+      $("#search").value = "";
       renderCategories(); renderProducts();
     }));
   }
 
-  function priceHtml(product) {
-    return `${money.format(product.price)}<span class="unit">/ ${escapeHtml(product.unit)}</span>`;
+  const qtyOf = (id) => (cart.get(id) || {}).qty || 0;
+  const stepper = (product) => {
+    const q = qtyOf(product.id);
+    return q
+      ? `<div class="stepper"><button type="button" data-minus="${escapeHtml(product.id)}" aria-label="Azalt">−</button><span>${q}</span><button type="button" data-plus="${escapeHtml(product.id)}" aria-label="Artır">+</button></div>`
+      : `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.title)} ekle">+</button>`;
+  };
+  const unitText = (product) => `<span class="unit">/ ${escapeHtml(product.unit)}</span>`;
+  function priceRange(items) {
+    const prices = items.map((p) => p.price);
+    const lo = Math.min(...prices), hi = Math.max(...prices);
+    return lo === hi ? money.format(lo) : `${money.format(lo)} – ${money.format(hi)}`;
   }
 
+  /* Seçili başlıktaki ürünler satır satır; aynı ailedekiler tek satırda, dokununca çeşitleri açılır.
+     Arama yapılınca başlık fark etmez, eşleşen çeşitler açık gelir. */
   function renderProducts() {
     const query = $("#search").value.trim().toLocaleLowerCase("tr-TR");
-    const products = catalog.filter((product) => (selectedCategory === "Tumu" || product.salesCategory === selectedCategory) && (!query || `${product.name} ${product.salesCategory}`.toLocaleLowerCase("tr-TR").includes(query)));
-    $("#catalogStatus").textContent = `${products.length} ürün`;
-    $("#products").innerHTML = products.map((product) => {
-      const isPriceKnown = Number(product.price) > 0;
-      return `<article class="product"><h3>${escapeHtml(product.title)}</h3>${product.detail ? `<p class="product-detail">${escapeHtml(product.detail)}</p>` : ""}<div class="product-bottom"><div class="price">${isPriceKnown ? priceHtml(product) : "Fiyat sorunuz"}</div>${isPriceKnown ? `<button class="add" type="button" data-add="${escapeHtml(product.id)}" aria-label="${escapeHtml(product.title)} ekle">+</button>` : ""}</div></article>`;
-    }).join("") || `<p class="empty-search">Aramanızla eşleşen ürün yok.</p>`;
-    document.querySelectorAll("[data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
+    const matches = (product) => !query || `${product.name} ${product.variant}`.toLocaleLowerCase("tr-TR").includes(query);
+    const visible = catalog.filter((product) => (query || product.salesCategory === selectedCategory) && matches(product));
+    const rows = [], byFamily = new Map();
+    visible.forEach((product) => {
+      if (!product.family) { rows.push({ product }); return; }
+      if (!byFamily.has(product.family)) { const row = { family: FAMILIES.find((f) => f.id === product.family), items: [] }; byFamily.set(product.family, row); rows.push(row); }
+      byFamily.get(product.family).items.push(product);
+    });
+    const html = rows.map((row) => {
+      if (row.product || row.items.length === 1) {
+        const product = row.product || row.items[0];
+        return `<article class="row"><div class="row-main"><h3>${escapeHtml(product.title)}</h3>${product.detail ? `<p class="product-detail">${escapeHtml(product.detail)}</p>` : ""}<p class="price">${money.format(product.price)}${unitText(product)}</p></div>${stepper(product)}</article>`;
+      }
+      const open = !!query || openFamilies.has(row.family.id);
+      const picked = row.items.reduce((sum, p) => sum + qtyOf(p.id), 0);
+      const samePrice = row.items.every((p) => p.price === row.items[0].price);
+      const variants = open ? `<div class="variants">${row.items.map((product) => `<div class="variant"><div class="row-main"><h4>${escapeHtml(product.variant)}</h4>${samePrice ? "" : `<p class="price small">${money.format(product.price)}${unitText(product)}</p>`}</div>${stepper(product)}</div>`).join("")}</div>` : "";
+      return `<article class="row family ${open ? "open" : ""}"><button class="family-head" type="button" data-family="${escapeHtml(row.family.id)}" aria-expanded="${open}"><div class="row-main"><h3>${escapeHtml(row.family.title)}</h3><p class="price">${priceRange(row.items)}${unitText(row.items[0])}</p><p class="product-detail">${row.items.length} çeşit</p></div><span class="family-side">${picked ? `<b class="picked">${picked}</b>` : ""}<span class="chevron" aria-hidden="true"></span></span></button>${variants}</article>`;
+    }).join("");
+    $("#catalogStatus").textContent = query ? `“${$("#search").value.trim()}” için ${visible.length} ürün` : "";
+    $("#products").innerHTML = html || `<p class="empty-search">Aramanızla eşleşen ürün yok.</p>`;
+    document.querySelectorAll("#products [data-add]").forEach((button) => button.addEventListener("click", () => add(button.dataset.add)));
+    document.querySelectorAll("#products [data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
+    document.querySelectorAll("#products [data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
+    document.querySelectorAll("#products [data-family]").forEach((button) => button.addEventListener("click", () => {
+      const id = button.dataset.family;
+      if (openFamilies.has(id)) openFamilies.delete(id); else openFamilies.add(id);
+      renderProducts();
+    }));
   }
 
   function add(id, qty) {
@@ -149,7 +213,7 @@
     const item = cart.get(id) || { ...product, qty: 0 };
     item.qty += qty || 1;
     cart.set(id, item);
-    renderCart();
+    renderCart(); renderProducts();
   }
 
   function changeQty(id, delta) {
@@ -158,7 +222,7 @@
     item.qty += delta;
     if (item.qty <= 0) cart.delete(id);
     else cart.set(id, item);
-    renderCart();
+    renderCart(); renderProducts();
   }
 
   function renderCart() {
@@ -174,8 +238,8 @@
     const upfrontRows = payment === "acik" && minimumUpfrontRate > 0
       ? `<div class="total-row"><span>Teslimde en az ödeme (%${minimumUpfrontRate * 100})</span><b>${money.format(minimumUpfront())}</b></div><div class="total-row"><span>Açık hesaba yazılacak</span><b>${money.format(openBalance())}</b></div>` : "";
     $("#totals").innerHTML = `${upfrontRows}<div class="total-row grand-total"><span>Toplam</span><span>${money.format(total())}</span></div>`;
-    document.querySelectorAll("[data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
-    document.querySelectorAll("[data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
+    document.querySelectorAll("#cartLines [data-minus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.minus, -1)));
+    document.querySelectorAll("#cartLines [data-plus]").forEach((button) => button.addEventListener("click", () => changeQty(button.dataset.plus, 1)));
   }
 
   function openCart(open) {
